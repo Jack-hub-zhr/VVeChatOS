@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#8b5cf6" />
+  <title>VVeChat OS</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%238b5cf6'/><text x='32' y='44' font-family='system-ui' font-size='36' font-weight='800' text-anchor='middle' fill='white'>V</text></svg>" />
+</head>
+<body>
+  <!-- ============================================================ -->
+  <!-- AUTH VIEW                                                       -->
+  <!-- ============================================================ -->
+  <section id="auth-view" class="screen auth-screen">
+    <div class="auth-card">
+      <h1 class="brand">
+        <span class="brand-name">VVeChat</span>
+        <span class="brand-sub">OS</span>
+      </h1>
+      <p class="brand-tag">A realtime chat experience</p>
+
+      <div class="tabs">
+        <button class="tab active" data-tab="login">登录</button>
+        <button class="tab" data-tab="register">注册</button>
+      </div>
+
+      <form id="auth-form" autocomplete="off">
+        <label>
+          <span>用户名</span>
+          <input id="auth-username" type="text" placeholder="2-20 字符" autocomplete="username" maxlength="20" required />
+        </label>
+        <label>
+          <span>密码</span>
+          <input id="auth-password" type="password" placeholder="至少 4 位" autocomplete="current-password" minlength="4" required />
+        </label>
+        <div id="auth-msg" class="auth-msg"></div>
+        <button id="auth-submit" type="submit" class="btn primary">登录</button>
+      </form>
+
+      <p class="auth-hint">默认管理员：<b>Jack</b> / <b>Zhr121005</b></p>
+    </div>
+
+    <!-- Corner version stamp -->
+    <div class="corner-version">VVeChat OS 1.0.0</div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- APP VIEW                                                        -->
+  <!-- ============================================================ -->
+  <section id="app-view" class="screen app-screen hidden">
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <header class="sidebar-head">
+        <div class="brand small">
+          <span class="brand-name">VVeChat</span>
+          <span class="brand-sub">OS</span>
+        </div>
+        <div class="sidebar-head-right">
+          <button id="btn-add" class="icon-btn" title="添加好友">+</button>
+          <button id="btn-logout" class="icon-btn" title="退出">⎋</button>
+        </div>
+      </header>
+      <ul id="chats-list" class="chats"></ul>
+      <div id="chats-empty" class="empty hidden">
+        <div class="empty-illus">💬</div>
+        <p>暂无会话</p>
+        <small>点 <b>+</b> 添加好友，或直接进入官方群</small>
+      </div>
+      <div class="user-pill-slot" id="user-pill-slot"></div>
+    </aside>
+
+    <!-- CHAT PANE -->
+    <main class="chat">
+      <header class="chat-head">
+        <div class="chat-title-wrap">
+          <div class="chat-avatar" id="chat-avatar"></div>
+          <div>
+            <div id="chat-title" class="chat-title">选择一个会话</div>
+            <div id="chat-sub" class="chat-sub"></div>
+          </div>
+        </div>
+      </header>
+
+      <div id="chat-empty" class="chat-empty">
+        <div class="big-emoji">💬</div>
+        <p>从左侧选择一个会话开始聊天</p>
+      </div>
+
+      <div id="messages" class="messages"></div>
+
+      <form id="composer" class="composer hidden" autocomplete="off">
+        <input id="msg-input" type="text" placeholder="输入消息…" maxlength="2000" autocomplete="off" />
+        <button id="btn-send" type="submit" class="btn primary">发送</button>
+      </form>
+    </main>
+  </section>
+
+  <!-- ADD-FRIEND MODAL -->
+  <div class="modal hidden" id="modal-add">
+    <div class="modal-mask"></div>
+    <div class="modal-card">
+      <div class="modal-head">
+        <h3>添加好友</h3>
+        <button class="icon-btn modal-close" data-close="modal-add">×</button>
+      </div>
+      <div class="modal-body">
+        <input id="add-q" type="text" placeholder="输入用户名搜索…" autocomplete="off" />
+        <div id="add-results" class="add-results"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <div id="toast" class="toast hidden"></div>
+
+  <!-- Corner version stamp on app screen -->
+  <div class="corner-version app-only hidden">VVeChat OS 1.0.0</div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
