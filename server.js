@@ -17,8 +17,14 @@ const { Server: SocketIOServer } = require('socket.io');
 
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'vvechat-dev-secret-change-me';
+// DB location. On Render Free the container FS is ephemeral, so a restart
+// wipes the database. Point DB_FILE at a mounted persistent disk to survive
+// restarts (e.g. DB_FILE=/var/data/vvechat.db). Falls back to the repo dir.
 const DB_FILE = process.env.DB_FILE || path.join(__dirname, 'vvechat.db');
 
+// Make sure the parent directory of the DB file exists (matters when
+// DB_FILE points at a mounted volume like /var/data).
+try { fs.mkdirSync(path.dirname(DB_FILE), { recursive: true }); } catch (_) {}
 const db = new Database(DB_FILE);
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
@@ -156,6 +162,28 @@ function ensureOfficialGroup() {
 }
 let OFFICIAL_GROUP_ID = ensureOfficialGroup();
 console.log('[VVeChat] official group id =', OFFICIAL_GROUP_ID);
+
+// ============================================================
+// Self-heal on boot: the official group is the app's lobby — every
+// registered account must be a member, otherwise /api/conversations
+// returns an empty list and the sidebar shows "暂无会话".
+// ============================================================
+try {
+  const allUsers = db.prepare('SELECT id FROM users').all();
+  const addMember = db.prepare(
+    'INSERT OR IGNORE INTO group_members (group_id, user_id, joined_at) VALUES (?, ?, ?)'
+  );
+  let healed = 0;
+  for (const u of allUsers) {
+    const r = addMember.run(OFFICIAL_GROUP_ID, u.id, now());
+    if (r.changes > 0) healed++;
+  }
+  const count = db.prepare('SELECT COUNT(*) AS n FROM group_members WHERE group_id = ?')
+    .get(OFFICIAL_GROUP_ID).n;
+  console.log(`[VVeChat] official group self-heal: +${healed} member(s), total ${count}`);
+} catch (e) {
+  console.error('[VVeChat] self-heal failed:', e.message);
+}
 
 
 function authRequired(req, res, next) {
@@ -1222,6 +1250,6 @@ process.on('uncaughtException', (e) => console.error('[VVeChat] uncaughtExceptio
 process.on('unhandledRejection', (e) => console.error('[VVeChat] unhandledRejection:', e));
 
 server.listen(PORT, () => {
-  console.log(`[VVeChat] listening on http://0.0.0.0:${PORT}`);
+  console.log(`[VVeChat] listening on http://0.0.0.0:${PORT}  (db: ${DB_FILE})`);
 });
 // re-deploy trigger 2026-08-26T23:33:46Z
