@@ -366,7 +366,8 @@ app.get('/api/users/search', authRequired, (req, res) => {
 // ============================================================
 // Static frontend
 // ============================================================
-const FRONTEND_DIR = path.join(__dirname, '..', 'frontend');
+// Frontend lives in ./frontend relative to this file (repo root layout).
+const FRONTEND_DIR = path.join(__dirname, 'frontend');
 if (fs.existsSync(FRONTEND_DIR)) {
   app.use(express.static(FRONTEND_DIR, {
     maxAge: 0,
