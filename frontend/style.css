@@ -588,8 +588,13 @@ body.dark .app-shell { background: rgba(20, 24, 32, 0.30); border-color: rgba(25
   z-index: 5;
 }
 body.dark .topbar { background: rgba(20, 24, 32, 0.30); border-bottom-color: rgba(255, 255, 255, 0.08); }
-.topbar-left { display: flex; align-items: center; gap: 8px; }
-.topbar-right { display: flex; gap: 6px; align-items: center; margin-left: auto; }
+.topbar-left { display: flex; align-items: center; gap: 8px; min-width: 0; flex-shrink: 0; }
+.topbar-right { display: flex; gap: 6px; align-items: center; margin-left: auto; flex-shrink: 0; }
+/* Buttons must never be squeezed/overlapped by a long left side. */
+.topbar-right > * { flex-shrink: 0; }
+/* The Jack shield pill must not push the row wider than the bar. */
+#topbar-jack-pill { flex-shrink: 0; }
+.brand-name, .beta-tag, .lang-btn { flex-shrink: 0; }
 
 .brand-name {
   font-weight: 800; font-size: 18px;
@@ -1204,8 +1209,8 @@ body.dark .chat-composer { background: rgba(20, 24, 32, 0.30); border-top-color:
 }
 .avatar.sm { width: 32px; height: 32px; font-size: 12px; }
 .avatar.lg { width: 64px; height: 64px; font-size: 22px; }
-.avatar.group { background: linear-gradient(135deg, #c084fc, #818cf8) !important; }
-.avatar.official { background: linear-gradient(135deg, #fde68a, #fb923c) !important; }
+.avatar.group { background: linear-gradient(135deg, #c084fc, #818cf8); }
+.avatar.official { background: linear-gradient(135deg, #fde68a, #fb923c); }
 #topbar-avatar { font-size: 13px; }
 #btn-profile .avatar { width: 32px; height: 32px; font-size: 13px; }
 

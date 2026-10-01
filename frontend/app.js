@@ -726,10 +726,11 @@
     el.style.justifyContent = 'center';
     // Jack gets signature gold glow on topbar avatar
     el.classList.toggle('avatar-jack-glow', isJack);
-    // show Jack pill if this user is Jack — append to topbar-right (sibling of profile btn)
+    // show Jack pill if this user is Jack (use isJack, not is_admin —
+    // is_admin can be missing from a stale localStorage user object)
     const existing = $('#topbar-jack-pill');
     if (existing) existing.remove();
-    if (state.user.is_admin) {
+    if (isJack) {
       const pill = document.createElement('span');
       pill.id = 'topbar-jack-pill';
       pill.className = 'admin-pill';
@@ -1887,7 +1888,23 @@
   async function refreshFriends() { try { state.friends = (await api('/friends')).friends || []; } catch { state.friends = []; } }
   async function refreshGroups()  { try { state.groups  = (await api('/groups')).groups   || []; } catch { state.groups  = []; } }
   async function refreshRequests() { try { state.requests = (await api('/friend/requests')).requests || []; } catch { state.requests = []; } }
-  async function refreshConversations() { try { state.conversations = (await api('/conversations')).conversations || []; renderChats(); } catch (e) { console.warn('conv refresh failed', e); } }
+  async function refreshConversations() {
+    try {
+      const r = await api('/conversations');
+      state.conversations = r.conversations || [];
+      renderChats();
+    } catch (e) {
+      // Surface the failure instead of silently rendering an empty list.
+      console.error('[VVeChat] conversations failed:', e && e.message);
+      const list = $('#chats-list');
+      if (list && !state.conversations.length) {
+        list.innerHTML = `<li style="padding:14px;color:var(--danger);font-size:12px;line-height:1.5">
+          会话加载失败<br><span style="opacity:.7;font-size:11px">${escapeHtml(e && e.message || 'unknown')}</span>
+        </li>`;
+      }
+      toast('加载会话失败：' + (e && e.message || ''));
+    }
+  }
   async function refreshOnlineStatus() {
     const ids = [...state.friends.map(f => f.id), ...state.groups.map(g => g.id), state.user.id];
     if (!ids.length) return;
@@ -1911,7 +1928,12 @@
       _splash.style.pointerEvents = 'none';
     }
     splashDismissed = true;
-    bindAppEvents();         // <-- always bind so refresh works
+    // Bind each event group defensively — one throw must not prevent the
+    // remaining handlers (modal close, composer, logout) from attaching.
+    try { bindAppEvents(); } catch (e) { console.error('[VVeChat] bindAppEvents failed:', e); }
+    // Safety net: ensure the modal close fallback is always attached, even if
+    // bindAppEvents() bailed out part-way through.
+    ensureModalCloseBound();
     renderTopbarAvatar();
     connectSocket();
     refreshAll();
@@ -1930,6 +1952,25 @@
       }
     } catch (_) { /* not logged in or transient error — ignore */ }
   }
+  // Idempotently attach the document-level modal close delegation.
+  let _modalCloseBound = false;
+  function ensureModalCloseBound() {
+    if (_modalCloseBound) return;
+    _modalCloseBound = true;
+    document.addEventListener('click', (e) => {
+      const closeEl = e.target.closest('[data-close]');
+      if (closeEl && closeEl.dataset.close) {
+        e.preventDefault(); e.stopPropagation();
+        closeModal(closeEl.dataset.close);
+        return;
+      }
+      if (e.target && e.target.classList && e.target.classList.contains('modal-mask')) {
+        const m = e.target.closest('.modal');
+        if (m) closeModal(m.id);
+      }
+    }, true);
+  }
+
   function logout() {
     state.user=null; state.token=null; state.conversations=[]; state.friends=[]; state.groups=[]; state.requests=[];
     state.currentChat=null; state.messagesByConv={}; state.online.clear();
