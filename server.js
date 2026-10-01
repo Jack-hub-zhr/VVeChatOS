@@ -146,7 +146,6 @@ function userPublic(u) {
     is_admin: u.username === ADMIN_USERNAME,
   };
 }
-const ADMIN_USERNAME_SEED = 'Jack';
 function ensureOfficialGroup() {
   const row = db.prepare('SELECT id FROM groups WHERE is_official = 1 LIMIT 1').get();
   if (row) return row.id;
@@ -157,34 +156,6 @@ function ensureOfficialGroup() {
 }
 let OFFICIAL_GROUP_ID = ensureOfficialGroup();
 console.log('[VVeChat] official group id =', OFFICIAL_GROUP_ID);
-
-// ============================================================
-// Auto-seed the built-in admin account (Jack) so a brand-new
-// deployment is immediately usable without manual registration.
-// Password: Zhr121005  |  avatar colour: signature gold #fbbf24
-// ============================================================
-try {
-  const jackRow = db.prepare('SELECT id FROM users WHERE username = ?').get(ADMIN_USERNAME_SEED);
-  if (!jackRow) {
-    const seedHash = bcrypt.hashSync('Zhr121005', 10);
-    db.prepare(
-      `INSERT INTO users (username, password_hash, avatar, bio, avatar_color, created_at)
-       VALUES (?, ?, ?, ?, ?, ?)`
-    ).run(ADMIN_USERNAME_SEED, seedHash, null, 'VVeChat 官方管理员', '#fbbf24', now());
-    console.log('[VVeChat] seeded admin account:', ADMIN_USERNAME_SEED);
-  } else {
-    console.log('[VVeChat] admin account already exists:', ADMIN_USERNAME_SEED);
-  }
-} catch (e) {
-  console.error('[VVeChat] admin seed failed:', e.message);
-}
-try {
-  const jack = db.prepare('SELECT id FROM users WHERE username = ?').get(ADMIN_USERNAME_SEED);
-  if (jack) {
-    db.prepare('INSERT OR IGNORE INTO group_members (group_id, user_id, joined_at) VALUES (?, ?, ?)')
-      .run(OFFICIAL_GROUP_ID, jack.id, now());
-  }
-} catch (e) { /* non-fatal */ }
 
 
 function authRequired(req, res, next) {
@@ -1225,23 +1196,16 @@ setInterval(cleanupOldMessages, 60 * 60 * 1000); // every hour
 // (Root console removed per user request — see commit message)
 
 // ============================================================
-// Static frontend — serve the SPA from ../frontend so that a single
-// Render Web Service provides BOTH the UI and the API under one URL:
-//   https://<service>.onrender.com/       -> frontend
-//   https://<service>.onrender.com/api/*  -> JSON API
+// Static frontend — serve the SPA from ./frontend so one service
+// provides both the UI and the API under a single URL.
 // ============================================================
 const FRONTEND_DIR = path.join(__dirname, 'frontend');
 if (fs.existsSync(FRONTEND_DIR)) {
   app.use(express.static(FRONTEND_DIR, {
-    maxAge: 0,               // never cache — always serve fresh code
-    etag: false,
-    lastModified: false,
-    setHeaders: (res) => {
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
-    },
+    maxAge: 0, etag: false, lastModified: false,
+    setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0'),
   }));
-  // SPA fallback: any non-API, non-socket path serves index.html.
-  // NOTE: must NOT swallow /socket.io/* or Socket.io handshakes break.
+  // SPA fallback — must NOT swallow /socket.io/* or handshakes break.
   app.get('*', (req, res, next) => {
     const p = req.path || '';
     if (p.startsWith('/api/') || p.startsWith('/socket.io/')) return next();
@@ -1250,16 +1214,12 @@ if (fs.existsSync(FRONTEND_DIR)) {
   });
   console.log('[VVeChat] serving frontend from', FRONTEND_DIR);
 } else {
-  console.warn('[VVeChat] frontend dir not found at', FRONTEND_DIR, '- API only');
+  console.warn('[VVeChat] frontend dir missing at', FRONTEND_DIR);
 }
 
-// Never let an unhandled error take the whole service down.
-process.on('uncaughtException', (err) => {
-  console.error('[VVeChat] uncaughtException:', err && err.stack || err);
-});
-process.on('unhandledRejection', (err) => {
-  console.error('[VVeChat] unhandledRejection:', err && err.stack || err);
-});
+// Never let one error kill the service.
+process.on('uncaughtException', (e) => console.error('[VVeChat] uncaughtException:', e));
+process.on('unhandledRejection', (e) => console.error('[VVeChat] unhandledRejection:', e));
 
 server.listen(PORT, () => {
   console.log(`[VVeChat] listening on http://0.0.0.0:${PORT}`);

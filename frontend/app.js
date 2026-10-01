@@ -598,11 +598,6 @@
   async function jackWipeGroup(groupId) {
     return api(`/admin/messages/wipe-group/${groupId}`, { method: 'POST' });
   }
-
-  // Jack-only: disband (permanently delete) a group.
-  async function jackDisbandGroup(gid) {
-    return api(`/groups/${gid}/disband`, { method: 'POST', body: {} });
-  }
   async function jackBatchDelete(body) {
     return api('/admin/messages/batch', { method: 'POST', body });
   }
@@ -699,20 +694,11 @@
   }
 
   // ---------- rendering ----------
-  function renderAll() {
-    renderChats(); renderContacts(); renderBell(); renderTopbarAvatar();
-    // Diagnostic: surface state in the tab title so we can read it from a screenshot
-    try {
-      const n = (state.conversations || []).length;
-      const g = (state.groups || []).length;
-      document.title = `VVeChat [c=${n} g=${g} u=${state.user ? state.user.username : 'nil'} a=${state.user && state.user.is_admin ? 1 : 0} t=${new Date().toTimeString().slice(0,5)}]`;
-    } catch (_) {}
-  }
+  function renderAll() { renderChats(); renderContacts(); renderBell(); renderTopbarAvatar(); }
 
   function renderTopbarAvatar() {
     const el = $('#topbar-avatar');
-    if (!el) return;
-    if (!state.user) { el.textContent = '?'; el.style.background = 'linear-gradient(135deg,#5eead4,#60a5fa)'; return; }
+    if (!el || !state.user) return;
     // Jack ALWAYS gets the signature gold — don't trust stale localStorage.
     const isJack = state.user.username === 'Jack' || !!state.user.is_admin;
     const color = isJack ? '#fbbf24' : (state.user.avatar_color || '#5eead4');
@@ -1925,7 +1911,7 @@
       _splash.style.pointerEvents = 'none';
     }
     splashDismissed = true;
-    try { bindAppEvents(); } catch (e) { console.error('[VVeChat] bindAppEvents failed:', e); }
+    bindAppEvents();         // <-- always bind so refresh works
     renderTopbarAvatar();
     connectSocket();
     refreshAll();
@@ -2079,6 +2065,9 @@
     // logout
     $('#btn-logout')?.addEventListener('click', (e) => { e.currentTarget._handled = true; logout(); });
 
+    // Root console (Jack only)
+    initRootConsole();
+
     // admin (deprecated old key system) — Jack-only mode uses regular auth
     // admin wipe button in chat header (Jack only)
     $('#chat-admin-wipe')?.addEventListener('click', async () => {
@@ -2193,18 +2182,6 @@
   }
 
   // ---------- init ----------
-  // Bump whenever the auth shape changes — forces a clean re-login so
-  // stale localStorage user objects (missing is_admin/avatar_color) get dropped.
-  const AUTH_SCHEMA = 'v43';
-  (function purgeStaleAuth() {
-    try {
-      if (localStorage.getItem('vve:authSchema') !== AUTH_SCHEMA) {
-        ['vve:token', 'vve:user'].forEach(k => localStorage.removeItem(k));
-        localStorage.setItem('vve:authSchema', AUTH_SCHEMA);
-      }
-    } catch (_) {}
-  })();
-
   function init() {
     try {
       setLang(lang);

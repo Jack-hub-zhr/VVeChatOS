@@ -1,2 +1,2 @@
-// Same-origin API (Express serves both UI and API from one service).
+// Same-origin API (Express serves both UI and API).
 window.VVECHAT_API = '';

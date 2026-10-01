@@ -1,13 +1,12 @@
 {
-  "name": "vvechat-os",
+  "name": "vvechat-backend",
   "version": "1.0.0",
-  "description": "VVeChat OS 1.0.0 (v42 UI) - realtime chat",
+  "description": "VVeChat - realtime chat backend (Express + Socket.io + SQLite)",
   "main": "server.js",
-  "engines": {
-    "node": "18.x"
-  },
+  "type": "commonjs",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "node server.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
