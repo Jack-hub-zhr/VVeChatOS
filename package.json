@@ -1,9 +1,11 @@
 {
-  "name": "vvechat-os-backend",
+  "name": "vvechat-os",
   "version": "1.0.0",
-  "description": "VVeChat OS 1.0.0 - realtime chat backend",
+  "description": "VVeChat OS 1.0.0 (v42 UI) - realtime chat",
   "main": "server.js",
-  "engines": { "node": "18.x" },
+  "engines": {
+    "node": "18.x"
+  },
   "scripts": {
     "start": "node server.js"
   },
