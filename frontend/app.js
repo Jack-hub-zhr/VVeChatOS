@@ -1953,6 +1953,24 @@
     // any fields stale in localStorage (avatar_color, is_admin, etc.)
     // get refreshed without forcing the user to log out + back in.
     fetchMe().then(() => renderTopbarAvatar());
+    // TEMP diagnostic: surface API state so failures are visible, not silent.
+    setTimeout(async () => {
+      try {
+        const probe = document.createElement('div');
+        probe.id = 'api-probe';
+        probe.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:99999;background:rgba(0,0,0,.78);color:#0f0;font-size:10px;padding:6px 8px;border-radius:6px;font-family:monospace;max-width:60vw;word-break:break-all';
+        const c = await fetch('/api/conversations', { headers: { Authorization: 'Bearer ' + state.token } });
+        const j = await c.json();
+        probe.textContent = `api=${c.status} conv=${(j.conversations||[]).length} state=${state.conversations.length} groups=${state.groups.length} apiBase=${window.VVECHAT_API||'(empty)'}`;
+        document.body.appendChild(probe);
+      } catch (e) {
+        const probe = document.createElement('div');
+        probe.id = 'api-probe';
+        probe.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:99999;background:rgba(200,0,0,.9);color:#fff;font-size:10px;padding:6px 8px;border-radius:6px;font-family:monospace;max-width:70vw;word-break:break-all';
+        probe.textContent = 'PROBE FAIL: ' + (e && e.message);
+        document.body.appendChild(probe);
+      }
+    }, 2500);
   }
   // Pull the latest /me record and merge it into state.user + localStorage.
   async function fetchMe() {
