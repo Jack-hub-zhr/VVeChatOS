@@ -289,6 +289,7 @@ app.get('/api/messages', authRequired, (req, res) => {
       WHERE m.conv_type='user' AND m.conv_id = ? AND m.is_deleted = 0
       ORDER BY m.id DESC LIMIT ?
     `).all(userConvId(req.user.id, other), lim);
+    for (const r of rows) r.is_admin = r.sender_username === ADMIN_USERNAME;
     res.json({ messages: rows.reverse() });
   } else if (conv_type === 'group') {
     const gid = Number(conv_id);
@@ -296,13 +297,12 @@ app.get('/api/messages', authRequired, (req, res) => {
     const isMember = db.prepare('SELECT 1 FROM group_members WHERE group_id=? AND user_id=?').get(gid, req.user.id);
     if (!isMember) return res.status(403).json({ error: '不在群里' });
     const rows = db.prepare(`
-      SELECT m.*, u.username AS sender_username, u.is_admin AS sender_is_admin
+      SELECT m.*, u.username AS sender_username, u.username AS sender_username_raw
       FROM messages m JOIN users u ON u.id = m.sender_id
       WHERE m.conv_type='group' AND m.conv_id = ? AND m.is_deleted = 0
       ORDER BY m.id DESC LIMIT ?
     `).all(String(gid), lim);
-    // patch is_admin
-    for (const r of rows) r.is_admin = r.sender_is_admin;
+    for (const r of rows) { r.is_admin = r.sender_username === ADMIN_USERNAME; delete r.sender_username_raw; }
     res.json({ messages: rows.reverse() });
   } else {
     res.status(400).json({ error: 'conv_type 错误' });
