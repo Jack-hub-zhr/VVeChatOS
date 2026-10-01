@@ -1911,8 +1911,20 @@
     try { const r = await api(`/users/status?ids=${ids.join(',')}`); state.online.clear(); for (const [uid, on] of Object.entries(r.status)) if (on) state.online.add(Number(uid)); } catch {}
   }
   async function refreshAll() {
-    await Promise.all([refreshFriends(), refreshGroups(), refreshRequests(), refreshConversations()]);
-    await refreshOnlineStatus();
+    // Each refresher already swallows its own error, but Promise.all would
+    // still reject if one of them throws synchronously — never let that stop
+    // renderAll() from running.
+    try {
+      await Promise.all([
+        refreshFriends().catch(e => console.error('friends', e)),
+        refreshGroups().catch(e => console.error('groups', e)),
+        refreshRequests().catch(e => console.error('requests', e)),
+        refreshConversations().catch(e => console.error('conversations', e)),
+      ]);
+      await refreshOnlineStatus();
+    } catch (e) {
+      console.error('[VVeChat] refreshAll failed:', e);
+    }
     renderAll();
   }
 

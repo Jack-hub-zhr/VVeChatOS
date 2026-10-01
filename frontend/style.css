@@ -1674,7 +1674,9 @@ body.dark .modal-card { background: rgba(20, 24, 32, 0.70); border-color: rgba(2
    THEME TOGGLE BUTTON + POPUP MENU
    ============================================================ */
 .theme-menu-wrap {
-  position: fixed; top: 14px; right: 14px; z-index: 500;
+  /* Fixed to the viewport, but pushed BELOW the topbar so it no longer
+     overlaps the topbar's right-hand buttons (logout / search / bell). */
+  position: fixed; top: 68px; right: 16px; z-index: 500;
 }
 .theme-toggle {
   width: 38px; height: 38px; padding: 0;
