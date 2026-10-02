@@ -1047,6 +1047,13 @@ body.dark .chat-header { background: rgba(20, 24, 32, 0.30); border-bottom-color
   opacity: 0.55;
   font-style: normal;
 }
+/* Language button busy state while the translator is running. */
+.lang-btn.translating, .lang-toggle.translating {
+  opacity: 0.65; cursor: progress;
+  animation: langPulse 1s ease-in-out infinite;
+}
+@keyframes langPulse { 0%,100%{opacity:.45} 50%{opacity:.9} }
+
 .translated { font-style: italic; }
 .translated::after { content: " 🌐"; font-size: 0.7em; opacity: 0.5; font-style: normal; margin-left: 4px; }
 /* Hide globe icon inside avatars / pills / small chips where it looks noisy */

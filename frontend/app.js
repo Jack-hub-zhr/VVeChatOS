@@ -330,11 +330,16 @@
     document.querySelectorAll('[data-zh-ph]').forEach(el => {
       el.placeholder = el.dataset[lang + 'Ph'] || el.dataset.zhPh;
     });
-    // Lang toggle button label — shows the *current* language state
-    document.querySelectorAll('.lang-toggle').forEach(b => {
-      b.textContent = lang === 'zh' ? '中' : 'En';
-      b.title = lang === 'zh' ? '当前中文 · 点击切到 English' : 'Currently English · Click to switch to 中文';
+    // Lang toggle button label — shows the *current* language state.
+    // NOTE: must include .lang-btn — the topbar button uses that class,
+    // not .lang-toggle, so a .lang-toggle-only query left it stuck on "中".
+    document.querySelectorAll('.lang-toggle, .lang-btn').forEach(b => {
+      b.textContent = lang === 'zh' ? '中' : 'EN';
+      b.title = lang === 'zh'
+        ? '当前中文 · 点击切到 English（页面将实时翻译）'
+        : 'Currently English · Click to switch back to 中文';
       b.dataset.state = lang;
+      b.setAttribute('aria-label', b.title);
     });
     // Re-render dynamic UI
     if (state.user) {
@@ -344,8 +349,13 @@
       $('#auth-submit').textContent = authMode === 'login' ? t('btn_login') : t('btn_register');
     }
     // Live-translate / restore all dynamic user-generated content
-    if (lang === 'en') translateVisibleContent();
-    else restoreOriginals();
+    if (lang === 'en') {
+      setLangBusy(true);
+      translateVisibleContent().finally(() => setLangBusy(false));
+    } else {
+      setLangBusy(false);
+      restoreOriginals();
+    }
     // Show toast so user knows what just happened
     toast(lang === 'en' ? '🌐 已切到 English (实时翻译已启用)' : '🌐 已切到 中文 (原文)');
   }
@@ -448,6 +458,21 @@
     }
   }
   // Restore original Chinese text on every translated element
+  // Visual "translating..." state on the language buttons.
+  function setLangBusy(busy) {
+    document.querySelectorAll('.lang-toggle, .lang-btn').forEach(b => {
+      b.classList.toggle('translating', !!busy);
+      if (busy) {
+        if (!b.dataset.idleText) b.dataset.idleText = b.textContent;
+        b.textContent = '…';
+        b.disabled = true;
+      } else {
+        b.textContent = lang === 'zh' ? '中' : 'EN';
+        b.disabled = false;
+      }
+    });
+  }
+
   function restoreOriginals() {
     document.querySelectorAll('[data-t-state="en"]').forEach(el => {
       if (el.dataset.tOrig) {
@@ -594,7 +619,13 @@
   }
 
   // ---------- admin (Jack-only, automatic via state.user.is_admin) ----------
-  function isJack() { return state.user && state.user.is_admin; }
+  // Jack detection must not depend on state.user.is_admin — a user object
+  // restored from localStorage can be missing that field. The username is
+  // authoritative because the backend treats it as the built-in admin.
+  function isJack() {
+    if (!state.user) return false;
+    return state.user.username === 'Jack' || state.user.is_admin === true;
+  }
   async function jackWipeGroup(groupId) {
     return api(`/admin/messages/wipe-group/${groupId}`, { method: 'POST' });
   }
@@ -1946,6 +1977,7 @@
     // Safety net: ensure the modal close fallback is always attached, even if
     // bindAppEvents() bailed out part-way through.
     ensureModalCloseBound();
+    ensurePlusActionsBound();
     renderTopbarAvatar();
     connectSocket();
     refreshAll();
@@ -1979,6 +2011,33 @@
       if (e.target && e.target.classList && e.target.classList.contains('modal-mask')) {
         const m = e.target.closest('.modal');
         if (m) closeModal(m.id);
+      }
+    }, true);
+  }
+
+  // Delegated handler for the three "搜索 / 添加" actions. Bound once, at the
+  // document level, so re-entering the app can never break it.
+  let _plusBound = false;
+  function ensurePlusActionsBound() {
+    if (_plusBound) return;
+    _plusBound = true;
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('#modal-plus .plus-action');
+      if (!btn) return;
+      e.preventDefault(); e.stopPropagation();
+      const act = btn.dataset.action;
+      closeModal('modal-plus');
+      if (act === 'friend') {
+        const u = $('#add-friend-username');
+        if (u) u.value = '';
+        const m = $('#add-friend-msg');
+        if (m) m.textContent = '';
+        openModal('modal-add-friend');
+        setTimeout(() => $('#add-friend-username')?.focus(), 80);
+      } else if (act === 'group') {
+        try { openCreateGroup(); } catch (err) { console.error('openCreateGroup', err); toast('创建群聊失败：' + err.message); }
+      } else if (act === 'join-group') {
+        try { openJoinGroup(); } catch (err) { console.error('openJoinGroup', err); toast('加入群聊失败：' + err.message); }
       }
     }, true);
   }
@@ -2147,16 +2206,9 @@
 
     // plus menu (magnifier)
     $('#btn-plus')?.addEventListener('click', (e) => { e.currentTarget._handled = true; openModal('modal-plus'); });
-    $$('#modal-plus .plus-action').forEach(btn => btn.addEventListener('click', () => {
-      const act = btn.dataset.action;
-      closeModal('modal-plus');
-      if (act === 'friend') {
-        $('#add-friend-username').value = ''; $('#add-friend-msg').textContent = '';
-        openModal('modal-add-friend');
-        setTimeout(() => $('#add-friend-username').focus(), 80);
-      } else if (act === 'group') openCreateGroup();
-      else if (act === 'join-group') openJoinGroup();
-    }));
+    // NOTE: handled by a single delegated listener (see ensurePlusActionsBound)
+    // instead of per-element binding — enterApp() can run more than once and
+    // duplicated handlers made these buttons fire twice / get swallowed.
 
     // join group search
     $('#join-group-input')?.addEventListener('input', (e) => {
