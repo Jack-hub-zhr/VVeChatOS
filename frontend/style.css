@@ -1075,6 +1075,75 @@ body.dark .chat-header { background: rgba(20, 24, 32, 0.30); border-bottom-color
   cursor: pointer;
   object-fit: cover;
 }
+
+/* ============================================================
+   Task 2 — own messages are mirrored: avatar on the RIGHT,
+   bubble right-aligned, timestamp under the bubble.
+   ============================================================ */
+.msg-row.me { flex-direction: row-reverse; align-items: flex-start; }
+.msg-row.me > .msg-avatar,
+.msg-row.me > .avatar { order: 3; }
+.msg-row.me .msg-content { align-items: flex-end; }
+.msg-row.me .msg-meta { justify-content: flex-end; }
+
+/* ============================================================
+/* ---- Task 3: "对方正在输入中…" indicator ---- */
+.typing-indicator {
+  position: absolute;
+  left: 18px; bottom: 76px;
+  padding: 6px 14px;
+  font-size: 12px; color: var(--muted);
+  background: var(--glass-bg-strong);
+  border: 1px solid var(--glass-border-soft);
+  border-radius: 999px;
+  box-shadow: var(--highlight);
+  backdrop-filter: blur(14px);
+  z-index: 5;
+  pointer-events: none;
+  animation: typingFade .2s ease;
+}
+.typing-indicator::before {
+  content: '';
+  display: inline-block;
+  width: 6px; height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--online, #22c55e);
+  animation: typingBlink 1s ease-in-out infinite;
+}
+@keyframes typingFade { from { opacity: 0; transform: translateY(6px) } to { opacity: 1; transform: translateY(0) } }
+@keyframes typingBlink { 0%,100%{opacity:.35} 50%{opacity:1} }
+
+   Task 4 — image messages: no bubble chrome at all.
+   The picture is sent at its natural aspect ratio, as a plain
+   rounded rectangle sitting directly on the glass background.
+   ============================================================ */
+.msg-bubble.image-bubble {
+  padding: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  border-radius: 14px;
+  overflow: hidden;
+  max-width: 300px;
+  line-height: 0;
+}
+.msg-bubble.image-bubble .chat-img {
+  display: block;
+  width: auto;
+  height: auto;
+  /* keep the original aspect ratio — do not crop or pad */
+  max-width: 300px;
+  max-height: 420px;
+  object-fit: contain;
+  border-radius: 14px;
+  cursor: zoom-in;
+  background: transparent;
+}
+/* The timestamp/meta must sit outside the image bubble cleanly. */
+.msg-row.me .msg-bubble.image-bubble + .msg-meta,
+.msg-row .msg-bubble.image-bubble + .msg-meta { padding: 0 4px; }
 .msg-quote {
   border-left: 3px solid var(--accent);
   background: rgba(59, 130, 246, 0.06);

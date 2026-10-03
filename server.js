@@ -208,8 +208,92 @@ function userConvId(a, b) { return a < b ? `u_${a}_${b}` : `u_${b}_${a}`; }
 
 // ---------- app ----------
 const app = express();
-app.use(cors());
+app.disable('x-powered-by');
+app.set('trust proxy', true); // Render sits behind a proxy; needed for correct client IPs
+
+// ---------- Security headers ----------
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+  // The app is fully self-hosted, so the origin can be locked down hard.
+  res.setHeader('Content-Security-Policy', [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob: https:",
+    "media-src 'self' data: blob:",
+    "font-src 'self' data:",
+    "connect-src 'self' https: wss:",
+    "frame-ancestors 'self'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "object-src 'none'",
+  ].join('; '));
+  next();
+});
+
+// ---------- CORS (tightened) ----------
+// Same-origin only by default. Set ALLOW_ORIGIN="*" to open it up when the
+// frontend is served from a different host during development.
+const ALLOW_ORIGIN = process.env.ALLOW_ORIGIN || '';
+app.use(cors({
+  origin: ALLOW_ORIGIN === '*' ? true : (origin, cb) => {
+    if (!origin) return cb(null, true);                       // curl / native
+    if (/localhost|127\.0\.0\.1/.test(origin)) return cb(null, true);
+    if (/\.onrender\.com$/.test(origin)) return cb(null, true);
+    if (ALLOW_ORIGIN && origin === ALLOW_ORIGIN) return cb(null, true);
+    return cb(null, false);
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  maxAge: 86400,
+}));
+
 app.use(express.json({ limit: '5mb' }));  // larger limit for image messages
+
+// ---------- Rate limiter (per-IP token bucket, in-memory) ----------
+// Protects login/register from brute force and every endpoint from floods.
+const RATE_BUCKETS = new Map();
+const RATE_LIMIT = {
+  windowMs: 60 * 1000,
+  global: 300,   // 300 req/min per IP across the whole API
+  auth: 12,      // 12 req/min for login/register
+  write: 60,     // 60 req/min for mutating endpoints
+};
+function clientIp(req) {
+  const xff = req.headers['x-forwarded-for'];
+  if (typeof xff === 'string' && xff.length) return xff.split(',')[0].trim();
+  return req.ip || (req.socket && req.socket.remoteAddress) || 'unknown';
+}
+function rateLimit(kind) {
+  return (req, res, next) => {
+    const ip = clientIp(req);
+    const now = Date.now();
+    let b = RATE_BUCKETS.get(ip);
+    if (!b || now - b.start > RATE_LIMIT.windowMs) {
+      b = { start: now, count: 0, auth: 0, write: 0 };
+      RATE_BUCKETS.set(ip, b);
+    }
+    b.count++;
+    if (b.count > RATE_LIMIT.global) {
+      return res.status(429).json({ error: '请求过于频繁，请稍后再试' });
+    }
+    if (kind === 'auth' && ++b.auth > RATE_LIMIT.auth) {
+      return res.status(429).json({ error: '尝试次数过多，请 1 分钟后再试' });
+    }
+    if (kind === 'write' && ++b.write > RATE_LIMIT.write) {
+      return res.status(429).json({ error: '操作过于频繁，请稍后再试' });
+    }
+    next();
+  };
+}
+// Drop stale buckets so the Map cannot grow without bound.
+setInterval(() => {
+  const cutoff = Date.now() - RATE_LIMIT.windowMs * 2;
+  for (const [ip, b] of RATE_BUCKETS) if (b.start < cutoff) RATE_BUCKETS.delete(ip);
+}, 60 * 1000).unref();
 
 // =====================================================================
 // Lightweight firewall / rate limiter (in-memory, per IP)
@@ -245,7 +329,7 @@ function requireAdmin(req, res, next) {
   if (!isAdmin(req.user)) return res.status(403).json({ error: '需要 Jack 账号' });
   next();
 }
-app.post('/api/admin/wipe', authRequired, requireAdmin, (req, res) => {
+app.post('/api/admin/wipe', rateLimit('write'), authRequired, requireAdmin, (req, res) => {
   try {
     db.exec(`
       DELETE FROM message_reactions;
@@ -282,7 +366,7 @@ app.get('/api/admin/stats', authRequired, requireAdmin, (req, res) => {
   res.json({ ok: true, stats });
 });
 // batch-delete messages (Jack only) — same filters as before
-app.post('/api/admin/messages/batch', authRequired, requireAdmin, (req, res) => {
+app.post('/api/admin/messages/batch', rateLimit('write'), authRequired, requireAdmin, (req, res) => {
   const { group_id, sender_id, before, after, content_contains, official, dry_run } = req.body || {};
   const where = [];
   const params = [];
@@ -307,7 +391,7 @@ app.post('/api/admin/messages/batch', authRequired, requireAdmin, (req, res) => 
   res.json({ ok: true, matched: ids.length, deleted });
 });
 // wipe all messages in one group (Jack only)
-app.post('/api/admin/messages/wipe-group/:id', authRequired, requireAdmin, (req, res) => {
+app.post('/api/admin/messages/wipe-group/:id', rateLimit('write'), authRequired, requireAdmin, (req, res) => {
   const gid = Number(req.params.id);
   const ids = db.prepare("SELECT id FROM messages WHERE conv_type = 'group' AND conv_id = ?").all(gid).map(r => r.id);
   if (!ids.length) return res.json({ ok: true, matched: 0, deleted: 0 });
@@ -322,7 +406,7 @@ app.post('/api/admin/messages/wipe-group/:id', authRequired, requireAdmin, (req,
   res.json({ ok: true, matched: ids.length, deleted });
 });
 // remove a member from a group (Jack only) — works for any group
-app.delete('/api/admin/groups/:gid/members/:uid', authRequired, requireAdmin, (req, res) => {
+app.delete('/api/admin/groups/:gid/members/:uid', rateLimit('write'), authRequired, requireAdmin, (req, res) => {
   const gid = Number(req.params.gid);
   const uid = Number(req.params.uid);
   const g = db.prepare('SELECT id, name, is_official FROM groups WHERE id = ?').get(gid);
@@ -339,7 +423,7 @@ app.delete('/api/admin/groups/:gid/members/:uid', authRequired, requireAdmin, (r
 });
 
 // register
-app.post('/api/register', (req, res) => {
+app.post('/api/register', rateLimit('auth'), (req, res) => {
   const { username, password } = req.body || {};
   if (!username || !password) return res.status(400).json({ error: '用户名和密码不能为空' });
   if (username.length < 2 || username.length > 24) return res.status(400).json({ error: '用户名长度需 2-24' });
@@ -378,7 +462,7 @@ app.post('/api/register', (req, res) => {
 });
 
 // login
-app.post('/api/login', (req, res) => {
+app.post('/api/login', rateLimit('auth'), (req, res) => {
   const { username, password } = req.body || {};
   if (!username || !password) return res.status(400).json({ error: '用户名和密码不能为空' });
   const u = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
@@ -400,7 +484,7 @@ app.get('/api/me', authRequired, (req, res) => {
   res.json({ user: userPublic(u) });
 });
 
-app.put('/api/me', authRequired, (req, res) => {
+app.put('/api/me', rateLimit('write'), authRequired, (req, res) => {
   const { bio, username, avatar_color, avatar } = req.body || {};
   const u = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
   if (!u) return res.status(404).json({ error: 'user not found' });
@@ -509,7 +593,7 @@ app.get('/api/groups', authRequired, (req, res) => {
 });
 
 // create group
-app.post('/api/groups', authRequired, (req, res) => {
+app.post('/api/groups', rateLimit('write'), authRequired, (req, res) => {
   const { name, memberIds } = req.body || {};
   if (!name || !name.trim()) return res.status(400).json({ error: '群名称不能为空' });
   const ids = Array.isArray(memberIds) ? [...new Set(memberIds.map(Number))].filter(Boolean) : [];
@@ -547,7 +631,7 @@ app.get('/api/groups/:id/members', authRequired, (req, res) => {
 });
 
 // add member to existing group (admin)
-app.post('/api/groups/:id/members', authRequired, (req, res) => {
+app.post('/api/groups/:id/members', rateLimit('write'), authRequired, (req, res) => {
   const gid = Number(req.params.id);
   const inGroup = db.prepare('SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?').get(gid, req.user.id);
   if (!inGroup) return res.status(403).json({ error: 'not in group' });
@@ -563,7 +647,7 @@ app.post('/api/groups/:id/members', authRequired, (req, res) => {
 });
 
 // Update group name. Only the official group requires Jack; regular groups allow any member.
-app.put('/api/groups/:id', authRequired, (req, res) => {
+app.put('/api/groups/:id', rateLimit('write'), authRequired, (req, res) => {
   const gid = Number(req.params.id);
   const { name, recommended, announcement, pinned, icon_color } = req.body || {};
   const g = db.prepare('SELECT id, name, is_official, owner_id FROM groups WHERE id = ?').get(gid);
@@ -603,7 +687,7 @@ app.put('/api/groups/:id', authRequired, (req, res) => {
 });
 
 // Leave a group
-app.post('/api/groups/:id/leave', authRequired, (req, res) => {
+app.post('/api/groups/:id/leave', rateLimit('write'), authRequired, (req, res) => {
   const gid = Number(req.params.id);
   const g = db.prepare('SELECT id, is_official FROM groups WHERE id = ?').get(gid);
   if (!g) return res.status(404).json({ error: '群不存在' });
@@ -613,7 +697,7 @@ app.post('/api/groups/:id/leave', authRequired, (req, res) => {
 });
 
 // Disband a group (Jack / owner)
-app.post('/api/groups/:id/disband', authRequired, (req, res) => {
+app.post('/api/groups/:id/disband', rateLimit('write'), authRequired, (req, res) => {
   const gid = Number(req.params.id);
   const g = db.prepare('SELECT id, is_official, owner_id FROM groups WHERE id = ?').get(gid);
   if (!g) return res.status(404).json({ error: '群不存在' });
@@ -641,7 +725,7 @@ app.get('/api/groups/recommended', authRequired, (req, res) => {
 });
 
 // self-join a public group (any logged-in user can join)
-app.post('/api/groups/:id/join', authRequired, (req, res) => {
+app.post('/api/groups/:id/join', rateLimit('write'), authRequired, (req, res) => {
   const gid = Number(req.params.id);
   const g = db.prepare('SELECT id, name, is_official FROM groups WHERE id = ?').get(gid);
   if (!g) return res.status(404).json({ error: '群不存在' });
@@ -656,39 +740,63 @@ app.post('/api/groups/:id/join', authRequired, (req, res) => {
 });
 
 // friend requests
-app.post('/api/friend/request', authRequired, (req, res) => {
-  const { toUsername } = req.body || {};
-  if (!toUsername) return res.status(400).json({ error: '请输入对方用户名' });
-  const target = db.prepare('SELECT * FROM users WHERE username = ?').get(toUsername);
-  if (!target) return res.status(404).json({ error: '该用户不存在' });
-  if (target.id === req.user.id) return res.status(400).json({ error: '不能加自己' });
-  const already = db.prepare('SELECT 1 FROM friends WHERE user_id = ? AND friend_id = ?').get(req.user.id, target.id);
-  if (already) return res.status(400).json({ error: '已经是好友了' });
+// Send (or auto-accept) a friend request from me to `target`.
+// Shared by the username-search flow and the "tap avatar in a group" flow.
+function sendFriendRequest(me, target) {
+  if (!target) return { status: 404, body: { error: '该用户不存在' } };
+  if (target.id === me.id) return { status: 400, body: { error: '不能加自己' } };
+  const already = db.prepare('SELECT 1 FROM friends WHERE user_id = ? AND friend_id = ?').get(me.id, target.id);
+  if (already) return { status: 400, body: { error: '已经是好友了' } };
   const pending = db.prepare(
     "SELECT id FROM friend_requests WHERE from_user_id = ? AND to_user_id = ? AND status = 'pending'"
-  ).get(req.user.id, target.id);
-  if (pending) return res.status(400).json({ error: '已发送过申请，等待对方处理' });
+  ).get(me.id, target.id);
+  if (pending) return { status: 400, body: { error: '已发送过申请，等待对方处理' } };
   const reverse = db.prepare(
     "SELECT id FROM friend_requests WHERE from_user_id = ? AND to_user_id = ? AND status = 'pending'"
-  ).get(target.id, req.user.id);
+  ).get(target.id, me.id);
   if (reverse) {
     db.prepare("UPDATE friend_requests SET status = 'accepted' WHERE id = ?").run(reverse.id);
     const ts = now();
-    db.prepare('INSERT OR IGNORE INTO friends (user_id, friend_id, created_at) VALUES (?, ?, ?)').run(req.user.id, target.id, ts);
-    db.prepare('INSERT OR IGNORE INTO friends (user_id, friend_id, created_at) VALUES (?, ?, ?)').run(target.id, req.user.id, ts);
-    io.to(`user:${req.user.id}`).emit('friend:added', { id: target.id, username: target.username, avatar: target.avatar, avatar_color: target.avatar_color });
-    io.to(`user:${target.id}`).emit('friend:added', { id: req.user.id, username: req.user.username, avatar: null, avatar_color: null });
-    return res.json({ ok: true, autoAccepted: true });
+    db.prepare('INSERT OR IGNORE INTO friends (user_id, friend_id, created_at) VALUES (?, ?, ?)').run(me.id, target.id, ts);
+    db.prepare('INSERT OR IGNORE INTO friends (user_id, friend_id, created_at) VALUES (?, ?, ?)').run(target.id, me.id, ts);
+    io.to(`user:${me.id}`).emit('friend:added', { id: target.id, username: target.username, avatar: target.avatar, avatar_color: target.avatar_color });
+    io.to(`user:${target.id}`).emit('friend:added', { id: me.id, username: me.username, avatar: me.avatar, avatar_color: me.avatar_color });
+    return { status: 200, body: { ok: true, autoAccepted: true } };
   }
   const info = db.prepare(
     'INSERT INTO friend_requests (from_user_id, to_user_id, status, created_at) VALUES (?, ?, ?, ?)'
-  ).run(req.user.id, target.id, 'pending', now());
+  ).run(me.id, target.id, 'pending', now());
   io.to(`user:${target.id}`).emit('friend:request', {
     id: info.lastInsertRowid,
-    from: { id: req.user.id, username: req.user.username, avatar: null },
+    from: { id: me.id, username: me.username, avatar: me.avatar, avatar_color: me.avatar_color },
     created_at: now(),
   });
-  res.json({ ok: true, requestId: info.lastInsertRowid });
+  return { status: 200, body: { ok: true, requestId: info.lastInsertRowid } };
+}
+
+// Existing flow: look the user up by username.
+// Minimal public profile lookup — used when you tap an avatar of someone
+// you have not befriended yet (e.g. a fellow member of a group).
+app.get('/api/users/by-id/:id', authRequired, (req, res) => {
+  const u = db.prepare('SELECT id, username, avatar, avatar_color, bio FROM users WHERE id = ?')
+    .get(Number(req.params.id));
+  if (!u) return res.status(404).json({ error: '用户不存在' });
+  res.json({ user: { id: u.id, username: u.username, avatar: u.avatar, avatar_color: u.avatar_color, bio: u.bio, is_admin: u.username === ADMIN_USERNAME } });
+});
+
+app.post('/api/friend/request', rateLimit('write'), authRequired, (req, res) => {
+  const { toUsername } = req.body || {};
+  if (!toUsername) return res.status(400).json({ error: '请输入对方用户名' });
+  const target = db.prepare('SELECT * FROM users WHERE username = ?').get(toUsername);
+  const r = sendFriendRequest(req.user, target);
+  res.status(r.status).json(r.body);
+});
+
+// New flow: add a user you already met in a group, addressed by id.
+app.post('/api/friend/request/:id', rateLimit('write'), authRequired, (req, res) => {
+  const target = db.prepare('SELECT * FROM users WHERE id = ?').get(Number(req.params.id));
+  const r = sendFriendRequest(req.user, target);
+  res.status(r.status).json(r.body);
 });
 
 app.get('/api/friend/requests', authRequired, (req, res) => {
@@ -703,7 +811,7 @@ app.get('/api/friend/requests', authRequired, (req, res) => {
   res.json({ requests: rows });
 });
 
-app.post('/api/friend/respond', authRequired, (req, res) => {
+app.post('/api/friend/respond', rateLimit('write'), authRequired, (req, res) => {
   const { requestId, accept } = req.body || {};
   const id = Number(requestId);
   if (!id) return res.status(400).json({ error: 'invalid requestId' });
@@ -807,7 +915,7 @@ db.exec(`
 `);
 
 // send message
-app.post('/api/messages', authRequired, (req, res) => {
+app.post('/api/messages', rateLimit('write'), authRequired, (req, res) => {
   let { conv_type, conv_id, content, type, meta, reply_to } = req.body || {};
   if (!['user', 'group'].includes(conv_type)) return res.status(400).json({ error: 'invalid conv_type' });
   if (!content) return res.status(400).json({ error: '内容不能为空' });
@@ -901,7 +1009,7 @@ function broadcastMessage(msg, conv_type, originalConvId, senderId) {
 }
 
 // delete message
-app.delete('/api/messages/:id', authRequired, (req, res) => {
+app.delete('/api/messages/:id', rateLimit('write'), authRequired, (req, res) => {
   const id = Number(req.params.id);
   const row = db.prepare('SELECT * FROM messages WHERE id = ?').get(id);
   if (!row) return res.status(404).json({ error: '消息不存在' });
@@ -934,7 +1042,7 @@ app.delete('/api/messages/:id', authRequired, (req, res) => {
 });
 
 // react to a message (toggle)
-app.post('/api/messages/:id/react', authRequired, (req, res) => {
+app.post('/api/messages/:id/react', rateLimit('write'), authRequired, (req, res) => {
   const id = Number(req.params.id);
   const { emoji } = req.body || {};
   if (!emoji || typeof emoji !== 'string' || emoji.length > 8) return res.status(400).json({ error: 'invalid emoji' });
@@ -976,7 +1084,7 @@ app.post('/api/messages/:id/react', authRequired, (req, res) => {
 });
 
 // mark messages as read
-app.post('/api/messages/read', authRequired, (req, res) => {
+app.post('/api/messages/read', rateLimit('write'), authRequired, (req, res) => {
   const { conv_type, conv_id, last_read_msg_id } = req.body || {};
   if (!['user','group'].includes(conv_type) || !conv_id || !last_read_msg_id) return res.status(400).json({ error: 'invalid payload' });
   let normalizedConvId;
@@ -1036,9 +1144,50 @@ io.use((socket, next) => {
   } catch (e) { next(new Error('invalid token')); }
 });
 
+// ============================================================
+// Typing indicator — relay a lightweight "is typing" signal
+// between the participants of a conversation. Nothing is stored.
+// ============================================================
+io.on('connection', (socket) => {
+  socket.on('typing', (payload) => {
+    try {
+      const { conv_type, conv_id, typing } = payload || {};
+      if (!conv_type || conv_id == null) return;
+      if (conv_type === 'user') {
+        const other = Number(conv_id);
+        if (!Number.isFinite(other)) return;
+        socket.to(`user:${other}`).emit('typing', {
+          conv_type: 'user', conv_id: String(other), uid: socket.user.id,
+          username: socket.user.username, typing: !!typing,
+        });
+      } else if (conv_type === 'group') {
+        const gid = Number(conv_id);
+        if (!Number.isFinite(gid)) return;
+        // only broadcast if the sender really is a member
+        const mem = db.prepare('SELECT 1 FROM group_members WHERE group_id=? AND user_id=?').get(gid, socket.user.id);
+        if (!mem) return;
+        socket.to(`group:${gid}`).emit('typing', {
+          conv_type: 'group', conv_id: String(gid), uid: socket.user.id,
+          username: socket.user.username, typing: !!typing,
+        });
+      }
+    } catch (e) {
+      console.error('[typing] relay failed:', e.message);
+    }
+  });
+});
+
 io.on('connection', (socket) => {
   const uid = socket.user.id;
   socket.join(`user:${uid}`);
+  // Join every group room the user belongs to, so group message + typing
+  // broadcasts actually reach them (without this, group chats looked "dead").
+  try {
+    const gs = db.prepare('SELECT group_id FROM group_members WHERE user_id = ?').all(uid);
+    for (const g of gs) socket.join(`group:${g.id}`);
+  } catch (e) {
+    console.error('[socket] group join failed:', e.message);
+  }
   if (!userSockets.has(uid)) userSockets.set(uid, new Set());
   const wasOffline = !onlineUsers.has(uid);
   userSockets.get(uid).add(socket.id);
@@ -1248,6 +1397,36 @@ if (fs.existsSync(FRONTEND_DIR)) {
 // Never let one error kill the service.
 process.on('uncaughtException', (e) => console.error('[VVeChat] uncaughtException:', e));
 process.on('unhandledRejection', (e) => console.error('[VVeChat] unhandledRejection:', e));
+
+// ============================================================
+// Keep-alive: Render's free tier spins the container down after ~15 min
+// of inbound silence, which kills Socket.io and forces a 30-50s cold
+// start on the next visitor. We ping our own /api/health on a timer so
+// the instance never crosses the idle threshold.
+//
+// Set KEEPALIVE=0 to disable (e.g. when you upgrade to a paid plan).
+// ============================================================
+if (process.env.KEEPALIVE !== '0') {
+  const kaInterval = Number(process.env.KEEPALIVE_INTERVAL_MS || 10 * 60 * 1000);
+  const kaClient = url.startsWith('https:') ? require('https') : require('http');
+  const keepAlive = () => {
+    try {
+      const req = kaClient.request(url, { method: 'GET', timeout: 12000 }, (r) => {
+        r.resume();
+        console.log(`[keepalive] ${new Date().toISOString()} -> ${r.statusCode}`);
+      });
+      req.on('timeout', () => req.destroy(new Error('timeout')));
+      req.on('error', (e) => console.error('[keepalive]', e.message));
+      req.end();
+    } catch (e) {
+      console.error('[keepalive] request failed:', e.message);
+    }
+  };
+  setTimeout(keepAlive, 20000);
+  const kaTimer = setInterval(keepAlive, kaInterval);
+  kaTimer.unref?.();
+  console.log(`[keepalive] armed — every ${kaInterval / 1000}s`);
+}
 
 server.listen(PORT, () => {
   console.log(`[VVeChat] listening on http://0.0.0.0:${PORT}  (db: ${DB_FILE})`);

@@ -1247,7 +1247,8 @@
       : '';
     const isJackAvatar = u.username === 'Jack';
     const glowCls = isJackAvatar ? ' avatar-jack-glow' : '';
-    const avatarHtml = `<div class="msg-avatar avatar sm${glowCls}" style="${bgStyle}">${escapeHtml(initials(u.username))}</div>`;
+    // Task: tap a group member's avatar to open their profile and add them.
+    const avatarHtml = `<div class="msg-avatar avatar sm${glowCls}" style="${bgStyle}" data-uid="${m.sender_id}" role="button" title="查看资料">${escapeHtml(initials(u.username))}</div>`;
     // sender name — show for group chats when message is from someone else
     const senderName = ctype === 'group' && !mine
       ? `<div class="msg-meta"><span class="sender t-translatable">${escapeHtml(m.sender_username)}</span></div>`
@@ -1282,6 +1283,17 @@
       }
     }
     row.querySelectorAll('.chat-img').forEach(img => img.addEventListener('click', () => openLightbox(img.dataset.img)));
+    // Tap an avatar to open that person's profile (works for non-friends too,
+    // which is how you discover people inside a group).
+    const avEl = row.querySelector('.msg-avatar[data-uid]');
+    if (avEl) {
+      avEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const uid = Number(avEl.dataset.uid);
+        if (!uid || uid === state.user.id) return;
+        openUserProfileById(uid);
+      });
+    }
     return row;
   }
 
@@ -1290,8 +1302,10 @@
   // any message; regular users can only delete their own messages within 2 min.
   function showMsgActionBar(rowEl, m, evt) {
     document.querySelectorAll('.msg-action-bar').forEach(el => el.remove());
-    const isJack = state.user && state.user.is_admin;
-    const isMine = state.user && m.user_id === state.user.id;
+    // NOTE: use isJack() (username-aware) not state.user.is_admin, and compare
+    // against m.sender_id — messages carry sender_id, never user_id.
+    const isJack = isJack();
+    const isMine = !!(state.user && m.sender_id === state.user.id);
     const ageMs = Date.now() - new Date(m.created_at).getTime();
     const canDelete = isJack || (isMine && ageMs < 2 * 60 * 1000);
     const canReply = !m.is_deleted;
@@ -1642,8 +1656,11 @@
   }
 
   // ---------- profile ----------
-  function openProfileModal(user) {
+  function openProfileModal(user, opts = {}) {
+    const allowAdd = !!opts.allowAdd;
     const isMe = user.id === state.user.id;
+    // Already a friend? then the primary action is "message", not "add".
+    const isFriend = state.friends.some(f => Number(f.id) === Number(user.id));
     $('#profile-title').textContent = isMe ? t('profile_title') : user.username;
     const bg = user.avatar_color ? `background:linear-gradient(135deg, ${user.avatar_color}, ${shade(user.avatar_color, -25)})` : '';
     const online = isOnline(user.id);
@@ -1654,7 +1671,9 @@
       <div class="profile-actions">
         ${isMe ? `<button class="btn btn-primary btn-sm" id="btn-edit-profile">${t('btn_edit')}</button>
                  <button class="btn btn-danger btn-sm" id="btn-profile-logout">${t('btn_logout')}</button>`
-                : `<button class="btn btn-primary btn-sm" id="btn-msg-friend">${t('btn_msg')}</button>`}
+                : (allowAdd && !isFriend
+                    ? `<button class="btn btn-primary btn-sm" id="btn-add-friend">+ 加好友</button>`
+                    : `<button class="btn btn-primary btn-sm" id="btn-msg-friend">${t('btn_msg')}</button>`)}
       </div></div>`;
     if (isMe) {
       $('#btn-edit-profile')?.addEventListener('click', openProfileEdit);
@@ -1662,9 +1681,55 @@
         if (confirm(t('confirm_logout') || '确定要退出登录？')) { closeModal('modal-profile'); logout(); }
       });
     }
-    else $('#btn-msg-friend')?.addEventListener('click', () => { closeModal('modal-profile'); openChat('user', user.id, user.username, 0); });
+    else {
+      $('#btn-msg-friend')?.addEventListener('click', () => { closeModal('modal-profile'); openChat('user', user.id, user.username, 0); });
+      const addBtn = $('#btn-add-friend');
+      if (addBtn) addBtn.addEventListener('click', async () => {
+        addBtn.disabled = true;
+        const orig = addBtn.textContent;
+        addBtn.textContent = '发送中…';
+        try {
+          const r = await api('/friend/request/' + user.id, { method: 'POST', body: {} });
+          addBtn.textContent = r.autoAccepted ? '已成为好友 ✓' : '申请已发送 ✓';
+          await refreshFriends();
+          await refreshConversations();
+          if (r.autoAccepted) setTimeout(() => closeModal('modal-profile'), 900);
+        } catch (e) {
+          addBtn.disabled = false;
+          addBtn.textContent = orig;
+          toast(e.message || '添加失败');
+        }
+      });
+    }
     openModal('modal-profile');
   }
+  // Open someone's profile by id — works for people who are not friends yet
+  // (e.g. another member of a group). Shows a "加好友" button when appropriate.
+  async function openUserProfileById(uid) {
+    let u = state.friends.find(f => Number(f.id) === Number(uid))
+         || state.groups.find(g => Number(g.id) === Number(uid));
+    // Also try to resolve from the currently loaded message list.
+    if (!u) {
+      const key = state.currentChat && convKey(state.currentChat.type, state.currentChat.id);
+      const arr = (key && state.messagesByConv[key]) || [];
+      for (const m of arr) {
+        if (Number(m.sender_id) === Number(uid)) {
+          u = { id: uid, username: m.sender_username, avatar_color: null };
+          break;
+        }
+      }
+    }
+    if (!u) {
+      // Last resort: hit the API.
+      try {
+        const r = await api('/users/by-id/' + uid);
+        u = r.user;
+      } catch (_) {}
+    }
+    if (!u) { toast('找不到该用户'); return; }
+    openProfileModal(u, { allowAdd: true });
+  }
+
   function openProfileEdit() {
     const current = state.user.avatar_color || '#5eead4';
     const initial = state.user.username.charAt(0).toUpperCase();
@@ -2138,6 +2203,7 @@
       const v = $('#chat-input').value.trim();
       if (!v) return;
       $('#chat-input').value = '';
+      stopTyping();
       sendMessage(v);
     });
     $('#reply-preview-cancel')?.addEventListener('click', () => { state.pendingReply = null; $('#reply-preview').classList.add('hidden'); });

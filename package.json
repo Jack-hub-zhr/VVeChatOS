@@ -6,6 +6,7 @@
   "type": "commonjs",
   "scripts": {
     "start": "node server.js",
+    "keepalive": "node keepalive.js",
     "dev": "node server.js"
   },
   "dependencies": {
