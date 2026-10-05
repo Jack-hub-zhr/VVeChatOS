@@ -1441,28 +1441,39 @@ process.on('unhandledRejection', (e) => console.error('[VVeChat] unhandledReject
 // start on the next visitor. We ping our own /api/health on a timer so
 // the instance never crosses the idle threshold.
 //
-// Set KEEPALIVE=0 to disable (e.g. when you upgrade to a paid plan).
+// Set KEEPALIVE=0 to disable (e.g. once you move to a paid plan).
+// NOTE: everything here is self-contained — no outer variables — so a
+// typo here can never take the whole process down at require() time.
 // ============================================================
 if (process.env.KEEPALIVE !== '0') {
-  const kaInterval = Number(process.env.KEEPALIVE_INTERVAL_MS || 10 * 60 * 1000);
-  const kaClient = url.startsWith('https:') ? require('https') : require('http');
-  const keepAlive = () => {
-    try {
-      const req = kaClient.request(url, { method: 'GET', timeout: 12000 }, (r) => {
+  try {
+    const kaInterval = Math.max(60 * 1000, Number(process.env.KEEPALIVE_INTERVAL_MS || 10 * 60 * 1000));
+    const kaPort = process.env.PORT || '10000';
+    const kaPath = process.env.KEEPALIVE_PATH || '/api/health';
+    const kaOptions = {
+      host: '127.0.0.1',
+      port: Number(kaPort),
+      path: kaPath,
+      method: 'GET',
+      timeout: 10000,
+      headers: { 'User-Agent': 'vvechat-keepalive/1.0' },
+    };
+    const keepAlive = () => {
+      const req = require('http').request(kaOptions, (r) => {
         r.resume();
-        console.log(`[keepalive] ${new Date().toISOString()} -> ${r.statusCode}`);
+        console.log('[keepalive] ' + new Date().toISOString() + ' -> ' + r.statusCode);
       });
-      req.on('timeout', () => req.destroy(new Error('timeout')));
-      req.on('error', (e) => console.error('[keepalive]', e.message));
+      req.on('timeout', () => { req.destroy(); console.error('[keepalive] timeout'); });
+      req.on('error', (e) => console.error('[keepalive] ' + e.message));
       req.end();
-    } catch (e) {
-      console.error('[keepalive] request failed:', e.message);
-    }
-  };
-  setTimeout(keepAlive, 20000);
-  const kaTimer = setInterval(keepAlive, kaInterval);
-  kaTimer.unref?.();
-  console.log(`[keepalive] armed — every ${kaInterval / 1000}s`);
+    };
+    // Delay the first ping so it never races the server's own listen().
+    setTimeout(keepAlive, 30000);
+    setInterval(keepAlive, kaInterval).unref();
+    console.log('[keepalive] armed every ' + Math.round(kaInterval / 1000) + 's -> 127.0.0.1:' + kaPort + kaPath);
+  } catch (e) {
+    console.error('[keepalive] disabled (setup failed): ' + e.message);
+  }
 }
 
 server.listen(PORT, () => {
