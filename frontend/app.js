@@ -299,7 +299,9 @@
   };
 
   // ---------- state ----------
-  let lang = localStorage.getItem('vve:lang') || (navigator.language && !navigator.language.startsWith('zh') ? 'en' : 'zh');
+  // The UI is Chinese-only (the language toggle was removed on request).
+  // Keep the variable so the existing t()/setLang() plumbing still works.
+  const lang = 'zh';
   let authMode = 'login';
   const state = {
     user: null, token: null, socket: null,
@@ -318,189 +320,22 @@
     if (!args.length) return s;
     return s.replace(/\{(\d+)\}/g, (m, i) => args[Number(i)] ?? m);
   }
-  function setLang(newLang) {
-    if (!STRINGS[newLang]) newLang = 'zh';
-    lang = newLang;
-    localStorage.setItem('vve:lang', lang);
-    document.documentElement.lang = (lang === 'zh') ? 'zh-CN' : 'en';
-    // Static elements with data-zh / data-en
+  // Re-render every static string as Chinese and refresh dynamic views.
+  // (The language toggle was removed — the UI is Chinese-only now.)
+  function setLang() {
+    document.documentElement.lang = 'zh-CN';
     document.querySelectorAll('[data-zh]').forEach(el => {
-      el.textContent = el.dataset[lang] || el.dataset.zh;
+      el.textContent = el.dataset.zh;
     });
     document.querySelectorAll('[data-zh-ph]').forEach(el => {
-      el.placeholder = el.dataset[lang + 'Ph'] || el.dataset.zhPh;
+      el.placeholder = el.dataset.zhPh;
     });
-    // Lang toggle button label — shows the *current* language state.
-    // NOTE: must include .lang-btn — the topbar button uses that class,
-    // not .lang-toggle, so a .lang-toggle-only query left it stuck on "中".
-    document.querySelectorAll('.lang-toggle, .lang-btn').forEach(b => {
-      b.textContent = lang === 'zh' ? '中' : 'EN';
-      b.title = lang === 'zh'
-        ? '当前中文 · 点击切到 English（页面将实时翻译）'
-        : 'Currently English · Click to switch back to 中文';
-      b.dataset.state = lang;
-      b.setAttribute('aria-label', b.title);
-    });
-    // Re-render dynamic UI
     if (state.user) {
       renderAll();
       if (state.currentChat) { renderChatHeader(); renderMessages(); }
     } else {
-      $('#auth-submit').textContent = authMode === 'login' ? t('btn_login') : t('btn_register');
-    }
-    // Live-translate / restore all dynamic user-generated content
-    if (lang === 'en') {
-      setLangBusy(true);
-      translateVisibleContent().finally(() => setLangBusy(false));
-    } else {
-      setLangBusy(false);
-      restoreOriginals();
-    }
-    // Show toast so user knows what just happened
-    toast(lang === 'en' ? '🌐 已切到 English (实时翻译已启用)' : '🌐 已切到 中文 (原文)');
-  }
-  // ============================================================
-  // Live translator — caches translations and shows them inline.
-  // 1) Built-in dict for common Chinese strings
-  // 2) Free MyMemory API for everything else (no key, rate-limited)
-  // 3) Persistent localStorage cache (survives reloads)
-  // 4) Restores original Chinese when switching back to 中文
-  // ============================================================
-  const TRANSLATE_DICT = {
-    'VVeChat 官方群': 'VVeChat Official Group',
-    'VVeChat 官方群聊': 'VVeChat Official Group',
-    '官方': 'Official',
-    '群聊': 'Group',
-    '你好': 'Hello',
-    '在吗': 'Are you there?',
-    '在么': 'Are you there?',
-    '好的': 'OK',
-    '收到': 'Got it',
-    '谢谢': 'Thanks',
-    '再见': 'Bye',
-    '拜拜': 'Bye',
-    '嗯': 'Mm',
-    '哈哈': 'Haha',
-    '哈哈哈哈哈': 'Hahaha',
-    '早': 'Morning',
-    '早安': 'Good morning',
-    '晚上好': 'Good evening',
-    '嗨': 'Hi',
-    '测试': 'Test',
-    '朋友': 'Friend',
-    '好友': 'Friend',
-    '群': 'Group',
-    '图片': 'Image',
-    '今天': 'Today',
-    '明天': 'Tomorrow',
-    '昨天': 'Yesterday',
-    '大家好': 'Hello everyone',
-    '新年快乐': 'Happy New Year',
-    '晚安': 'Good night',
-    '吃饭了吗': 'Have you eaten?',
-    '我现在有点忙': "I'm a bit busy right now",
-    '稍等一下': 'Hold on a sec',
-  };
-  // Persistent cache (localStorage)
-  const _TX_CACHE_KEY = 'vve:txcache:v1';
-  let _txCache;
-  try { _txCache = new Map(Object.entries(JSON.parse(localStorage.getItem(_TX_CACHE_KEY) || '{}'))); }
-  catch { _txCache = new Map(); }
-  const _txInFlight = new Set();
-  function _txCacheSave() {
-    try {
-      const obj = Object.fromEntries(_txCache);
-      const keys = Object.keys(obj);
-      if (keys.length > 500) {
-        const trimmed = {};
-        keys.slice(-500).forEach(k => trimmed[k] = obj[k]);
-        localStorage.setItem(_TX_CACHE_KEY, JSON.stringify(trimmed));
-      } else {
-        localStorage.setItem(_TX_CACHE_KEY, JSON.stringify(obj));
-      }
-    } catch (_) {}
-  }
-  async function translateText(text) {
-    if (!text || typeof text !== 'string') return text;
-    const trimmed = text.trim();
-    if (!trimmed) return text;
-    if (_txCache.has(trimmed)) return _txCache.get(trimmed);
-    if (!/[\u4e00-\u9fa5]/.test(trimmed)) { _txCache.set(trimmed, trimmed); _txCacheSave(); return trimmed; }
-    if (TRANSLATE_DICT[trimmed]) { _txCache.set(trimmed, TRANSLATE_DICT[trimmed]); _txCacheSave(); return TRANSLATE_DICT[trimmed]; }
-    if (_txInFlight.has(trimmed)) return trimmed;
-    _txInFlight.add(trimmed);
-    try {
-      const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(trimmed.slice(0, 500))}&langpair=zh-CN|en-US`;
-      const r = await fetch(url, { signal: AbortSignal.timeout(6000) });
-      const j = await r.json();
-      const out = j?.responseData?.translatedText;
-      if (out && !out.toUpperCase().includes('MYMEMORY') && out.length < trimmed.length * 4 && out.length > 0) {
-        _txCache.set(trimmed, out);
-        _txCacheSave();
-        return out;
-      }
-    } catch (_) {}
-    _txInFlight.delete(trimmed);
-    _txCache.set(trimmed, trimmed);
-    return trimmed;
-  }
-  async function applyTranslation(el) {
-    if (!el || !el.textContent) return;
-    const original = el.dataset.tOrig || el.textContent;
-    if (!el.dataset.tOrig) el.dataset.tOrig = original;
-    if (!/[\u4e00-\u9fa5]/.test(original)) { el.classList.remove('translated'); return; }
-    const translated = await translateText(original);
-    if (translated && translated !== original) {
-      el.textContent = translated;
-      el.title = original;
-      el.classList.add('translated');
-      el.dataset.tState = 'en';
-    }
-  }
-  // Restore original Chinese text on every translated element
-  // Visual "translating..." state on the language buttons.
-  function setLangBusy(busy) {
-    document.querySelectorAll('.lang-toggle, .lang-btn').forEach(b => {
-      b.classList.toggle('translating', !!busy);
-      if (busy) {
-        if (!b.dataset.idleText) b.dataset.idleText = b.textContent;
-        b.textContent = '…';
-        b.disabled = true;
-      } else {
-        b.textContent = lang === 'zh' ? '中' : 'EN';
-        b.disabled = false;
-      }
-    });
-  }
-
-  function restoreOriginals() {
-    document.querySelectorAll('[data-t-state="en"]').forEach(el => {
-      if (el.dataset.tOrig) {
-        el.textContent = el.dataset.tOrig;
-        el.classList.remove('translated');
-        el.dataset.tState = 'zh';
-      }
-    });
-  }
-  // Translate one freshly-inserted element (used right after rendering)
-  async function translateFreshElement(el) {
-    if (!el || lang !== 'en') return;
-    await applyTranslation(el);
-  }
-  async function translateVisibleContent() {
-    const tasks = [];
-    document.querySelectorAll('.t-translatable').forEach(el => {
-      if (el.dataset.tState === 'en') return;
-      const original = el.dataset.tOrig || el.textContent || '';
-      if (original && /[\u4e00-\u9fa5]/.test(original)) {
-        tasks.push(applyTranslation(el));
-      }
-    });
-    if (!tasks.length) return;
-    const BATCH = 4;
-    for (let i = 0; i < tasks.length; i += BATCH) {
-      await Promise.all(tasks.slice(i, i + BATCH));
-      await new Promise(r => setTimeout(r, 80));
+      const btn = $('#auth-submit');
+      if (btn) btn.textContent = authMode === 'login' ? t('btn_login') : t('btn_register');
     }
   }
 
@@ -815,8 +650,8 @@
         ? `<span style="color:var(--accent);font-weight:600;">${escapeHtml(userInfo(c.last_sender_id).username)}:</span> ` : '';
       const unreadHtml = c.unread > 0 ? `<span class="unread">${c.unread>99?'99+':c.unread}</span>` : '';
       li.innerHTML = `<div class="${avatarCls}"${avatarBg}>${escapeHtml(initials(c.username))}${dot}</div>
-        <div class="meta"><div class="name t-translatable">${escapeHtml(c.username)} ${officialTag}</div>
-        <div class="preview t-translatable">${senderPrefix}${escapeHtml(preview)}</div></div>
+        <div class="meta"><div class="name">${escapeHtml(c.username)} ${officialTag}</div>
+        <div class="preview">${senderPrefix}${escapeHtml(preview)}</div></div>
         <div class="time">${fmtTime(c.last_at)}</div>${unreadHtml}`;
       li.addEventListener('click', () => openChat(c.type, c.id, c.username, isOfficial));
       list.appendChild(li);
@@ -830,7 +665,7 @@
       const ac = `avatar group ${g.is_official?'official':''}`;
       const officialTag = g.is_official ? `<span style="font-size:10px;background:rgba(245,158,11,0.14);color:#b45309;padding:2px 7px;border-radius:6px;border:1px solid rgba(245,158,11,0.30);font-weight:600;">${t('group_sub')==='群聊'?'官方':'Off'}</span>` : '';
       li.innerHTML = `<div class="${ac}">${escapeHtml(initials(g.name))}</div>
-        <div class="meta"><div class="name t-translatable">${escapeHtml(g.name)} ${officialTag}</div>
+        <div class="meta"><div class="name">${escapeHtml(g.name)} ${officialTag}</div>
         <div class="preview">${g.is_official?t('official_sub'):t('group_sub')}</div></div>`;
       li.addEventListener('click', () => openChat('group', g.id, g.name, g.is_official));
       grpList.appendChild(li);
@@ -845,8 +680,8 @@
       const bg = avatarStyle(f);
       const statusTag = online ? `<span style="font-size:10px;background:rgba(52,199,89,0.14);color:#15803d;padding:2px 7px;border-radius:6px;border:1px solid rgba(52,199,89,0.30);font-weight:600;">${t('online')}</span>` : '';
       li.innerHTML = `<div class="avatar ${online?'online':''}"${bg ? ` style="${bg}"` : ''}>${avatarInner(f)}<span class="online-dot"></span></div>
-        <div class="meta"><div class="name t-translatable">${escapeHtml(f.username)} ${statusTag}</div>
-        <div class="preview t-translatable">${escapeHtml(f.bio || (online?t('online'):t('friend')))}</div></div>`;
+        <div class="meta"><div class="name">${escapeHtml(f.username)} ${statusTag}</div>
+        <div class="preview">${escapeHtml(f.bio || (online?t('online'):t('friend')))}</div></div>`;
       li.addEventListener('click', () => openProfileModal(f));
       frList.appendChild(li);
     }
@@ -894,8 +729,8 @@
       const bg = `background:linear-gradient(135deg, ${color}, ${shade(color, -25)});`;
       li.innerHTML = `<div class="avatar sm" style="${bg}">${escapeHtml((g.name || '?').slice(0,1))}</div>
         <div class="meta">
-          <div class="name t-translatable">${escapeHtml(g.name)}</div>
-          <div class="preview t-translatable">${escapeHtml(g.description || '')} · ${g.member_count || 0} ${lang==='zh'?'人':'members'}</div>
+          <div class="name">${escapeHtml(g.name)}</div>
+          <div class="preview">${escapeHtml(g.description || '')} · ${g.member_count || 0} ${lang==='zh'?'人':'members'}</div>
         </div>
         <button class="settings-action" data-gid="${g.id}" data-act="${g.joined ? 'open' : 'join'}" style="color:#3b82f6;">${g.joined ? (lang==='zh'?'打开':'Open') : (lang==='zh'?'加入':'Join')}</button>`;
       const act = li.querySelector('[data-act]');
@@ -924,6 +759,35 @@
       list.appendChild(li);
     }
   }
+  // ---- In-app confirm dialog ----
+  // Native confirm() is unreliable inside a PWA / standalone Safari view, so
+  // every destructive action goes through this instead.
+  function askConfirm(opts) {
+    return new Promise((resolve) => {
+      const mask = document.createElement('div');
+      mask.className = 'modal';
+      mask.innerHTML = `
+        <div class="modal-mask"></div>
+        <div class="modal-card" style="max-width:340px">
+          <div class="modal-head"><h3>${escapeHtml(opts.title || '确认操作')}</h3></div>
+          <div class="modal-body" style="font-size:14px;line-height:1.6;color:var(--ink-2);">
+            ${escapeHtml(opts.message || '')}
+          </div>
+          <div class="modal-actions" style="display:flex;gap:10px;padding:0 20px 20px">
+            <button class="btn btn-ghost" data-x="0" style="flex:1">${escapeHtml(opts.cancelText || '取消')}</button>
+            <button class="btn ${opts.danger === false ? 'btn-primary' : 'btn-danger'}" data-x="1" style="flex:1">${escapeHtml(opts.okText || '确定')}</button>
+          </div>
+        </div>`;
+      document.body.appendChild(mask);
+      const done = (v) => { mask.remove(); resolve(v); };
+      mask.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-x]');
+        if (b) return done(b.dataset.x === '1');
+        if (e.target.classList.contains('modal-mask')) done(false);
+      });
+    });
+  }
+
   async function openGroupInfoModal() {
     const gid = state.currentChat.id;
     const g = state.groups.find(g => g.id === gid) || {};
@@ -991,6 +855,18 @@
       wrap.appendChild(recRow);
     }
 
+    // Add-member row — group owner / Jack only
+    if (canManage) {
+      const addRow = document.createElement('div');
+      addRow.className = 'settings-row';
+      addRow.id = 'gi-add-member';
+      addRow.innerHTML = `<div class="avatar sm" style="background:linear-gradient(135deg,#34d399,#10b981);color:#fff;">+</div>
+        <div class="settings-label" style="color:#10b981;font-weight:600;">添加成员</div>
+        <div class="settings-trailing"><span class="settings-chevron">›</span></div>`;
+      addRow.addEventListener('click', () => openAddMemberModal(g));
+      wrap.appendChild(addRow);
+    }
+
     // Members section header
     const mTitle = document.createElement('div');
     mTitle.className = 'section-title';
@@ -1022,11 +898,16 @@
         const kick = row.querySelector('[data-act="kick"]');
         if (kick) kick.addEventListener('click', async (e) => {
           e.stopPropagation();
-          if (!confirm((lang==='zh'?'确定把 ':'Remove ') + m.username + (lang==='zh'?' 从群里移除？':' from group?'))) return;
+          const ok = await askConfirm({
+            title: '移出群聊',
+            message: '确定把 ' + m.username + ' 从群里移出？',
+            okText: '移出',
+          });
+          if (!ok) return;
           try {
-            await (isAdmin ? jackRemoveMember(gid, m.id) : api(`/groups/${gid}/members/${m.id}`, { method: 'DELETE' }));
+            await api(`/groups/${gid}/members/${m.id}`, { method: 'DELETE' });
             row.remove();
-            toast(lang==='zh'?'已移除':'Removed');
+            toast('已移出 ' + m.username);
             refreshGroups();
           } catch (e) { toast(e.message); }
         });
@@ -1251,13 +1132,13 @@
     const avatarHtml = `<div class="msg-avatar avatar sm${glowCls}" style="${bgStyle}" data-uid="${m.sender_id}" role="button" title="查看资料">${escapeHtml(initials(u.username))}</div>`;
     // sender name — show for group chats when message is from someone else
     const senderName = ctype === 'group' && !mine
-      ? `<div class="msg-meta"><span class="sender t-translatable">${escapeHtml(m.sender_username)}</span></div>`
+      ? `<div class="msg-meta"><span class="sender">${escapeHtml(m.sender_username)}</span></div>`
       : '';
     const quoteHtml = m.reply_to ? renderQuote(m.reply_to) : '';
     let bubbleContent = '';
     if (m.is_deleted) bubbleContent = `<div class="msg-bubble deleted">${t('msg_deleted')}</div>`;
     else if (m.type === 'image') bubbleContent = `<div class="msg-bubble image-bubble"><img class="chat-img" src="${escapeHtml(m.content)}" alt="${t('img_alt')}" data-img="${escapeHtml(m.content)}" loading="lazy" /></div>`;
-    else bubbleContent = `<div class="msg-bubble t-translatable">${escapeHtml(m.content)}</div>`;
+    else bubbleContent = `<div class="msg-bubble">${escapeHtml(m.content)}</div>`;
     const time = new Date(m.created_at).toTimeString().slice(0,5);
     let receipt = '';
     if (mine && ctype === 'user' && !m.is_deleted) {
@@ -1730,6 +1611,79 @@
     openProfileModal(u, { allowAdd: true });
   }
 
+  // ---- Add member to a group (owner / Jack) ----
+  async function openAddMemberModal(g) {
+    const gid = g.id;
+    const mask = document.createElement('div');
+    mask.className = 'modal';
+    mask.innerHTML = `
+      <div class="modal-mask"></div>
+      <div class="modal-card">
+        <div class="modal-head">
+          <h3>添加成员到「${escapeHtml(g.name || '')}」</h3>
+          <button class="icon-btn icon-btn-sm" data-x="0">×</button>
+        </div>
+        <div class="modal-body">
+          <input id="am-q" class="input" type="text" placeholder="输入用户名搜索…" autocomplete="off" />
+          <div id="am-results" style="margin-top:12px;max-height:300px;overflow-y:auto;">
+            <div class="empty-hint"><p>正在加载…</p></div>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(mask);
+    const close = () => mask.remove();
+    mask.addEventListener('click', (e) => {
+      if (e.target.closest('[data-x]') || e.target.classList.contains('modal-mask')) close();
+    });
+
+    const results = mask.querySelector('#am-results');
+    const load = async (q) => {
+      try {
+        const r = await api(`/groups/${gid}/candidates` + (q ? `?q=${encodeURIComponent(q)}` : ''));
+        const list = r.candidates || [];
+        if (!list.length) {
+          results.innerHTML = `<div class="empty-hint"><p>${q ? '没有匹配的用户' : '所有用户都已在群里'}</p></div>`;
+          return;
+        }
+        results.innerHTML = '';
+        for (const u of list) {
+          const row = document.createElement('div');
+          row.className = 'settings-row';
+          const bg = u.avatar_color ? `background:linear-gradient(135deg, ${u.avatar_color}, ${shade(u.avatar_color, -25)})` : '';
+          row.innerHTML = `<div class="avatar sm" style="${bg}">${escapeHtml(initials(u.username))}</div>
+            <div class="settings-label">${escapeHtml(u.username)}</div>
+            <div class="settings-trailing"><span class="settings-action" data-add="${u.id}">添加</span></div>`;
+          const btn = row.querySelector('[data-add]');
+          btn.addEventListener('click', async () => {
+            btn.disabled = true;
+            btn.textContent = '…';
+            try {
+              await api(`/groups/${gid}/members`, { method: 'POST', body: { memberId: u.id } });
+              btn.textContent = '✓ 已添加';
+              btn.style.color = '#10b981';
+              toast('已添加 ' + u.username);
+              refreshGroups();
+              setTimeout(close, 700);
+            } catch (e) {
+              btn.disabled = false;
+              btn.textContent = '添加';
+              toast(e.message || '添加失败');
+            }
+          });
+          results.appendChild(row);
+        }
+      } catch (e) {
+        results.innerHTML = `<div class="empty-hint"><p>${escapeHtml(e.message || '加载失败')}</p></div>`;
+      }
+    };
+    load('');
+    let t = null;
+    mask.querySelector('#am-q').addEventListener('input', (e) => {
+      clearTimeout(t);
+      t = setTimeout(() => load(e.target.value.trim()), 220);
+    });
+  }
+
   function openProfileEdit() {
     const current = state.user.avatar_color || '#5eead4';
     const initial = state.user.username.charAt(0).toUpperCase();
@@ -1900,10 +1854,10 @@
       const inChat = state.currentChat && state.currentChat.type===msg.conv_type &&
         ((msg.conv_type==='user' && state.currentChat.id===peerId) ||
          (msg.conv_type==='group' && state.currentChat.id===msg.conv_id));
-      if (inChat) { renderMessages(); scrollBottom(); sendReadReceipt(msg); if (lang === 'en') translateVisibleContent(); }
+      if (inChat) { renderMessages(); scrollBottom(); sendReadReceipt(msg); }
       else refreshConversations();
     } else {
-      refreshConversations(); if (lang === 'en') translateVisibleContent();
+      refreshConversations();
     }
   }
   function onMessageDeleted({ id, conv_type, conv_id }) {
@@ -2248,17 +2202,27 @@
 
     // admin (deprecated old key system) — Jack-only mode uses regular auth
     // admin wipe button in chat header (Jack only)
+    // Wipe every message in the current group. Jack only.
+    // Uses the in-app confirm dialog: native confirm() is swallowed when the
+    // page runs in Safari's standalone/PWA mode, so the trash button looked
+    // completely dead.
     $('#chat-admin-wipe')?.addEventListener('click', async () => {
       if (!state.currentChat || state.currentChat.type !== 'group') return;
-      if (!confirm(t('confirm_wipe_official') || '确定清空本群所有消息？此操作不可恢复！')) return;
+      if (!isJack()) { toast('只有 Jack 可以使用该功能'); return; }
+      const chatName = state.currentChat.name || state.currentChat.title || '当前群聊';
+      const ok = await askConfirm({
+        title: '清空群内所有消息',
+        message: '确定要删除「' + chatName + '」内的全部消息吗？此操作不可恢复。',
+        okText: '全部删除',
+      });
+      if (!ok) return;
       try {
         const r = await jackWipeGroup(state.currentChat.id);
-        toast(t('wiped') + ' ' + r.deleted);
-        // clear local cache
+        toast('已删除 ' + (r.deleted != null ? r.deleted : r.matched || 0) + ' 条消息');
         state.messagesByConv[convKey('group', state.currentChat.id)] = [];
         renderMessages();
         refreshConversations();
-      } catch (e) { toast(e.message); }
+      } catch (e) { toast(e.message || '删除失败'); }
     });
 
     // ULTIMATE FALLBACK: document-level click delegation by data-action.

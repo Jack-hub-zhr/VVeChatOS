@@ -405,12 +405,14 @@ app.post('/api/admin/messages/wipe-group/:id', rateLimit('write'), authRequired,
   try { if (io) io.emit('group:wiped', { group_id: gid }); } catch {}
   res.json({ ok: true, matched: ids.length, deleted });
 });
-// remove a member from a group (Jack only) — works for any group
-app.delete('/api/admin/groups/:gid/members/:uid', rateLimit('write'), authRequired, requireAdmin, (req, res) => {
+// Remove a member from a group. Allowed for the group owner and for Jack.
+app.delete('/api/groups/:gid/members/:uid', rateLimit('write'), authRequired, (req, res) => {
   const gid = Number(req.params.gid);
   const uid = Number(req.params.uid);
-  const g = db.prepare('SELECT id, name, is_official FROM groups WHERE id = ?').get(gid);
+  const g = db.prepare('SELECT id, name, is_official, owner_id FROM groups WHERE id = ?').get(gid);
   if (!g) return res.status(404).json({ error: '群不存在' });
+  if (!canManageGroup(req.user, g)) return res.status(403).json({ error: '只有群主或 Jack 可以移出成员' });
+  if (uid === Number(req.user.id)) return res.status(400).json({ error: '不能移出自己，请用"退出群聊"' });
   // don't allow removing Jack from the official group
   if (g.is_official) {
     const u = db.prepare('SELECT username FROM users WHERE id = ?').get(uid);
@@ -616,6 +618,13 @@ app.post('/api/groups', rateLimit('write'), authRequired, (req, res) => {
 });
 
 // group members
+// Can `user` manage this group's membership? Owner or the built-in admin (Jack).
+function canManageGroup(user, group) {
+  if (!user || !group) return false;
+  if (isAdmin(user)) return true;
+  return Number(group.owner_id) === Number(user.id);
+}
+
 app.get('/api/groups/:id/members', authRequired, (req, res) => {
   const gid = Number(req.params.id);
   const inGroup = db.prepare('SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?').get(gid, req.user.id);
@@ -630,20 +639,48 @@ app.get('/api/groups/:id/members', authRequired, (req, res) => {
   res.json({ members: rows });
 });
 
-// add member to existing group (admin)
+// Add a member to a group. Owner or Jack only.
 app.post('/api/groups/:id/members', rateLimit('write'), authRequired, (req, res) => {
   const gid = Number(req.params.id);
-  const inGroup = db.prepare('SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?').get(gid, req.user.id);
-  if (!inGroup) return res.status(403).json({ error: 'not in group' });
+  const g = db.prepare('SELECT id, name, is_official, owner_id FROM groups WHERE id = ?').get(gid);
+  if (!g) return res.status(404).json({ error: '群不存在' });
+  if (!canManageGroup(req.user, g)) return res.status(403).json({ error: '只有群主或 Jack 可以添加成员' });
   const { memberId } = req.body || {};
   const mid = Number(memberId);
-  if (!mid) return res.status(400).json({ error: 'invalid memberId' });
+  if (!mid) return res.status(400).json({ error: '缺少成员 ID' });
+  if (mid === Number(req.user.id)) return res.status(400).json({ error: '不能添加自己' });
   const u = db.prepare('SELECT id, username FROM users WHERE id = ?').get(mid);
-  if (!u) return res.status(404).json({ error: 'user not found' });
+  if (!u) return res.status(404).json({ error: '用户不存在' });
+  const already = db.prepare('SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?').get(gid, mid);
+  if (already) return res.status(400).json({ error: '该用户已在群中' });
   db.prepare('INSERT OR IGNORE INTO group_members (group_id, user_id, joined_at) VALUES (?, ?, ?)').run(gid, mid, now());
-  const grp = db.prepare('SELECT name FROM groups WHERE id = ?').get(gid);
-  io.to(`user:${mid}`).emit('group:added', { groupId: gid, name: grp.name });
-  res.json({ ok: true });
+  // Make sure the new member's socket joins the group room right away so they
+  // receive messages without having to reconnect.
+  try {
+    for (const [, sock] of (userSockets.get(mid) || new Set())) {
+      const s2 = io.sockets.sockets.get(sock);
+      if (s2) s2.join(`group:${gid}`);
+    }
+  } catch (_) {}
+  io.to(`user:${mid}`).emit('group:added', { groupId: gid, name: g.name });
+  res.json({ ok: true, member: { id: u.id, username: u.username } });
+});
+
+// List users who are NOT yet in this group — powers the "add member" picker.
+app.get('/api/groups/:id/candidates', rateLimit('write'), authRequired, (req, res) => {
+  const gid = Number(req.params.id);
+  const g = db.prepare('SELECT id, name, is_official, owner_id FROM groups WHERE id = ?').get(gid);
+  if (!g) return res.status(404).json({ error: '群不存在' });
+  if (!canManageGroup(req.user, g)) return res.status(403).json({ error: '只有群主或 Jack 可以查看' });
+  const q = String(req.query.q || '').trim();
+  const rows = db.prepare(`
+    SELECT u.id, u.username, u.avatar_color
+    FROM users u
+    WHERE u.id NOT IN (SELECT user_id FROM group_members WHERE group_id = ?)
+      ${q ? 'AND u.username LIKE ?' : ''}
+    ORDER BY u.username LIMIT 50
+  `).all(...(q ? [gid, '%' + q + '%'] : [gid]));
+  res.json({ candidates: rows });
 });
 
 // Update group name. Only the official group requires Jack; regular groups allow any member.

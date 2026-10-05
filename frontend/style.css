@@ -359,43 +359,15 @@ body.dark .auth-card { background: rgba(20, 24, 32, 0.60); border-color: rgba(25
   color: var(--accent);
   text-shadow: 0 2px 12px rgba(59, 130, 246, 0.18);
 }
-.lang-toggle {
-  margin-left: auto;
-  min-width: 32px; height: 28px; padding: 0 10px;
-  border-radius: var(--r-pill);
-  background: var(--glass-bg-strong);
-  border: 1px solid var(--glass-border);
-  font-size: 11px; font-weight: 700; color: var(--ink);
-  box-shadow: var(--glass-highlight);
-  transition: background 0.2s, color 0.2s, transform 0.2s;
-}
-.lang-toggle:hover {
   background: var(--accent-soft); color: var(--accent);
   transform: translateY(-1px);
 }
-.lang-toggle-sm {
   margin-left: 12px;
   min-width: 28px; height: 26px; padding: 0 8px;
   font-size: 10.5px;
   align-self: center;
 }
-.lang-btn {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 30px; height: 26px;
-  border-radius: 999px;
-  background: var(--glass-bg-soft);
-  color: var(--muted);
-  font-size: 12px; font-weight: 600;
-  border: 1px solid var(--glass-border);
-  cursor: pointer;
-  transition: all .18s ease;
-  backdrop-filter: blur(8px) saturate(180%);
-  -webkit-backdrop-filter: blur(8px) saturate(180%);
-}
-.lang-btn:hover { background: var(--accent-soft); color: var(--accent); transform: translateY(-1px); }
-body.dark .lang-btn { background: rgba(255, 255, 255, 0.10); color: var(--ink); }
-.lang-btn-restored{}
-body.dark .lang-btn-restored{}
+
 .brand-tagline {
   font-size: 13.5px; color: var(--muted);
   text-align: center; margin: -4px 0 6px;
@@ -594,7 +566,6 @@ body.dark .topbar { background: rgba(20, 24, 32, 0.30); border-bottom-color: rgb
 .topbar-right > * { flex-shrink: 0; }
 /* The Jack shield pill must not push the row wider than the bar. */
 #topbar-jack-pill { flex-shrink: 0; }
-.brand-name, .beta-tag, .lang-btn { flex-shrink: 0; }
 
 .brand-name {
   font-weight: 800; font-size: 18px;
@@ -1012,7 +983,9 @@ body.dark .chat-header { background: rgba(20, 24, 32, 0.30); border-bottom-color
 .msg-bubble {
   position: relative;
   padding: 10px 16px;
-  border-radius: 999px;  /* full capsule shape */
+  /* Match the sidebar panel radius (#chats-list) so bubbles and the chat
+     list read as one system instead of two different languages. */
+  border-radius: 14px;
   font-size: 14px; line-height: 1.45;
   word-wrap: break-word; word-break: break-word;
   max-width: 100%;
@@ -1039,27 +1012,10 @@ body.dark .chat-header { background: rgba(20, 24, 32, 0.30); border-bottom-color
   border-radius: inherit;
   pointer-events: none;
 }
-/* Live-translated text (user-generated content) */
-.msg-bubble.translated { font-style: italic; opacity: 0.92; }
-.msg-bubble.translated::after {
-  content: " 🌐";
-  font-size: 0.7em;
-  opacity: 0.55;
-  font-style: normal;
-}
 /* Language button busy state while the translator is running. */
-.lang-btn.translating, .lang-toggle.translating {
-  opacity: 0.65; cursor: progress;
-  animation: langPulse 1s ease-in-out infinite;
-}
 @keyframes langPulse { 0%,100%{opacity:.45} 50%{opacity:.9} }
 
-.translated { font-style: italic; }
-.translated::after { content: " 🌐"; font-size: 0.7em; opacity: 0.5; font-style: normal; margin-left: 4px; }
 /* Hide globe icon inside avatars / pills / small chips where it looks noisy */
-.avatar.translated::after,
-.admin-pill.translated::after,
-.name > .translated::after { content: none !important; }
 /* Subtle highlight on the lang toggle while English mode is active */
 /* lang state highlight removed */
 .msg-bubble.deleted {
@@ -1894,7 +1850,6 @@ body.dark .theme-menu { background: rgba(20, 24, 32, 0.92); border-color: rgba(2
   .chat-header { height: 48px; padding: 0 10px; gap: 6px; }
   .icon-btn { width: 32px; height: 32px; }
   .icon-btn-sm { width: 28px; height: 28px; }
-  .lang-btn {
   display: inline-flex; align-items: center; justify-content: center;
   width: 30px; height: 26px;
   border-radius: 999px;
@@ -1907,8 +1862,7 @@ body.dark .theme-menu { background: rgba(20, 24, 32, 0.92); border-color: rgba(2
   backdrop-filter: blur(8px) saturate(180%);
   -webkit-backdrop-filter: blur(8px) saturate(180%);
 }
-.lang-btn:hover { background: var(--accent-soft); color: var(--accent); transform: translateY(-1px); }
-body.dark .lang-btn { background: rgba(255, 255, 255, 0.10); color: var(--ink); }
+
   .beta-tag { height: 18px; padding: 0 8px; font-size: 10px; }
   .composer-row .emoji-btn, .composer-row .attach-btn { width: 34px; height: 34px; font-size: 17px; }
   /* Root terminal on mobile: nearly full-screen */
@@ -2008,12 +1962,10 @@ body.dark .icon-btn:hover {
   background: rgba(255, 255, 255, 0.20);
   color: var(--accent);
 }
-body.dark .lang-toggle {
   background: rgba(255, 255, 255, 0.08);
   border-color: rgba(255, 255, 255, 0.12);
   color: var(--ink);
 }
-body.dark .lang-toggle:hover { background: var(--accent-soft); color: var(--accent); }
 body.dark .composer-row .emoji-btn,
 body.dark .composer-row .attach-btn {
   background: rgba(255, 255, 255, 0.06);
