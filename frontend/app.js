@@ -893,7 +893,7 @@
           right.push(`<span class="settings-action danger" data-act="kick" data-uid="${m.id}">${lang==='zh'?'移除':'Remove'}</span>`);
         }
         row.innerHTML = `<div class="avatar sm" style="${bg}">${escapeHtml(initials(m.username))}</div>
-          <div class="settings-label">${escapeHtml(m.username)}${m.is_admin?` <span class="admin-pill" style="font-size:9px;padding:1px 6px;"></span>`:''}</div>
+          <div class="settings-label">${escapeHtml(m.username)}${m.is_admin?` <span class="admin-pill admin-pill-xs"></span>`:''}</div>
           <div class="settings-trailing">${right.join('')}</div>`;
         const kick = row.querySelector('[data-act="kick"]');
         if (kick) kick.addEventListener('click', async (e) => {
@@ -1387,24 +1387,47 @@
     state.pendingReply = null; state.pendingImage = null;
     $('#reply-preview').classList.add('hidden');
     $('#img-preview').classList.add('hidden');
-    if (state.socket && state.socket.emit) {
+    const key = convKey(type, id);
+    const acceptMessage = (msg) => {
+      if (!msg) return;
+      const arr = state.messagesByConv[key] || (state.messagesByConv[key] = []);
+      if (!arr.find(x => x.id === msg.id)) arr.push(msg);
+      renderMessages(); scrollBottom();
+      refreshConversations();
+    };
+
+    // Prefer the socket (instant), but never depend on it: if the connection
+    // is down — or the ack simply never arrives — fall back to HTTP so a
+    // message can never get stuck on "发送中…".
+    if (state.socket && state.socket.connected) {
+      let settled = false;
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        sendViaHttp(payload, acceptMessage);
+      }, 4000);
       state.socket.emit('message:send', payload, (ack) => {
-        if (!ack.ok) toast(ack.error || t('err_send'));
-        else {
-          const key = convKey(type, id);
-          const arr = state.messagesByConv[key] || [];
-          if (!arr.find(x => x.id === ack.message.id)) arr.push(ack.message);
-          state.messagesByConv[key] = arr;
-          renderMessages(); scrollBottom();
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        if (!ack || !ack.ok) {
+          sendViaHttp(payload, acceptMessage);
+        } else {
+          acceptMessage(ack.message);
         }
       });
     } else {
-      try {
-        const data = await api('/messages', { method:'POST', body: payload });
-        const key = convKey(type, id);
-        const arr = state.messagesByConv[key] || []; arr.push(data.message); state.messagesByConv[key] = arr;
-        renderMessages(); scrollBottom(); refreshConversations();
-      } catch(e) { toast(e.message); }
+      await sendViaHttp(payload, acceptMessage);
+    }
+  }
+
+  // HTTP fallback for sending a message.
+  async function sendViaHttp(payload, acceptMessage) {
+    try {
+      const data = await api('/messages', { method: 'POST', body: payload });
+      acceptMessage(data && data.message);
+    } catch (e) {
+      toast((e && e.message) || '发送失败');
     }
   }
 
