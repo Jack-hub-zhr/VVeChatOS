@@ -258,9 +258,9 @@ app.use(express.json({ limit: '5mb' }));  // larger limit for image messages
 const RATE_BUCKETS = new Map();
 const RATE_LIMIT = {
   windowMs: 60 * 1000,
-  global: 300,   // 300 req/min per IP across the whole API
-  auth: 12,      // 12 req/min for login/register
-  write: 60,     // 60 req/min for mutating endpoints
+  global: 1200,  // 1200 req/min per IP across the whole API
+  auth: 60,      // 60 req/min for login/register (a person can retry freely)
+  write: 240,    // 240 req/min for mutating endpoints
 };
 function clientIp(req) {
   const xff = req.headers['x-forwarded-for'];
@@ -273,15 +273,19 @@ function rateLimit(kind) {
     const now = Date.now();
     let b = RATE_BUCKETS.get(ip);
     if (!b || now - b.start > RATE_LIMIT.windowMs) {
-      b = { start: now, count: 0, auth: 0, write: 0 };
+      b = { start: now, count: 0, authFail: 0, write: 0 };
       RATE_BUCKETS.set(ip, b);
     }
     b.count++;
     if (b.count > RATE_LIMIT.global) {
-      return res.status(429).json({ error: '请求过于频繁，请稍后再试' });
+      return res.status(429).json({ error: '请求太频繁，请稍等几秒再试' });
     }
-    if (kind === 'auth' && ++b.auth > RATE_LIMIT.auth) {
-      return res.status(429).json({ error: '尝试次数过多，请 1 分钟后再试' });
+    if (kind === 'auth') {
+      // Only *failed* auth attempts count toward the brute-force limit, so a
+      // real user who mistypes a password or retries is never locked out.
+      if ((b.authFail || 0) > RATE_LIMIT.auth) {
+        return res.status(429).json({ error: '登录失败次数过多，请 1 分钟后再试' });
+      }
     }
     if (kind === 'write' && ++b.write > RATE_LIMIT.write) {
       return res.status(429).json({ error: '操作过于频繁，请稍后再试' });
@@ -289,34 +293,19 @@ function rateLimit(kind) {
     next();
   };
 }
+
+// Called by the login/register handlers when authentication fails.
+function noteAuthFailure(req) {
+  const ip = clientIp(req);
+  const b = RATE_BUCKETS.get(ip);
+  if (!b) return;
+  b.authFail = (b.authFail || 0) + 1;
+}
 // Drop stale buckets so the Map cannot grow without bound.
 setInterval(() => {
   const cutoff = Date.now() - RATE_LIMIT.windowMs * 2;
   for (const [ip, b] of RATE_BUCKETS) if (b.start < cutoff) RATE_BUCKETS.delete(ip);
 }, 60 * 1000).unref();
-
-// =====================================================================
-// Lightweight firewall / rate limiter (in-memory, per IP)
-// =====================================================================
-const RATE_BUCKET = new Map();
-function rateLimit(max = 120, windowMs = 60_000) {
-  return (req, res, next) => {
-    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || 'unknown';
-    const now = Date.now();
-    const arr = RATE_BUCKET.get(ip) || [];
-    while (arr.length && now - arr[0] > windowMs) arr.shift();
-    if (arr.length >= max) {
-      return res.status(429).json({ error: 'rate_limited', retry_after: Math.ceil(windowMs/1000) });
-    }
-    arr.push(now);
-    RATE_BUCKET.set(ip, arr);
-    next();
-  };
-}
-// Global limit: 120 req/min per IP for any /api/* path
-app.use('/api/', rateLimit(180, 60_000));
-// Tighter limit for auth endpoints (10 / min)
-app.use(['/api/login', '/api/register'], rateLimit(15, 60_000));
 
 app.get('/api/health', (_, res) => res.json({ ok: true, name: 'VVeChat' }));
 
@@ -468,14 +457,17 @@ app.post('/api/login', rateLimit('auth'), (req, res) => {
   const { username, password } = req.body || {};
   if (!username || !password) return res.status(400).json({ error: '用户名和密码不能为空' });
   const u = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
-  if (!u) return res.status(401).json({ error: '账号不存在' });
+  if (!u) { noteAuthFailure(req); return res.status(401).json({ error: '账号不存在' }); }
   if (!bcrypt.compareSync(password, u.password_hash)) {
+    noteAuthFailure(req);
     return res.status(401).json({ error: '密码错误' });
   }
   // re-join official group if previously removed
   db.prepare('INSERT OR IGNORE INTO group_members (group_id, user_id, joined_at) VALUES (?, ?, ?)')
     .run(OFFICIAL_GROUP_ID, u.id, now());
   const token = jwt.sign({ uid: u.id, username: u.username }, JWT_SECRET, { expiresIn: '30d' });
+  // Successful login clears this IP's failure counter.
+  try { const b = RATE_BUCKETS.get(clientIp(req)); if (b) b.authFail = 0; } catch (_) {}
   res.json({ token, user: userPublic(u) });
 });
 
@@ -1447,30 +1439,38 @@ process.on('unhandledRejection', (e) => console.error('[VVeChat] unhandledReject
 // ============================================================
 if (process.env.KEEPALIVE !== '0') {
   try {
-    const kaInterval = Math.max(60 * 1000, Number(process.env.KEEPALIVE_INTERVAL_MS || 10 * 60 * 1000));
-    const kaPort = process.env.PORT || '10000';
+    // Render's free tier sleeps a service after ~15 minutes with no *external*
+    // inbound traffic. Pinging 127.0.0.1 does not count, so we deliberately
+    // hit our own public URL — that is traffic from outside the container and
+    // it resets Render's idle timer.
+    const kaInterval = Math.max(60 * 1000, Number(process.env.KEEPALIVE_INTERVAL_MS || 5 * 60 * 1000));
+    const kaSelf = process.env.RENDER_EXTERNAL_URL
+      || (process.env.RENDER_SERVICE_URL ? ('https://' + process.env.RENDER_SERVICE_URL) : '')
+      || (process.env.RENDER_EXTERNAL_HOSTNAME ? ('https://' + process.env.RENDER_EXTERNAL_HOSTNAME) : '')
+      || ('http://127.0.0.1:' + (process.env.PORT || '10000'));
     const kaPath = process.env.KEEPALIVE_PATH || '/api/health';
-    const kaOptions = {
-      host: '127.0.0.1',
-      port: Number(kaPort),
-      path: kaPath,
-      method: 'GET',
-      timeout: 10000,
-      headers: { 'User-Agent': 'vvechat-keepalive/1.0' },
-    };
+    let u;
+    try { u = new URL(kaPath, kaSelf); } catch (_) { u = new URL('http://127.0.0.1:' + (process.env.PORT || '10000') + kaPath); }
+    const kaMod = u.protocol === 'https:' ? require('https') : require('http');
+
     const keepAlive = () => {
-      const req = require('http').request(kaOptions, (r) => {
+      const req = kaMod.request(u, {
+        method: 'GET',
+        timeout: 15000,
+        headers: { 'User-Agent': 'vvechat-keepalive/1.0', 'Accept': 'application/json' },
+      }, (r) => {
         r.resume();
-        console.log('[keepalive] ' + new Date().toISOString() + ' -> ' + r.statusCode);
+        console.log('[keepalive] ' + new Date().toISOString() + ' -> ' + r.statusCode + ' ' + u.href);
       });
       req.on('timeout', () => { req.destroy(); console.error('[keepalive] timeout'); });
       req.on('error', (e) => console.error('[keepalive] ' + e.message));
       req.end();
     };
-    // Delay the first ping so it never races the server's own listen().
-    setTimeout(keepAlive, 30000);
+
+    // Stagger the first ping so it never races the server's own listen().
+    setTimeout(keepAlive, 45000);
     setInterval(keepAlive, kaInterval).unref();
-    console.log('[keepalive] armed every ' + Math.round(kaInterval / 1000) + 's -> 127.0.0.1:' + kaPort + kaPath);
+    console.log('[keepalive] armed every ' + Math.round(kaInterval / 1000) + 's -> ' + u.href);
   } catch (e) {
     console.error('[keepalive] disabled (setup failed): ' + e.message);
   }

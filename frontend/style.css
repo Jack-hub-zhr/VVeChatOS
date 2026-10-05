@@ -1532,12 +1532,16 @@ body.dark .hello-splash-hint {
 }
 @keyframes modalMaskIn { from { opacity: 0; } to { opacity: 1; } }
 
+/* Secondary menus sit centred and square, so every dialog reads as the same
+   object. Width is capped so it never gets wide; aspect-ratio keeps it square
+   and min-height guarantees a sensible floor on short screens. */
 .modal-card {
   position: relative;
-  width: 100%;
-  max-width: 460px;
-  max-height: 80vh;
+  width: min(88vw, 420px, 62vh);
+  aspect-ratio: 1 / 1;
+  max-height: 78vh;
   display: flex; flex-direction: column;
+  margin: 0 auto;
   background: rgba(255, 255, 255, 0.50);
   backdrop-filter: blur(18px) saturate(180%);
   -webkit-backdrop-filter: blur(18px) saturate(180%);
@@ -1556,7 +1560,7 @@ body.dark .modal-card { background: rgba(20, 24, 32, 0.70); border-color: rgba(2
   from { opacity: 0; transform: translateY(20px) scale(0.96); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
-.modal-card-sm { max-width: 380px; }
+.modal-card-sm { width: min(84vw, 340px, 52vh); aspect-ratio: 1 / 1; }
 
 .modal-head {
   display: flex; align-items: center; gap: 10px;
@@ -1565,7 +1569,7 @@ body.dark .modal-card { background: rgba(20, 24, 32, 0.70); border-color: rgba(2
 }
 .modal-head h3 { flex: 1; font-size: 16px; font-weight: 700; }
 
-.modal-body { padding: 18px 20px; overflow-y: auto; flex: 1; }
+.modal-body { padding: 18px 20px; overflow-y: auto; flex: 1; min-height: 0; }
 .modal-body::-webkit-scrollbar { width: 6px; }
 .modal-body::-webkit-scrollbar-thumb { background: rgba(30, 80, 150, 0.15); border-radius: 3px; }
 
