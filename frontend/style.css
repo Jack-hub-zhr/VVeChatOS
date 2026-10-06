@@ -999,7 +999,7 @@ body.dark .chat-header { background: rgba(20, 24, 32, 0.30); border-bottom-color
 }
 .msg-row:not(.me) .msg-bubble,
 .msg-row.me .msg-bubble {
-  border-radius: 999px;  /* full capsule on both sides */
+  border-radius: 14px;  /* same radius as the sidebar panel */
 }
 .msg-row.me .msg-bubble {
   background: var(--bubble-me);
@@ -1074,23 +1074,30 @@ body.dark .chat-header { background: rgba(20, 24, 32, 0.30); border-bottom-color
    The picture is sent at its natural aspect ratio, as a plain
    rounded rectangle sitting directly on the glass background.
    ============================================================ */
-.msg-bubble.image-bubble {
+/* Specificity note: .msg-row.me .msg-bubble (0,3,0) would otherwise beat
+   .msg-bubble.image-bubble (0,2,0) and paint the blue capsule behind the
+   picture — hence the explicit .msg-row prefix and !important flags. */
+.msg-row .msg-bubble.image-bubble,
+.msg-row.me .msg-bubble.image-bubble {
   padding: 0 !important;
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
   backdrop-filter: none !important;
-  border-radius: 14px;
+  border-radius: 14px !important;
   overflow: hidden;
-  max-width: 300px;
+  max-width: min(300px, 62vw) !important;
   line-height: 0;
+  color: inherit;
 }
-.msg-bubble.image-bubble .chat-img {
+/* Kill the highlight overlay on own-image messages. */
+.msg-row.me .msg-bubble.image-bubble::before { display: none !important; }
+.msg-row .msg-bubble.image-bubble .chat-img {
   display: block;
   width: auto;
   height: auto;
-  /* keep the original aspect ratio — do not crop or pad */
-  max-width: 300px;
+  /* keep the original aspect ratio — no cropping, no padding */
+  max-width: min(300px, 62vw);
   max-height: 420px;
   object-fit: contain;
   border-radius: 14px;
@@ -1531,6 +1538,27 @@ body.dark .hello-splash-hint {
   animation: modalMaskIn 0.3s ease both;
 }
 @keyframes modalMaskIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* ---- In-app confirm dialog (wipe group, remove member) ----
+   Uses its own class names so the global [data-close] / .modal-mask
+   capture-phase delegate never swallows its buttons. */
+.ask-confirm {
+  position: fixed; inset: 0; z-index: 2000;
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+}
+.ask-confirm-mask {
+  position: absolute; inset: 0;
+  background: rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.ask-confirm-card {
+  position: relative;
+  width: min(86vw, 360px, 56vh);
+  max-height: 76vh;
+  aspect-ratio: auto;   /* confirmations are message-shaped, not square */
+}
 
 /* Secondary menus sit centred and square, so every dialog reads as the same
    object. Width is capped so it never gets wide; aspect-ratio keeps it square
@@ -2122,10 +2150,15 @@ body.dark .settings-group { background: rgba(255, 255, 255, 0.06); }
 body.dark .settings-row { border-bottom-color: rgba(255, 255, 255, 0.08); }
 .settings-row:last-child { border-bottom: none; }
 .settings-row .avatar { flex-shrink: 0; }
-.settings-row .settings-label { flex: 1; min-width: 0; font-size: 14px; color: var(--ink); display: flex; align-items: center; gap: 6px; }
+.settings-row .settings-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; color: var(--ink); display: flex; align-items: center; gap: 6px; }
 .settings-row .settings-value { font-size: 13px; color: var(--muted); max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .settings-row .settings-chevron { color: var(--muted); font-size: 16px; line-height: 1; }
-.settings-row .settings-trailing { display: flex; align-items: center; gap: 12px; }
+.settings-row .settings-trailing {
+  display: flex; align-items: center; gap: 12px;
+  /* Never let the trailing side (我 / 移除 / chevrons) be squeezed into a
+     vertical column — that is what pushed "我" into a one-char-per-line stack. */
+  flex-shrink: 0; flex-wrap: nowrap; white-space: nowrap;
+}
 .settings-row .settings-action { font-size: 13px; cursor: pointer; }
 .settings-row .settings-action.danger { color: #ff3b30; }
 .settings-row .settings-action.danger:hover { color: #ff6b6b; }

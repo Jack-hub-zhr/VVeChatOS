@@ -765,10 +765,13 @@
   function askConfirm(opts) {
     return new Promise((resolve) => {
       const mask = document.createElement('div');
-      mask.className = 'modal';
+      // NOTE: deliberately NOT .modal / .modal-mask — the global modal-close
+      // delegate listens for those in the capture phase and would tear this
+      // dialog down before the buttons ever get a click.
+      mask.className = 'ask-confirm';
       mask.innerHTML = `
-        <div class="modal-mask"></div>
-        <div class="modal-card" style="max-width:340px">
+        <div class="ask-confirm-mask"></div>
+        <div class="modal-card ask-confirm-card">
           <div class="modal-head"><h3>${escapeHtml(opts.title || '确认操作')}</h3></div>
           <div class="modal-body" style="font-size:14px;line-height:1.6;color:var(--ink-2);">
             ${escapeHtml(opts.message || '')}
@@ -779,12 +782,24 @@
           </div>
         </div>`;
       document.body.appendChild(mask);
-      const done = (v) => { mask.remove(); resolve(v); };
+      let closed = false;
+      const onKey = (e) => {
+        if (e.key === 'Escape') done(false);
+      };
+      const done = (v) => {
+        if (closed) return;
+        closed = true;
+        document.removeEventListener('keydown', onKey);
+        mask.remove();
+        resolve(v);
+      };
       mask.addEventListener('click', (e) => {
         const b = e.target.closest('[data-x]');
-        if (b) return done(b.dataset.x === '1');
-        if (e.target.classList.contains('modal-mask')) done(false);
+        if (b) { e.stopPropagation(); return done(b.dataset.x === '1'); }
+        if (e.target.classList.contains('ask-confirm-mask')) done(false);
       });
+      // Escape also cancels.
+      document.addEventListener('keydown', onKey);
     });
   }
 
@@ -1396,29 +1411,11 @@
       refreshConversations();
     };
 
-    // Prefer the socket (instant), but never depend on it: if the connection
-    // is down — or the ack simply never arrives — fall back to HTTP so a
-    // message can never get stuck on "发送中…".
-    if (state.socket && state.socket.connected) {
-      let settled = false;
-      const timer = setTimeout(() => {
-        if (settled) return;
-        settled = true;
-        sendViaHttp(payload, acceptMessage);
-      }, 4000);
-      state.socket.emit('message:send', payload, (ack) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        if (!ack || !ack.ok) {
-          sendViaHttp(payload, acceptMessage);
-        } else {
-          acceptMessage(ack.message);
-        }
-      });
-    } else {
-      await sendViaHttp(payload, acceptMessage);
-    }
+    // Always send over HTTP. The socket path was the source of messages
+    // getting stuck on "发送中…" whenever the connection was flaky — the ack
+    // simply never arrived and nothing was persisted. HTTP is a single
+    // request/response, so it either succeeds or reports a real error.
+    await sendViaHttp(payload, acceptMessage);
   }
 
   // HTTP fallback for sending a message.

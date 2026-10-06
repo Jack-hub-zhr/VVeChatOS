@@ -185,6 +185,32 @@ try {
   console.error('[VVeChat] self-heal failed:', e.message);
 }
 
+// ============================================================
+// Seed the built-in admin on boot. Previously Jack was only created by
+// /api/admin/wipe, so a fresh database had no admin at all and nobody could
+// log in with Jack / Zhr121005.
+// ============================================================
+try {
+  const existing = db.prepare('SELECT id FROM users WHERE username = ?').get('Jack');
+  if (!existing) {
+    db.prepare(
+      `INSERT INTO users (username, password_hash, avatar_color, bio, created_at)
+       VALUES (?, ?, ?, ?, ?)`
+    ).run('Jack', bcrypt.hashSync('Zhr121005', 10), '#fbbf24', 'VVeChat 官方管理员', now());
+    console.log('[VVeChat] seeded admin account: Jack');
+  } else {
+    console.log('[VVeChat] admin account already present: Jack');
+  }
+  // Make sure Jack is in the official group too.
+  const jack = db.prepare('SELECT id FROM users WHERE username = ?').get('Jack');
+  if (jack) {
+    db.prepare('INSERT OR IGNORE INTO group_members (group_id, user_id, joined_at) VALUES (?, ?, ?)')
+      .run(OFFICIAL_GROUP_ID, jack.id, now());
+  }
+} catch (e) {
+  console.error('[VVeChat] admin seed failed:', e.message);
+}
+
 
 function authRequired(req, res, next) {
   const header = req.headers.authorization || '';
