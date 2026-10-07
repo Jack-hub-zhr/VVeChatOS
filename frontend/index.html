@@ -461,7 +461,9 @@
   <div id="toast" class="toast hidden"></div>
   <div id="offline-banner" class="offline-banner hidden"><span class="dot"></span> <span data-zh="正在重新连接…" data-en="Reconnecting…">正在重新连接…</span></div>
 
-  <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.7.5/dist/socket.io.min.js"></script>
+  <!-- Socket.io client is served by this same Express app at /socket.io/socket.io.js,
+       so there is no third-party CDN to fail (or be blocked). -->
+  <script src="/socket.io/socket.io.js"></script>
   <script src="config.js"></script>
   <script src="app.js"></script>
 </body>

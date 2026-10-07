@@ -359,6 +359,14 @@
     if (d.toDateString() === now.toDateString()) return d.toTimeString().slice(0,5);
     return `${d.getMonth()+1}/${d.getDate()}`;
   }
+  // Avatar letter for a group: the official group reads「官」, any other
+  // group「群」. Falls back to initials() for non-Chinese names.
+  function groupLetter(name, isOfficial) {
+    if (isOfficial) return '官';
+    if (/[\u4e00-\u9fa5]/.test(name || '')) return '群';
+    return initials(name);
+  }
+
   function initials(name) {
     if (!name) return '?';
     return /[\u4e00-\u9fa5]/.test(name) ? name.slice(-1) : name.slice(0,1).toUpperCase();
@@ -649,7 +657,7 @@
       const senderPrefix = c.last_sender_id && c.last_sender_id !== state.user.id && isGroup
         ? `<span style="color:var(--accent);font-weight:600;">${escapeHtml(userInfo(c.last_sender_id).username)}:</span> ` : '';
       const unreadHtml = c.unread > 0 ? `<span class="unread">${c.unread>99?'99+':c.unread}</span>` : '';
-      li.innerHTML = `<div class="${avatarCls}"${avatarBg}>${escapeHtml(initials(c.username))}${dot}</div>
+      li.innerHTML = `<div class="${avatarCls}"${avatarBg}>${escapeHtml(isGroup ? groupLetter(c.username, isOfficial) : initials(c.username))}${dot}</div>
         <div class="meta"><div class="name">${escapeHtml(c.username)} ${officialTag}</div>
         <div class="preview">${senderPrefix}${escapeHtml(preview)}</div></div>
         <div class="time">${fmtTime(c.last_at)}</div>${unreadHtml}`;
@@ -664,7 +672,7 @@
       const li = document.createElement('li'); li.className = 'list-item';
       const ac = `avatar group ${g.is_official?'official':''}`;
       const officialTag = g.is_official ? `<span style="font-size:10px;background:rgba(245,158,11,0.14);color:#b45309;padding:2px 7px;border-radius:6px;border:1px solid rgba(245,158,11,0.30);font-weight:600;">${t('group_sub')==='群聊'?'官方':'Off'}</span>` : '';
-      li.innerHTML = `<div class="${ac}">${escapeHtml(initials(g.name))}</div>
+      li.innerHTML = `<div class="${ac}">${escapeHtml(groupLetter(g.name, g.is_official))}</div>
         <div class="meta"><div class="name">${escapeHtml(g.name)} ${officialTag}</div>
         <div class="preview">${g.is_official?t('official_sub'):t('group_sub')}</div></div>`;
       li.addEventListener('click', () => openChat('group', g.id, g.name, g.is_official));
@@ -1069,7 +1077,7 @@
       avatar.textContent = f && f.avatar ? '' : initials(title);
       avatar.onclick = () => f && openProfileModal(f);
     } else {
-      sub.textContent = isOfficial ? 'VVeChat Official' : t('group_sub');
+      sub.textContent = isOfficial ? '官方群 · 全部成员' : t('group_sub');
       avatar.className = 'avatar sm group';
       avatar.style.cssText = isOfficial ? 'background:linear-gradient(135deg, #fde68a, #fb923c);' : '';
       avatar.style.display = 'flex';
@@ -1327,7 +1335,7 @@
       </div>`;
     }).join('') || `<div class="empty-hint small"><p>${t('no_friends_yet') || '还没有好友'}</p></div>`;
     const groupsHtml = (state.groups || []).map(g => `<div class="req-item" data-gid="${g.id}">
-      <div class="avatar sm group">${escapeHtml(initials(g.name))}</div>
+      <div class="avatar sm group">${escapeHtml(groupLetter(g.name, g.is_official))}</div>
       <div class="meta"><div class="name">${escapeHtml(g.name)}</div></div>
     </div>`).join('') || `<div class="empty-hint small"><p>${t('no_groups_yet') || '还没有群聊'}</p></div>`;
     modal.querySelector('#forward-friends').innerHTML = friendsHtml;
@@ -1390,8 +1398,8 @@
     }
   }
 
-  async function sendMessage(content, opts = {}) {
-    if (!state.currentChat) return;
+  async function sendMessage(content, opts = {}, inputEl) {
+    if (!state.currentChat) { toast('请先选择一个会话'); return; }
     const { type, id } = state.currentChat;
     const payload = {
       conv_type: type, conv_id: id, content,
@@ -1415,16 +1423,30 @@
     // getting stuck on "发送中…" whenever the connection was flaky — the ack
     // simply never arrived and nothing was persisted. HTTP is a single
     // request/response, so it either succeeds or reports a real error.
-    await sendViaHttp(payload, acceptMessage);
+    const btn = $('#send-btn');
+    if (btn) btn.disabled = true;
+    try {
+      await sendViaHttp(payload, acceptMessage, inputEl);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
   }
 
-  // HTTP fallback for sending a message.
-  async function sendViaHttp(payload, acceptMessage) {
+  // POST a message over HTTP. On success the input is cleared; on failure the
+  // text is put back so nothing is ever silently lost.
+  async function sendViaHttp(payload, acceptMessage, inputEl) {
     try {
+      console.log('[VVeChat] sending', payload);
       const data = await api('/messages', { method: 'POST', body: payload });
-      acceptMessage(data && data.message);
+      if (!data || !data.message) throw new Error('服务器没有返回消息');
+      if (inputEl) inputEl.value = '';
+      acceptMessage(data.message);
+      console.log('[VVeChat] sent ok');
     } catch (e) {
-      toast((e && e.message) || '发送失败');
+      const msg = (e && e.message) || '发送失败';
+      // Keep the text in the box so the user can retry, and say why.
+      toast('发送失败：' + msg);
+      console.error('[VVeChat] send failed:', e);
     }
   }
 
@@ -1791,7 +1813,7 @@
     for (const g of groups) {
       const li = document.createElement('div');
       li.className = 'list-item'; li.style.cursor = 'default';
-      li.innerHTML = `<div class="avatar sm group">${escapeHtml(initials(g.name))}</div>
+      li.innerHTML = `<div class="avatar sm group">${escapeHtml(groupLetter(g.name, g.is_official))}</div>
         <div class="meta"><div class="name">${escapeHtml(g.name)}</div><div class="preview">${g.member_count} ${t('member_sub')}</div></div>
         <button class="btn btn-ok btn-sm" data-join="${g.id}">${t('add')}</button>`;
       wrap.appendChild(li);
@@ -2173,12 +2195,40 @@
     // composer
     $('#chat-composer')?.addEventListener('submit', (e) => {
       e.preventDefault();
-      if (state.pendingImage) { sendMessage(state.pendingImage, { type: 'image' }); $('#chat-input').value = ''; return; }
-      const v = $('#chat-input').value.trim();
+      if (state.pendingImage) {
+        const img = state.pendingImage;
+        state.pendingImage = null;
+        $('#chat-input').value = '';
+        sendMessage(img, { type: 'image' });
+        return;
+      }
+      const input = $('#chat-input');
+      const v = input.value.trim();
       if (!v) return;
-      $('#chat-input').value = '';
-      stopTyping();
-      sendMessage(v);
+      // Keep the text in the box until the server confirms it, so a failed
+      // send never loses the user's message.
+      sendMessage(v, {}, input);
+    });
+
+    // The send button is type=submit, but iOS Safari sometimes swallows the
+    // implicit form submission when the keyboard's return key is used. Wire an
+    // explicit click handler as a belt-and-braces fallback.
+    $('#send-btn')?.addEventListener('click', (e) => {
+      if (e.defaultPrevented) return;
+      e.preventDefault();
+      $('#chat-composer')?.requestSubmit
+        ? $('#chat-composer').requestSubmit()
+        : $('#chat-composer')?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+    });
+
+    // Enter sends, Shift+Enter inserts a newline.
+    $('#chat-input')?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+        e.preventDefault();
+        $('#chat-composer')?.requestSubmit
+          ? $('#chat-composer').requestSubmit()
+          : $('#chat-composer')?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+      }
     });
     $('#reply-preview-cancel')?.addEventListener('click', () => { state.pendingReply = null; $('#reply-preview').classList.add('hidden'); });
     $('#img-preview-cancel')?.addEventListener('click', () => { state.pendingImage = null; $('#img-preview').classList.add('hidden'); });
