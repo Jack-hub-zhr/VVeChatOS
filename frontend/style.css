@@ -1100,19 +1100,27 @@ body.dark .chat-header { background: rgba(20, 24, 32, 0.30); border-bottom-color
 /* Specificity note: .msg-row.me .msg-bubble (0,3,0) would otherwise beat
    .msg-bubble.image-bubble (0,2,0) and paint the blue capsule behind the
    picture — hence the explicit .msg-row prefix and !important flags. */
+/* An image is the message: no bubble chrome at all, not even a soft
+   glow. Everything that could tint the frame is forced off. */
 .msg-row .msg-bubble.image-bubble,
 .msg-row.me .msg-bubble.image-bubble {
   padding: 0 !important;
-  background: transparent !important;
-  border: none !important;
+  background: none !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
   box-shadow: none !important;
   backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
   border-radius: 14px !important;
-  overflow: hidden;
+  overflow: visible !important;
   max-width: min(300px, 62vw) !important;
+  width: max-content;
   line-height: 0;
   color: inherit;
 }
+.msg-row .msg-bubble.image-bubble::before,
+.msg-row .msg-bubble.image-bubble::after { display: none !important; content: none !important; }
 /* Kill the highlight overlay on own-image messages. */
 .msg-row.me .msg-bubble.image-bubble::before { display: none !important; }
 .msg-row .msg-bubble.image-bubble .chat-img {
@@ -1124,6 +1132,9 @@ body.dark .chat-header { background: rgba(20, 24, 32, 0.30); border-bottom-color
   max-height: 420px;
   object-fit: contain;
   border-radius: 14px;
+  border: 0;
+  box-shadow: none;
+  outline: none;
   cursor: zoom-in;
   background: transparent;
 }

@@ -1061,10 +1061,10 @@
     if (!state.currentChat) return;
     const { type, id, title, isOfficial } = state.currentChat;
     const titleEl = $('#chat-title');
-    titleEl.textContent = title;
+    // Official group gets the shield in front of its name.
+    titleEl.textContent = isOfficial ? '\u{1F6E1} ' + title : title;
     titleEl.dataset.tOrig = title;
     titleEl.dataset.tState = 'zh';
-    titleEl.classList.add('t-translatable');
     const sub = $('#chat-sub'); const avatar = $('#chat-avatar');
     if (type === 'user') {
       const f = state.friends.find(f => f.id === id);
@@ -1077,7 +1077,7 @@
       avatar.textContent = f && f.avatar ? '' : initials(title);
       avatar.onclick = () => f && openProfileModal(f);
     } else {
-      sub.textContent = isOfficial ? '官方群 · 全部成员' : t('group_sub');
+      sub.textContent = '';   // no subtitle — the group name is enough
       avatar.className = 'avatar sm group';
       avatar.style.cssText = isOfficial ? 'background:linear-gradient(135deg, #fde68a, #fb923c);' : '';
       avatar.style.display = 'flex';
@@ -2039,6 +2039,7 @@
     // bindAppEvents() bailed out part-way through.
     ensureModalCloseBound();
     ensurePlusActionsBound();
+    ensureWipeBound();
     renderTopbarAvatar();
     connectSocket();
     refreshAll();
@@ -2099,6 +2100,46 @@
         try { openCreateGroup(); } catch (err) { console.error('openCreateGroup', err); toast('创建群聊失败：' + err.message); }
       } else if (act === 'join-group') {
         try { openJoinGroup(); } catch (err) { console.error('openJoinGroup', err); toast('加入群聊失败：' + err.message); }
+      }
+    }, true);
+  }
+
+  // ---- Wipe every message in the current group (Jack only) ----
+  // Bound once at document level. It used to live inside bindAppEvents(),
+  // so any earlier throw in that long function left the trash button dead.
+  let _wipeBound = false;
+  function ensureWipeBound() {
+    if (_wipeBound) return;
+    _wipeBound = true;
+    document.addEventListener('click', async (e) => {
+      const btn = e.target.closest('#chat-admin-wipe');
+      if (!btn) return;
+      e.preventDefault(); e.stopPropagation();
+      console.log('[VVeChat] wipe clicked');
+      if (!state.currentChat || state.currentChat.type !== 'group') {
+        toast('请先打开一个群聊');
+        return;
+      }
+      if (!isJack()) { toast('只有 Jack 可以使用该功能'); return; }
+      const chatName = state.currentChat.title || '当前群聊';
+      const ok = await askConfirm({
+        title: '清空群内所有消息',
+        message: '确定要删除「' + chatName + '」内的全部消息吗？此操作不可恢复。',
+        okText: '全部删除',
+      });
+      if (!ok) return;
+      const gid = state.currentChat.id;
+      try {
+        btn.disabled = true;
+        const r = await jackWipeGroup(gid);
+        state.messagesByConv[convKey('group', gid)] = [];
+        renderMessages();
+        refreshConversations();
+        toast('已删除 ' + (r.deleted != null ? r.deleted : (r.matched || 0)) + ' 条消息');
+      } catch (e) {
+        toast(e.message || '删除失败');
+      } finally {
+        btn.disabled = false;
       }
     }, true);
   }
@@ -2272,28 +2313,7 @@
 
     // admin (deprecated old key system) — Jack-only mode uses regular auth
     // admin wipe button in chat header (Jack only)
-    // Wipe every message in the current group. Jack only.
-    // Uses the in-app confirm dialog: native confirm() is swallowed when the
-    // page runs in Safari's standalone/PWA mode, so the trash button looked
-    // completely dead.
-    $('#chat-admin-wipe')?.addEventListener('click', async () => {
-      if (!state.currentChat || state.currentChat.type !== 'group') return;
-      if (!isJack()) { toast('只有 Jack 可以使用该功能'); return; }
-      const chatName = state.currentChat.name || state.currentChat.title || '当前群聊';
-      const ok = await askConfirm({
-        title: '清空群内所有消息',
-        message: '确定要删除「' + chatName + '」内的全部消息吗？此操作不可恢复。',
-        okText: '全部删除',
-      });
-      if (!ok) return;
-      try {
-        const r = await jackWipeGroup(state.currentChat.id);
-        toast('已删除 ' + (r.deleted != null ? r.deleted : r.matched || 0) + ' 条消息');
-        state.messagesByConv[convKey('group', state.currentChat.id)] = [];
-        renderMessages();
-        refreshConversations();
-      } catch (e) { toast(e.message || '删除失败'); }
-    });
+    // (wipe-group is bound separately via ensureWipeBound — see below)
 
     // ULTIMATE FALLBACK: document-level click delegation by data-action.
     // If anything above somehow missed, this still works.
