@@ -359,9 +359,11 @@ body.dark .auth-card { background: rgba(20, 24, 32, 0.60); border-color: rgba(25
   color: var(--accent);
   text-shadow: 0 2px 12px rgba(59, 130, 246, 0.18);
 }
+.brand-text:hover {
   background: var(--accent-soft); color: var(--accent);
   transform: translateY(-1px);
 }
+.beta-tag {
   margin-left: 12px;
   min-width: 28px; height: 26px; padding: 0 8px;
   font-size: 10.5px;
@@ -940,6 +942,17 @@ body.dark .chat-header { background: rgba(20, 24, 32, 0.30); border-bottom-color
   text-overflow: ellipsis;
   max-width: 100%;
 }
+/* Inline shield between the brand and the group type in the chat title. */
+.title-shield {
+  display: inline-block;
+  font-size: 0.78em;
+  line-height: 1;
+  vertical-align: baseline;
+  margin: 0 3px;
+  transform: translateY(-1px);
+  filter: saturate(1.1);
+}
+
 .chat-title {
   font-size: 16px;
   line-height: 1.25;
@@ -1999,6 +2012,7 @@ body.dark .theme-menu { background: rgba(20, 24, 32, 0.92); border-color: rgba(2
   .toast { bottom: 16px; font-size: 12.5px; padding: 8px 16px; }
   .auth-card { border-radius: 18px; }
   /* Action bar on mobile: smaller buttons */
+  @media (max-width: 520px) {
   .msg-action-bar { padding: 4px; border-radius: 10px; }
   .msg-action-btn { width: 28px; height: 28px; }
   .msg-action-btn svg { width: 14px; height: 14px; }
@@ -2046,6 +2060,7 @@ body.dark .icon-btn:hover {
   background: rgba(255, 255, 255, 0.20);
   color: var(--accent);
 }
+body.dark .beta-btn {
   background: rgba(255, 255, 255, 0.08);
   border-color: rgba(255, 255, 255, 0.12);
   color: var(--ink);
@@ -2269,3 +2284,38 @@ body.dark .chat-empty-mark {
   background: rgba(255, 255, 255, 0.06);
   border-color: rgba(255, 255, 255, 0.10);
 }
+
+
+/* ============================================================
+   Mirror view (explicit, last so it wins over every earlier rule)
+   Sender sees their own message with the avatar on the RIGHT and the
+   bubble on the LEFT; everyone else sees it mirrored.
+   ============================================================ */
+.msg-row.me {
+  flex-direction: row-reverse !important;
+  align-items: flex-end !important;
+  justify-content: flex-start;
+  align-self: flex-end;
+}
+/* The avatar must be the visually right-most item. */
+.msg-row.me > .msg-avatar,
+.msg-row.me > .avatar { order: 10; }
+.msg-row.me > .msg-content,
+.msg-row.me > .msg-body { order: 1; }
+
+/* Keep the content column narrow so the row hugs the right edge. */
+.msg-row.me .msg-content { align-items: flex-end; }
+.msg-row.me .msg-meta,
+.msg-row.me .msg-time { justify-content: flex-end; text-align: right; }
+.msg-row.me .msg-bubble { align-self: flex-end; }
+
+/* Opposite side (their messages): avatar left, bubble right-aligned within. */
+.msg-row:not(.me) {
+  flex-direction: row !important;
+  align-items: flex-end !important;
+  align-self: flex-start;
+}
+.msg-row:not(.me) > .msg-avatar,
+.msg-row:not(.me) > .avatar { order: 1; }
+.msg-row:not(.me) > .msg-content,
+.msg-row:not(.me) > .msg-body { order: 10; }

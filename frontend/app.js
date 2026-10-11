@@ -1061,8 +1061,18 @@
     if (!state.currentChat) return;
     const { type, id, title, isOfficial } = state.currentChat;
     const titleEl = $('#chat-title');
-    // Official group gets the shield in front of its name.
-    titleEl.textContent = isOfficial ? '\u{1F6E1} ' + title : title;
+    // Official group: shield sits between the brand and the group type,
+    // e.g. "VVeChat 🛡 官方群", rendered as a small inline badge.
+    if (isOfficial) {
+      const m = /^(.*?)(官方群|群)$/.exec(title);
+      const head = m ? m[1].trim() : title;
+      const tail = m ? m[2] : '';
+      titleEl.innerHTML = tail
+        ? `${escapeHtml(head)}<span class="title-shield">🛡</span>${escapeHtml(tail)}`
+        : escapeHtml(title);
+    } else {
+      titleEl.textContent = title;
+    }
     titleEl.dataset.tOrig = title;
     titleEl.dataset.tState = 'zh';
     const sub = $('#chat-sub'); const avatar = $('#chat-avatar');
@@ -1079,9 +1089,14 @@
     } else {
       sub.textContent = '';   // no subtitle — the group name is enough
       avatar.className = 'avatar sm group';
-      avatar.style.cssText = isOfficial ? 'background:linear-gradient(135deg, #fde68a, #fb923c);' : '';
+      // Set only the properties we need — assigning cssText would wipe the
+      // class-driven width/height/font-size, which is what blew the single
+      // character up into a giant emoji.
+      avatar.style.background = isOfficial
+        ? 'linear-gradient(135deg, #fde68a, #fb923c)'
+        : '';
       avatar.style.display = 'flex';
-      avatar.textContent = initials(title);
+      avatar.textContent = groupLetter(title, isOfficial);
       avatar.onclick = null;
     }
     // admin badge in header (Jack)
@@ -1294,12 +1309,25 @@
       bar.remove();
     });
     bar.querySelector('.msg-action-cancel').addEventListener('click', (ev) => { ev.stopPropagation(); bar.remove(); });
-    setTimeout(() => {
-      const dismiss = (e) => {
-        if (!bar.contains(e.target)) { bar.remove(); document.removeEventListener('click', dismiss); }
-      };
-      document.addEventListener('click', dismiss);
-    }, 50);
+    // Dismiss on the NEXT tap elsewhere. On touch devices the click that
+    // opened this bar is delivered ~50-300ms later, so a 50ms timeout made
+    // the bar delete itself the instant it appeared. Wait for a full touch
+    // cycle and ignore the event that is still bubbling from the opener.
+    let armed = false;
+    const armTimer = setTimeout(() => { armed = true; }, 400);
+    const dismiss = (e) => {
+      if (!armed) return;                       // still the opening tap
+      if (bar.contains(e.target)) return;      // tapped inside the bar
+      bar.remove();
+      cleanup();
+    };
+    const cleanup = () => {
+      clearTimeout(armTimer);
+      document.removeEventListener('click', dismiss, true);
+      document.removeEventListener('touchstart', dismiss, true);
+    };
+    document.addEventListener('click', dismiss, true);
+    document.addEventListener('touchstart', dismiss, true);
   }
 
   // Forward message to another chat (friend or group)
