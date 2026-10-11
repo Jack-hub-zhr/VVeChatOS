@@ -1099,13 +1099,8 @@
       avatar.textContent = groupLetter(title, isOfficial);
       avatar.onclick = null;
     }
-    // admin badge in header (Jack)
-    const adminBadge = isJack() ? `<span class="admin-pill admin-pill-inline" title="Jack 管理员"></span>` : '';
-    if ($('#chat-title').parentElement) {
-      const existing = $('#chat-title').parentElement.querySelector('.admin-pill');
-      if (existing) existing.remove();
-      if (adminBadge) $('#chat-title').insertAdjacentHTML('afterend', adminBadge);
-    }
+    // No admin badge in the chat header — the shield under the group name
+    // was visual noise. (The topbar pill and the in-message badge stay.)
     // Jack can wipe any group's messages — show button when Jack and in a group
     const wipeBtn = $('#chat-admin-wipe');
     if (wipeBtn) {
