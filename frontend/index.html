@@ -144,14 +144,12 @@
               </svg>
               <span data-zh="通讯录" data-en="Contacts">通讯录</span>
             </button>
-            <button class="tab2" data-pane="discover">
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="9"/>
                 <path d="M2 12h20"/>
                 <path d="M12 2a14 14 0 0 1 0 20"/>
                 <path d="M12 2a14 14 0 0 0 0 20"/>
               </svg>
-              <span data-zh="推荐" data-en="Discover">推荐</span>
             </button>
           </nav>
 
@@ -183,15 +181,6 @@
             </div>
           </div>
 
-          <div id="pane-discover" class="pane hidden">
-            <div class="section-title" data-zh="看看大家的群聊" data-en="Discover groups">看看大家的群聊 👀</div>
-            <ul id="discover-list" class="list"></ul>
-            <div class="empty-hint hidden" id="discover-empty">
-              <div class="empty-illus">🌐</div>
-              <p data-zh="还没有推荐的群聊" data-en="No recommended groups yet">还没有推荐的群聊</p>
-              <small data-zh="群主开启"推荐群聊"后会出现在这里" data-en='When a group owner enables "Recommend", it appears here'>群主开启"推荐群聊"后会出现在这里</small>
-            </div>
-          </div>
         </aside>
 
         <section class="right-pane" id="right-pane">
@@ -275,48 +264,6 @@
     <div class="modal-card modal-card-sm">
       <div class="modal-head">
         <h3 data-zh="搜索 / 添加" data-en="Search / Add">搜索 / 添加</h3>
-        <button class="icon-btn icon-btn-sm modal-close" data-close="modal-plus">×</button>
-      </div>
-      <div class="modal-body modal-plus-body">
-        <button class="plus-action" data-action="friend">
-          <div class="plus-action-icon">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-              <circle cx="8.5" cy="7" r="4"/>
-              <line x1="18" y1="4.5" x2="18" y2="9.5"/><line x1="15.5" y1="7" x2="20.5" y2="7"/>
-            </svg>
-          </div>
-          <div>
-            <div class="plus-action-title" data-zh="添加用户" data-en="Add user">添加用户</div>
-            <div class="plus-action-sub" data-zh="按用户名搜索并发送申请" data-en="Search by username & send request">按用户名搜索并发送申请</div>
-          </div>
-        </button>
-        <button class="plus-action" data-action="join-group">
-          <div class="plus-action-icon">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-              <circle cx="9" cy="7" r="4"/>
-              <line x1="18.5" y1="4.5" x2="18.5" y2="9.5"/><line x1="16" y1="7" x2="21" y2="7"/>
-            </svg>
-          </div>
-          <div>
-            <div class="plus-action-title" data-zh="添加群聊" data-en="Join group">添加群聊</div>
-            <div class="plus-action-sub" data-zh="按名称搜索并加入一个群" data-en="Search by name & join a group">按名称搜索并加入一个群</div>
-          </div>
-        </button>
-        <button class="plus-action" data-action="group">
-          <div class="plus-action-icon">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2"/>
-              <line x1="12" y1="9" x2="12" y2="15"/>
-              <line x1="9" y1="12" x2="15" y2="12"/>
-            </svg>
-          </div>
-          <div>
-            <div class="plus-action-title" data-zh="创建群聊" data-en="Create group">创建群聊</div>
-            <div class="plus-action-sub" data-zh="选择好友创建一个新群" data-en="Pick friends & create new group">选择好友创建一个新群</div>
-          </div>
-        </button>
       </div>
     </div>
   </div>
@@ -340,64 +287,6 @@
           <button type="submit" class="btn btn-primary" data-zh="发送申请" data-en="Send">发送申请</button>
         </div>
       </form>
-    </div>
-  </div>
-
-  <!-- MODAL: create group -->
-  <div class="modal hidden" id="modal-create-group" role="dialog">
-    <div class="modal-mask"></div>
-    <div class="modal-card">
-      <div class="modal-head">
-        <h3 data-zh="创建群聊" data-en="Create group">创建群聊</h3>
-        <button class="icon-btn icon-btn-sm modal-close" data-close="modal-create-group">×</button>
-      </div>
-      <form class="modal-body" id="form-create-group">
-        <label class="field">
-          <span class="field-label" data-zh="群名称" data-en="Group name">群名称</span>
-          <input id="group-name" type="text" required data-zh-ph="给新群起个名字" data-en-ph="Group name" placeholder="给新群起个名字" maxlength="40" />
-        </label>
-        <div class="field">
-          <span class="field-label">
-            <span data-zh="选择成员" data-en="Members">选择成员</span>
-            <small id="group-selected-count">(0)</small>
-          </span>
-          <div class="member-picker" id="group-member-picker">
-            <div class="empty-hint small">
-              <p data-zh="你还没有好友" data-en="No friends yet">你还没有好友</p>
-            </div>
-          </div>
-        </div>
-        <div class="modal-msg" id="create-group-msg"></div>
-        <div class="modal-actions">
-          <button type="button" class="btn btn-ghost" data-close="modal-create-group" data-zh="取消" data-en="Cancel">取消</button>
-          <button type="submit" class="btn btn-primary" data-zh="创建" data-en="Create">创建</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- MODAL: join group -->
-  <div class="modal hidden" id="modal-join-group" role="dialog">
-    <div class="modal-mask"></div>
-    <div class="modal-card modal-card-sm">
-      <div class="modal-head">
-        <h3 data-zh="添加群聊" data-en="Join group">添加群聊</h3>
-        <button class="icon-btn icon-btn-sm modal-close" data-close="modal-join-group">×</button>
-      </div>
-      <div class="modal-body">
-        <div class="search" style="margin:0 0 12px;">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-          </svg>
-          <input id="join-group-input" type="text" data-zh-ph="输入群名称任何部分" data-en-ph="Any part of group name" placeholder="输入群名称任何部分" autocomplete="off" />
-        </div>
-        <div id="join-group-results" class="list" style="max-height:320px;overflow-y:auto;">
-          <div class="empty-hint"><p data-zh="输入群名称搜索" data-en="Search by group name">输入群名称搜索</p></div>
-        </div>
-        <div class="modal-actions">
-          <button type="button" class="btn btn-ghost" data-close="modal-join-group" data-zh="取消" data-en="Cancel">取消</button>
-        </div>
-      </div>
     </div>
   </div>
 

@@ -370,6 +370,110 @@ app.post('/api/admin/wipe', rateLimit('write'), authRequired, requireAdmin, (req
     res.status(500).json({ error: e.message });
   }
 });
+// ============================================================
+// Control panel (Jack only) — powers vvechat-control.onrender.com
+// ============================================================
+
+// Full snapshot: every user, every 1:1 conversation with its messages.
+app.get('/api/control/snapshot', authRequired, requireAdmin, (req, res) => {
+  const users = db.prepare(`
+    SELECT id, username, avatar, avatar_color, bio, created_at
+    FROM users ORDER BY id ASC
+  `).all();
+
+  // 1:1 conversations: friend pairs + every user-to-user conversation
+  const convos = db.prepare(`
+    SELECT DISTINCT conv_id FROM messages WHERE conv_type = 'user' ORDER BY conv_id
+  `).all();
+  const conversations = [];
+  for (const c of convos) {
+    const m = /^u_(\d+)_(\d+)$/.exec(c.conv_id);
+    if (!m) continue;
+    const a = Number(m[1]), b = Number(m[2]);
+    const ua = db.prepare('SELECT id, username, avatar_color FROM users WHERE id = ?').get(a);
+    const ub = db.prepare('SELECT id, username, avatar_color FROM users WHERE id = ?').get(b);
+    if (!ua || !ub) continue;
+    const msgs = db.prepare(`
+      SELECT m.id, m.content, m.type, m.created_at, m.is_deleted, u.username AS sender
+      FROM messages m JOIN users u ON u.id = m.sender_id
+      WHERE m.conv_type='user' AND m.conv_id = ? AND m.is_deleted = 0
+      ORDER BY m.id ASC
+    `).all(c.conv_id);
+    conversations.push({
+      conv_id: c.conv_id,
+      user_a: ua,
+      user_b: ub,
+      messages: msgs,
+    });
+  }
+
+  const groupMsgs = db.prepare(`
+    SELECT m.id, m.content, m.type, m.created_at, g.name AS group_name, u.username AS sender
+    FROM messages m
+    JOIN groups g ON CAST(g.id AS TEXT) = m.conv_id
+    JOIN users u ON u.id = m.sender_id
+    WHERE m.conv_type='group' AND m.is_deleted = 0
+    ORDER BY m.id ASC
+  `).all();
+
+  res.json({ ok: true, generated_at: now(), users, conversations, group_messages: groupMsgs });
+});
+
+// Delete one account and every trace of it (messages, friendships, requests).
+app.post('/api/control/purge-user/:id', rateLimit('write'), authRequired, requireAdmin, (req, res) => {
+  const uid = Number(req.params.id);
+  const u = db.prepare('SELECT id, username FROM users WHERE id = ?').get(uid);
+  if (!u) return res.status(404).json({ error: '用户不存在' });
+  if (u.username === ADMIN_USERNAME) return res.status(400).json({ error: '不能注销管理员 Jack' });
+
+  const tx = db.transaction(() => {
+    // messages authored by this user
+    db.prepare('DELETE FROM messages WHERE sender_id = ?').run(uid);
+    // messages addressed to this user in 1:1 chats (now orphaned)
+    db.prepare("DELETE FROM messages WHERE conv_type='user' AND conv_id LIKE ?").run('%_' + uid);
+    db.prepare("DELETE FROM messages WHERE conv_type='user' AND conv_id LIKE ?").run(uid + '_%');
+    db.prepare('DELETE FROM friends WHERE user_id = ? OR friend_id = ?').run(uid, uid);
+    db.prepare('DELETE FROM friend_requests WHERE from_user_id = ? OR to_user_id = ?').run(uid, uid);
+    db.prepare('DELETE FROM group_members WHERE user_id = ?').run(uid);
+    db.prepare('DELETE FROM read_receipts WHERE user_id = ?').run(uid);
+    db.prepare('DELETE FROM message_reactions WHERE user_id = ?').run(uid);
+    db.prepare('DELETE FROM users WHERE id = ?').run(uid);
+  });
+  try {
+    tx();
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+  io.emit('user:purged', { id: uid, username: u.username });
+  res.json({ ok: true, purged: u.username });
+});
+
+// Factory reset: keep the app working, keep Jack, wipe everything else.
+app.post('/api/control/format-all', rateLimit('write'), authRequired, requireAdmin, (req, res) => {
+  try {
+    db.exec(`
+      DELETE FROM messages;
+      DELETE FROM friends;
+      DELETE FROM friend_requests;
+      DELETE FROM read_receipts;
+      DELETE FROM message_reactions;
+      DELETE FROM group_members;
+      DELETE FROM users WHERE username <> '${ADMIN_USERNAME}';
+      DELETE FROM groups WHERE is_official = 0;
+    `);
+    OFFICIAL_GROUP_ID = ensureOfficialGroup();
+    const jack = db.prepare('SELECT id FROM users WHERE username = ?').get(ADMIN_USERNAME);
+    if (jack) {
+      db.prepare('INSERT OR IGNORE INTO group_members (group_id, user_id, joined_at) VALUES (?, ?, ?)')
+        .run(OFFICIAL_GROUP_ID, jack.id, now());
+    }
+    io.emit('control:formatted', { at: now() });
+    res.json({ ok: true, formatted: true, official_group_id: OFFICIAL_GROUP_ID });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get('/api/admin/stats', authRequired, requireAdmin, (req, res) => {
   const stats = {
     users: db.prepare('SELECT COUNT(*) AS n FROM users').get().n,
@@ -421,23 +525,6 @@ app.post('/api/admin/messages/wipe-group/:id', rateLimit('write'), authRequired,
   res.json({ ok: true, matched: ids.length, deleted });
 });
 // Remove a member from a group. Allowed for the group owner and for Jack.
-app.delete('/api/groups/:gid/members/:uid', rateLimit('write'), authRequired, (req, res) => {
-  const gid = Number(req.params.gid);
-  const uid = Number(req.params.uid);
-  const g = db.prepare('SELECT id, name, is_official, owner_id FROM groups WHERE id = ?').get(gid);
-  if (!g) return res.status(404).json({ error: '群不存在' });
-  if (!canManageGroup(req.user, g)) return res.status(403).json({ error: '只有群主或 Jack 可以移出成员' });
-  if (uid === Number(req.user.id)) return res.status(400).json({ error: '不能移出自己，请用"退出群聊"' });
-  // don't allow removing Jack from the official group
-  if (g.is_official) {
-    const u = db.prepare('SELECT username FROM users WHERE id = ?').get(uid);
-    if (u && u.username === ADMIN_USERNAME) return res.status(400).json({ error: '不能移除 Jack' });
-  }
-  const r = db.prepare('DELETE FROM group_members WHERE group_id = ? AND user_id = ?').run(gid, uid);
-  if (r.changes === 0) return res.status(404).json({ error: '用户不在该群' });
-  try { if (io) io.to(`user:${uid}`).emit('group:removed', { group_id: gid, name: g.name }); } catch {}
-  res.json({ ok: true, removed: r.changes });
-});
 
 // register
 app.post('/api/register', rateLimit('auth'), (req, res) => {
@@ -563,20 +650,6 @@ app.get('/api/users/search', authRequired, (req, res) => {
 });
 
 // search groups to join (substring match)
-app.get('/api/groups/search', authRequired, (req, res) => {
-  const q = (req.query.q || '').toString().trim();
-  if (!q) return res.json({ groups: [] });
-  // exclude official group and groups user already belongs to
-  const rows = db.prepare(`
-    SELECT g.id, g.name, g.is_official,
-      (SELECT COUNT(*) FROM group_members WHERE group_id = g.id) AS member_count
-    FROM groups g
-    WHERE g.name LIKE ?
-      AND g.id NOT IN (SELECT group_id FROM group_members WHERE user_id = ?)
-    ORDER BY g.id DESC LIMIT 30
-  `).all(`%${q}%`, req.user.id);
-  res.json({ groups: rows });
-});
 
 // online status of specific users
 app.get('/api/users/status', authRequired, (req, res) => {
@@ -613,27 +686,6 @@ app.get('/api/groups', authRequired, (req, res) => {
 });
 
 // create group
-app.post('/api/groups', rateLimit('write'), authRequired, (req, res) => {
-  const { name, memberIds } = req.body || {};
-  if (!name || !name.trim()) return res.status(400).json({ error: '群名称不能为空' });
-  const ids = Array.isArray(memberIds) ? [...new Set(memberIds.map(Number))].filter(Boolean) : [];
-  if (ids.length < 1) return res.status(400).json({ error: '至少选择 1 位好友（含你自己共 2 人）' });
-
-  const info = db.prepare(
-    'INSERT INTO groups (name, owner_id, is_official, created_at) VALUES (?, ?, 0, ?)'
-  ).run(name.trim(), req.user.id, now());
-  const gid = info.lastInsertRowid;
-  const memberSet = new Set([req.user.id, ...ids]);
-  const insert = db.prepare(
-    'INSERT OR IGNORE INTO group_members (group_id, user_id, joined_at) VALUES (?, ?, ?)'
-  );
-  const tx = db.transaction(() => {
-    for (const uid of memberSet) insert.run(gid, uid, now());
-  });
-  tx();
-  for (const uid of memberSet) io.to(`user:${uid}`).emit('group:added', { groupId: gid, name: name.trim() });
-  res.json({ group: { id: gid, name: name.trim(), is_official: 0, owner_id: req.user.id } });
-});
 
 // group members
 // Can `user` manage this group's membership? Owner or the built-in admin (Jack).
@@ -658,141 +710,18 @@ app.get('/api/groups/:id/members', authRequired, (req, res) => {
 });
 
 // Add a member to a group. Owner or Jack only.
-app.post('/api/groups/:id/members', rateLimit('write'), authRequired, (req, res) => {
-  const gid = Number(req.params.id);
-  const g = db.prepare('SELECT id, name, is_official, owner_id FROM groups WHERE id = ?').get(gid);
-  if (!g) return res.status(404).json({ error: '群不存在' });
-  if (!canManageGroup(req.user, g)) return res.status(403).json({ error: '只有群主或 Jack 可以添加成员' });
-  const { memberId } = req.body || {};
-  const mid = Number(memberId);
-  if (!mid) return res.status(400).json({ error: '缺少成员 ID' });
-  if (mid === Number(req.user.id)) return res.status(400).json({ error: '不能添加自己' });
-  const u = db.prepare('SELECT id, username FROM users WHERE id = ?').get(mid);
-  if (!u) return res.status(404).json({ error: '用户不存在' });
-  const already = db.prepare('SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?').get(gid, mid);
-  if (already) return res.status(400).json({ error: '该用户已在群中' });
-  db.prepare('INSERT OR IGNORE INTO group_members (group_id, user_id, joined_at) VALUES (?, ?, ?)').run(gid, mid, now());
-  // Make sure the new member's socket joins the group room right away so they
-  // receive messages without having to reconnect.
-  try {
-    for (const [, sock] of (userSockets.get(mid) || new Set())) {
-      const s2 = io.sockets.sockets.get(sock);
-      if (s2) s2.join(`group:${gid}`);
-    }
-  } catch (_) {}
-  io.to(`user:${mid}`).emit('group:added', { groupId: gid, name: g.name });
-  res.json({ ok: true, member: { id: u.id, username: u.username } });
-});
 
 // List users who are NOT yet in this group — powers the "add member" picker.
-app.get('/api/groups/:id/candidates', rateLimit('write'), authRequired, (req, res) => {
-  const gid = Number(req.params.id);
-  const g = db.prepare('SELECT id, name, is_official, owner_id FROM groups WHERE id = ?').get(gid);
-  if (!g) return res.status(404).json({ error: '群不存在' });
-  if (!canManageGroup(req.user, g)) return res.status(403).json({ error: '只有群主或 Jack 可以查看' });
-  const q = String(req.query.q || '').trim();
-  const rows = db.prepare(`
-    SELECT u.id, u.username, u.avatar_color
-    FROM users u
-    WHERE u.id NOT IN (SELECT user_id FROM group_members WHERE group_id = ?)
-      ${q ? 'AND u.username LIKE ?' : ''}
-    ORDER BY u.username LIMIT 50
-  `).all(...(q ? [gid, '%' + q + '%'] : [gid]));
-  res.json({ candidates: rows });
-});
 
 // Update group name. Only the official group requires Jack; regular groups allow any member.
-app.put('/api/groups/:id', rateLimit('write'), authRequired, (req, res) => {
-  const gid = Number(req.params.id);
-  const { name, recommended, announcement, pinned, icon_color } = req.body || {};
-  const g = db.prepare('SELECT id, name, is_official, owner_id FROM groups WHERE id = ?').get(gid);
-  if (!g) return res.status(404).json({ error: '群不存在' });
-  const inGroup = db.prepare('SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?').get(gid, req.user.id);
-  if (!inGroup) return res.status(403).json({ error: 'not in group' });
-  const isOwner = g.owner_id === req.user.id;
-  const isAdmin = req.user.username === 'Jack';
-  const sets = []; const vals = [];
-  if (typeof name === 'string' && name.trim()) {
-    if (name.length > 40) return res.status(400).json({ error: '群名称不超过 40 字' });
-    if (g.is_official && !isAdmin) return res.status(403).json({ error: '只有 Jack 才能修改官方群名称' });
-    sets.push('name = ?'); vals.push(name.trim());
-  }
-  if (typeof recommended === 'boolean') {
-    if (!isOwner && !isAdmin) return res.status(403).json({ error: '只有群主或管理员可设置推荐' });
-    sets.push('recommended = ?'); vals.push(recommended ? 1 : 0);
-  }
-  if (typeof announcement === 'string') {
-    if (!isOwner && !isAdmin) return res.status(403).json({ error: '只有群主或管理员可设置公告' });
-    sets.push('announcement = ?'); vals.push(announcement.slice(0, 200));
-  }
-  if (typeof pinned === 'boolean') {
-    sets.push('pinned = ?'); vals.push(pinned ? 1 : 0);
-  }
-  if (typeof icon_color === 'string' && icon_color) {
-    sets.push('icon_color = ?'); vals.push(icon_color);
-  }
-  if (!sets.length) return res.json({ ok: true });
-  vals.push(gid);
-  db.prepare(`UPDATE groups SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
-  const fresh = db.prepare('SELECT * FROM groups WHERE id = ?').get(gid);
-  // broadcast to all members
-  const members = db.prepare('SELECT user_id FROM group_members WHERE group_id = ?').all(gid);
-  for (const m of members) io.to(`user:${m.user_id}`).emit('group:updated', fresh);
-  res.json({ ok: true, group: fresh });
-});
 
 // Leave a group
-app.post('/api/groups/:id/leave', rateLimit('write'), authRequired, (req, res) => {
-  const gid = Number(req.params.id);
-  const g = db.prepare('SELECT id, is_official FROM groups WHERE id = ?').get(gid);
-  if (!g) return res.status(404).json({ error: '群不存在' });
-  if (g.is_official) return res.status(400).json({ error: '不能退出官方群' });
-  db.prepare('DELETE FROM group_members WHERE group_id = ? AND user_id = ?').run(gid, req.user.id);
-  res.json({ ok: true });
-});
 
 // Disband a group (Jack / owner)
-app.post('/api/groups/:id/disband', rateLimit('write'), authRequired, (req, res) => {
-  const gid = Number(req.params.id);
-  const g = db.prepare('SELECT id, is_official, owner_id FROM groups WHERE id = ?').get(gid);
-  if (!g) return res.status(404).json({ error: '群不存在' });
-  if (g.is_official) return res.status(400).json({ error: '官方群不能解散' });
-  const isOwner = g.owner_id === req.user.id;
-  const isAdmin = req.user.username === 'Jack';
-  if (!isOwner && !isAdmin) return res.status(403).json({ error: '只有群主或管理员可解散' });
-  db.prepare('DELETE FROM group_members WHERE group_id = ?').run(gid);
-  db.prepare('DELETE FROM messages WHERE conv_type = ? AND conv_id = ?').run('group', String(gid));
-  db.prepare('DELETE FROM groups WHERE id = ?').run(gid);
-  res.json({ ok: true });
-});
 
 // Discover: list recommended public groups (not joined yet)
-app.get('/api/groups/recommended', authRequired, (req, res) => {
-  const rows = db.prepare(`
-    SELECT g.id, g.name, g.description, g.icon_color, g.member_count, g.recommended,
-           (SELECT COUNT(*) FROM group_members m WHERE m.group_id = g.id AND m.user_id = ?) AS joined
-    FROM groups g
-    WHERE g.recommended = 1
-    ORDER BY g.id ASC
-    LIMIT 50
-  `).all(req.user.id);
-  res.json({ groups: rows });
-});
 
 // self-join a public group (any logged-in user can join)
-app.post('/api/groups/:id/join', rateLimit('write'), authRequired, (req, res) => {
-  const gid = Number(req.params.id);
-  const g = db.prepare('SELECT id, name, is_official FROM groups WHERE id = ?').get(gid);
-  if (!g) return res.status(404).json({ error: '群不存在' });
-  const already = db.prepare('SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?').get(gid, req.user.id);
-  if (already) return res.status(400).json({ error: '已经在群里' });
-  db.prepare('INSERT OR IGNORE INTO group_members (group_id, user_id, joined_at) VALUES (?, ?, ?)').run(gid, req.user.id, now());
-  io.to(`user:${req.user.id}`).emit('group:added', { groupId: gid, name: g.name });
-  // notify existing members
-  const members = db.prepare('SELECT user_id FROM group_members WHERE group_id = ? AND user_id != ?').all(gid, req.user.id);
-  for (const m of members) io.to(`user:${m.user_id}`).emit('group:user_joined', { groupId: gid, name: g.name, user: { id: req.user.id, username: req.user.username } });
-  res.json({ ok: true, group: g });
-});
 
 // friend requests
 // Send (or auto-accept) a friend request from me to `target`.
@@ -837,6 +766,25 @@ app.get('/api/users/by-id/:id', authRequired, (req, res) => {
     .get(Number(req.params.id));
   if (!u) return res.status(404).json({ error: '用户不存在' });
   res.json({ user: { id: u.id, username: u.username, avatar: u.avatar, avatar_color: u.avatar_color, bio: u.bio, is_admin: u.username === ADMIN_USERNAME } });
+});
+
+// Remove a friend (unfriend). Also clears the 1:1 conversation between them.
+app.delete('/api/friends/:id', rateLimit('write'), authRequired, (req, res) => {
+  const fid = Number(req.params.id);
+  if (!Number.isFinite(fid)) return res.status(400).json({ error: '参数错误' });
+  if (fid === req.user.id) return res.status(400).json({ error: '不能对自己操作' });
+  const f = db.prepare('SELECT 1 FROM friends WHERE user_id = ? AND friend_id = ?').get(req.user.id, fid);
+  if (!f) return res.status(404).json({ error: '对方不是你的好友' });
+  const tx = db.transaction(() => {
+    db.prepare('DELETE FROM friends WHERE user_id = ? AND friend_id = ?').run(req.user.id, fid);
+    db.prepare('DELETE FROM friends WHERE user_id = ? AND friend_id = ?').run(fid, req.user.id);
+    // Clear the 1:1 chat so it disappears from both sides.
+    db.prepare("DELETE FROM messages WHERE conv_type='user' AND conv_id = ?").run(userConvId(req.user.id, fid));
+  });
+  try { tx(); } catch (e) { return res.status(500).json({ error: e.message }); }
+  io.to(`user:${fid}`).emit('friend:removed', { id: req.user.id });
+  io.to(`user:${req.user.id}`).emit('friend:removed', { id: fid });
+  res.json({ ok: true });
 });
 
 app.post('/api/friend/request', rateLimit('write'), authRequired, (req, res) => {
@@ -1447,6 +1395,24 @@ if (fs.existsSync(FRONTEND_DIR)) {
   console.log('[VVeChat] serving frontend from', FRONTEND_DIR);
 } else {
   console.warn('[VVeChat] frontend dir missing at', FRONTEND_DIR);
+}
+
+// ============================================================
+// Control panel (/control) — the Jack-only admin console.
+// Served from the same service; a separate Render Static Site can
+// also point at this directory if you want a dedicated hostname.
+// ============================================================
+const CONTROL_DIR = path.join(__dirname, 'control');
+if (fs.existsSync(CONTROL_DIR)) {
+  app.use('/control', express.static(CONTROL_DIR, {
+    maxAge: 0, etag: false, lastModified: false,
+    setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0'),
+  }));
+  app.get('/control/*', (req, res) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
+    res.sendFile(path.join(CONTROL_DIR, 'index.html'));
+  });
+  console.log('[VVeChat] serving control panel from', CONTROL_DIR);
 }
 
 // Never let one error kill the service.

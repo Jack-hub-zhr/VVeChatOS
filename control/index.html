@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#8b5cf6" />
+  <title>VVeChat 控制台</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%238b5cf6'/><text x='32' y='44' font-family='system-ui' font-size='36' font-weight='800' text-anchor='middle' fill='white'>V</text></svg>" />
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand"><span class="brand-name">VVeChat</span><span class="brand-sub">控制台</span></div>
+  <div class="topbar-right">
+    <span id="stamp" class="stamp"></span>
+    <button id="btn-format" class="pill danger">⚠️ 格式化一切信息</button>
+    <button id="btn-refresh" class="pill">刷新</button>
+  </div>
+</header>
+
+<!-- Login gate -->
+<section id="gate" class="gate">
+  <div class="gate-card">
+    <h1>VVeChat 控制台</h1>
+    <p class="gate-sub">仅管理员 Jack 可访问</p>
+    <input id="gate-user" type="text" placeholder="用户名" value="Jack" autocomplete="username" />
+    <input id="gate-pass" type="password" placeholder="密码" autocomplete="current-password" />
+    <div id="gate-msg" class="gate-msg"></div>
+    <button id="gate-go" class="btn primary">进入控制台</button>
+  </div>
+</section>
+
+<!-- Panel -->
+<main id="panel" class="panel hidden">
+  <section class="block">
+    <h2>所有用户 <span id="user-count" class="count">0</span></h2>
+    <p class="hint">红色「注销」会永久删除该账号，以及它发出的全部消息、好友关系和好友申请。</p>
+    <div id="users" class="users"></div>
+  </section>
+
+  <section class="block">
+    <h2>好友对话 <span id="convo-count" class="count">0</span></h2>
+    <p class="hint">包含每一段单聊里的全部消息内容。</p>
+    <div id="convos" class="convos"></div>
+  </section>
+
+  <section class="block">
+    <h2>官方群消息 <span id="group-count" class="count">0</span></h2>
+    <div id="groups" class="convos"></div>
+  </section>
+</main>
+
+<!-- Confirm dialog -->
+<div id="confirm" class="confirm hidden">
+  <div class="confirm-mask"></div>
+  <div class="confirm-card">
+    <h3 id="confirm-title">确认</h3>
+    <p id="confirm-msg"></p>
+    <div class="confirm-actions">
+      <button id="confirm-no" class="btn ghost">取消</button>
+      <button id="confirm-yes" class="btn danger">确定</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script src="app.js"></script>
+</body>
+</html>

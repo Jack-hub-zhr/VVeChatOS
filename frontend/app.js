@@ -657,7 +657,7 @@
       const senderPrefix = c.last_sender_id && c.last_sender_id !== state.user.id && isGroup
         ? `<span style="color:var(--accent);font-weight:600;">${escapeHtml(userInfo(c.last_sender_id).username)}:</span> ` : '';
       const unreadHtml = c.unread > 0 ? `<span class="unread">${c.unread>99?'99+':c.unread}</span>` : '';
-      li.innerHTML = `<div class="${avatarCls}"${avatarBg}>${escapeHtml(isGroup ? groupLetter(c.username, isOfficial) : initials(c.username))}${dot}</div>
+      li.innerHTML = `<div class="${avatarCls}"${avatarBg} data-peer="${isGroup ? '' : c.id}">${escapeHtml(isGroup ? groupLetter(c.username, isOfficial) : initials(c.username))}${dot}</div>
         <div class="meta"><div class="name">${escapeHtml(c.username)} ${officialTag}</div>
         <div class="preview">${senderPrefix}${escapeHtml(preview)}</div></div>
         <div class="time">${fmtTime(c.last_at)}</div>${unreadHtml}`;
@@ -687,7 +687,7 @@
       const online = isOnline(f.id);
       const bg = avatarStyle(f);
       const statusTag = online ? `<span style="font-size:10px;background:rgba(52,199,89,0.14);color:#15803d;padding:2px 7px;border-radius:6px;border:1px solid rgba(52,199,89,0.30);font-weight:600;">${t('online')}</span>` : '';
-      li.innerHTML = `<div class="avatar ${online?'online':''}"${bg ? ` style="${bg}"` : ''}>${avatarInner(f)}<span class="online-dot"></span></div>
+      li.innerHTML = `<div class="avatar ${online?'online':''}"${bg ? ` style="${bg}"` : ''} data-peer="${f.id}">${avatarInner(f)}<span class="online-dot"></span></div>
         <div class="meta"><div class="name">${escapeHtml(f.username)} ${statusTag}</div>
         <div class="preview">${escapeHtml(f.bio || (online?t('online'):t('friend')))}</div></div>`;
       li.addEventListener('click', () => openProfileModal(f));
@@ -1620,6 +1620,7 @@
                 : (allowAdd && !isFriend
                     ? `<button class="btn btn-primary btn-sm" id="btn-add-friend">+ 加好友</button>`
                     : `<button class="btn btn-primary btn-sm" id="btn-msg-friend">${t('btn_msg')}</button>`)}
+        ${isFriend ? `<button class="btn btn-danger btn-sm" id="btn-remove-friend">删除好友</button>` : ''}
       </div></div>`;
     if (isMe) {
       $('#btn-edit-profile')?.addEventListener('click', openProfileEdit);
@@ -1644,6 +1645,33 @@
           addBtn.disabled = false;
           addBtn.textContent = orig;
           toast(e.message || '添加失败');
+        }
+      });
+      const rmBtn = $('#btn-remove-friend');
+      if (rmBtn) rmBtn.addEventListener('click', async () => {
+        const ok = await askConfirm({
+          title: '删除好友',
+          message: '确定不再和 ' + user.username + ' 做好友吗？你们的私聊记录也会一并清除。',
+          okText: '删除好友',
+        });
+        if (!ok) return;
+        rmBtn.disabled = true;
+        try {
+          await api('/friends/' + user.id, { method: 'DELETE' });
+          closeModal('modal-profile');
+          state.friends = state.friends.filter(f => Number(f.id) !== Number(user.id));
+          state.conversations = state.conversations.filter(
+            c => !(c.type === 'user' && (Number(c.id) === Number(user.id) || Number(c.id) === Number(state.user.id)))
+          );
+          if (state.currentChat && state.currentChat.type === 'user' && Number(state.currentChat.id) === Number(user.id)) {
+            state.currentChat = null;
+            delete state.messagesByConv[convKey('user', user.id)];
+          }
+          renderAll();
+          toast('已删除好友 ' + user.username);
+        } catch (e) {
+          rmBtn.disabled = false;
+          toast(e.message || '删除失败');
         }
       });
     }
@@ -2063,6 +2091,7 @@
     ensureModalCloseBound();
     ensurePlusActionsBound();
     ensureWipeBound();
+    ensureBellBound();
     renderTopbarAvatar();
     connectSocket();
     refreshAll();
@@ -2164,6 +2193,53 @@
       } finally {
         btn.disabled = false;
       }
+    }, true);
+  }
+
+  // ---- Friend request accept / reject (delegated) ----
+  let _bellBound = false;
+  function ensureBellBound() {
+    if (_bellBound) return;
+    _bellBound = true;
+    document.addEventListener('click', async (e) => {
+      const btn = e.target.closest('#bell-list button[data-act]');
+      if (!btn) return;
+      e.preventDefault(); e.stopPropagation();
+      const id = Number(btn.dataset.id);
+      const accept = btn.dataset.act === 'accept';
+      if (!id) return;
+      btn.disabled = true;
+      try {
+        await api('/friend/respond', { method: 'POST', body: { requestId: id, accept } });
+        state.requests = state.requests.filter(r => r.id !== id);
+        renderBell();
+        if (accept) { await refreshFriends(); await refreshConversations(); renderAll(); toast('已添加好友'); }
+        else toast('已拒绝');
+      } catch (err) {
+        toast(err.message || '操作失败');
+        btn.disabled = false;
+      }
+    }, true);
+  }
+
+  // ---- Tap any user avatar -> profile (with + 加好友 when not friends) ----
+  // One delegated listener so it works in the sidebar, the contacts list and
+  // the chat header, and cannot be lost to an unrelated bind error.
+  let _avatarBound = false;
+  function ensureAvatarBound() {
+    if (_avatarBound) return;
+    _avatarBound = true;
+    document.addEventListener('click', (e) => {
+      const av = e.target.closest('[data-peer]');
+      if (!av) return;
+      // Already handled by a more specific handler (message rows etc).
+      if (e.defaultPrevented) return;
+      const raw = av.dataset.peer;
+      if (!raw) return;                       // group avatar: nothing to add
+      const uid = Number(raw);
+      if (!Number.isFinite(uid) || uid === state.user?.id) return;
+      e.preventDefault(); e.stopPropagation();
+      openUserProfileById(uid);
     }, true);
   }
 
@@ -2363,19 +2439,6 @@
 
     // bell
     $('#btn-bell')?.addEventListener('click', (e) => { e.currentTarget._handled = true; renderBell(); openModal('modal-bell'); });
-    $('#bell-list')?.addEventListener('click', async (e) => {
-      const btn = e.target.closest('button[data-act]');
-      if (!btn) return;
-      const id = Number(btn.dataset.id), accept = btn.dataset.act === 'accept';
-      btn.disabled = true;
-      try {
-        await api('/friend/respond', { method: 'POST', body: { requestId: id, accept } });
-        state.requests = state.requests.filter(r => r.id !== id);
-        renderBell();
-        if (accept) { await refreshFriends(); await refreshConversations(); renderAll(); toast(t('ok_friend_added')); }
-        else toast(t('ok_rejected'));
-      } catch (err) { toast(err.message); btn.disabled = false; }
-    });
 
     // add friend form
     $('#form-add-friend')?.addEventListener('submit', async (e) => {
