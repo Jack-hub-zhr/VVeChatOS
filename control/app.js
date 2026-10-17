@@ -39,10 +39,16 @@
     toast._t = setTimeout(() => t.classList.add('hidden'), ms);
   }
 
+  // If this panel is hosted on its own domain (vvechat-control.onrender.com),
+  // talk to the main VVeChat service; if it is served from the main service
+  // under /control, the relative path already resolves to the same origin.
+  const API_BASE = window.VVECHAT_API_BASE
+    || (location.pathname.startsWith('/control') ? '' : 'https://vvechat.onrender.com');
+
   async function api(path, opts = {}) {
     const headers = { 'Content-Type': 'application/json' };
     if (state.token) headers['Authorization'] = 'Bearer ' + state.token;
-    const r = await fetch(path, {
+    const r = await fetch(API_BASE + path, {
       method: opts.method || 'GET',
       headers,
       body: opts.body ? JSON.stringify(opts.body) : undefined,
@@ -91,7 +97,7 @@
     const btn = $('#gate-go');
     btn.disabled = true;
     try {
-      const r = await fetch('/api/login', {
+      const r = await fetch(API_BASE + '/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: u, password: p }),
