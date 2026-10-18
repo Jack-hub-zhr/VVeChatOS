@@ -1385,17 +1385,6 @@ if (fs.existsSync(FRONTEND_DIR)) {
     maxAge: 0, etag: false, lastModified: false,
     setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0'),
   }));
-  // SPA fallback — must NOT swallow /socket.io/* or handshakes break.
-  app.get('*', (req, res, next) => {
-    const p = req.path || '';
-    if (p.startsWith('/api/') || p.startsWith('/socket.io/')) return next();
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
-    res.sendFile(path.join(FRONTEND_DIR, 'index.html'));
-  });
-  console.log('[VVeChat] serving frontend from', FRONTEND_DIR);
-} else {
-  console.warn('[VVeChat] frontend dir missing at', FRONTEND_DIR);
-}
 
 // ============================================================
 // Control panel (/control) — the Jack-only admin console.
@@ -1414,6 +1403,19 @@ if (fs.existsSync(CONTROL_DIR)) {
   });
   console.log('[VVeChat] serving control panel from', CONTROL_DIR);
 }
+
+  // SPA fallback — must NOT swallow /socket.io/* or handshakes break.
+  app.get('*', (req, res, next) => {
+    const p = req.path || '';
+    if (p.startsWith('/api/') || p.startsWith('/socket.io/')) return next();
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
+    res.sendFile(path.join(FRONTEND_DIR, 'index.html'));
+  });
+  console.log('[VVeChat] serving frontend from', FRONTEND_DIR);
+} else {
+  console.warn('[VVeChat] frontend dir missing at', FRONTEND_DIR);
+}
+
 
 // Never let one error kill the service.
 process.on('uncaughtException', (e) => console.error('[VVeChat] uncaughtException:', e));
