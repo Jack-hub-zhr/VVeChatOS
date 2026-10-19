@@ -983,6 +983,20 @@ body.dark .chat-header { background: rgba(20, 24, 32, 0.30); border-bottom-color
 .msg-row {
   display: flex; gap: 8px; align-items: flex-end;
   margin-bottom: 6px;
+  min-width: 0;
+}
+.msg-row > .msg-avatar,
+.msg-row > .avatar,
+.msg-row > .msg-content,
+.msg-row > .msg-body {
+  min-width: 0;
+  flex-shrink: 0;
+}
+.msg-row > .msg-content,
+.msg-row > .msg-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: calc(100% - 56px);
 }
 /* WeChat style: "them" messages on the left, "me" messages on the right.
    The sender and receiver see the message on OPPOSITE sides (mirror view). */
@@ -1023,8 +1037,20 @@ body.dark .chat-header { background: rgba(20, 24, 32, 0.30); border-bottom-color
      list read as one system instead of two different languages. */
   border-radius: 14px;
   font-size: 14px; line-height: 1.45;
-  word-wrap: break-word; word-break: break-word;
-  max-width: 100%;
+  /* overflow-wrap:anywhere breaks long words (English/numbers/URLs) at any
+     character WITHOUT inflating the parent column's intrinsic min-width.
+     word-break:break-word is the older, less reliable form and was forcing
+     "congratulations" to wrap as "congratulatio / ns" mid-word even when
+     there was plenty of room — because .msg-content was using its content
+     width as min-width and the bubble's max-width:100% then wrapped to
+     that narrow column. With min-width:0 on the flex children and a sane
+     70% max-width on the bubble, words wrap naturally. */
+  overflow-wrap: anywhere;
+  word-break: normal;
+  /* fit-content + 70% cap: bubble hugs its text up to 70% of the chat column,
+     then expands down with normal line breaks instead of mid-word splits. */
+  width: fit-content;
+  max-width: 70%;
   background: var(--bubble-them-bg);
   color: var(--bubble-them-text);
   border: 1px solid rgba(255, 255, 255, 0.7);
