@@ -40,10 +40,12 @@
   --success: #10b981;
 
   /* Bubble colors */
-  --bubble-me: linear-gradient(135deg, #3B82F6, #0EA5E9);
-  --bubble-me-text: #ffffff;
-  --bubble-them-bg: rgba(255, 255, 255, 0.70);
-  --bubble-them-text: #1c2a3e;
+  /* WeChat classic green for my own bubbles (P2 reference). Flat, no
+     gradient — a tinted gradient makes it read as "glass", not WeChat. */
+  --bubble-me: #95EC69;
+  --bubble-me-text: #17251a;
+  --bubble-them-bg: rgba(255, 255, 255, 0.94);
+  --bubble-them-text: #17251a;
 
   /* Shape */
   --r-ctrl: 12px;
@@ -84,9 +86,9 @@ body.dark, body.theme-dark {
   --accent-soft: rgba(96, 165, 250, 0.16);
   --accent-glow: rgba(96, 165, 250, 0.40);
 
-  --bubble-me: linear-gradient(135deg, #3B82F6, #0EA5E9);
-  --bubble-me-text: #ffffff;
-  --bubble-them-bg: rgba(255, 255, 255, 0.08);
+  --bubble-me: #3EB575;
+  --bubble-me-text: #0d1a12;
+  --bubble-them-bg: rgba(38, 42, 52, 0.92);
   --bubble-them-text: #e6ecf5;
 
   /* Dark wallpaper — deep chrome liquid metal */
@@ -115,7 +117,9 @@ body.dark, body.theme-dark {
     --accent: #60A5FA;
     --accent2: #38BDF8;
     --accent-soft: rgba(96, 165, 250, 0.16);
-    --bubble-them-bg: rgba(255, 255, 255, 0.08);
+    --bubble-me: #3EB575;
+    --bubble-me-text: #0d1a12;
+    --bubble-them-bg: rgba(38, 42, 52, 0.92);
     --bubble-them-text: #e6ecf5;
   }
 }
@@ -1053,26 +1057,68 @@ body.dark .chat-header { background: rgba(20, 24, 32, 0.30); border-bottom-color
   max-width: 70%;
   background: var(--bubble-them-bg);
   color: var(--bubble-them-text);
-  border: 1px solid rgba(255, 255, 255, 0.7);
-  box-shadow: 0 4px 14px rgba(30, 80, 150, 0.06);
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  overflow: hidden;
+  /* visible so the ::after tail can stick out past the bubble edge */
+  overflow: visible;
 }
+.msg-bubble.deleted,
+.msg-bubble.image-bubble { overflow: hidden; }
 .msg-row:not(.me) .msg-bubble,
 .msg-row.me .msg-bubble {
   border-radius: 14px;  /* same radius as the sidebar panel */
 }
+/* WeChat's signature asymmetry: the corner nearest the avatar is a small
+   4px nub, the far corners stay at the panel radius. */
+.msg-row.me .msg-bubble {
+  border-top-right-radius: 4px;
+  border-bottom-right-radius: 4px;
+}
+.msg-row:not(.me) .msg-bubble {
+  border-top-left-radius: 4px;
+  border-bottom-left-radius: 4px;
+}
+/* Images have no tail — a WeChat photo is the whole message. */
+.msg-bubble.image-bubble::after { display: none; }
 .msg-row.me .msg-bubble {
   background: var(--bubble-me);
   color: var(--bubble-me-text);
-  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.25);
+  border-color: rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
 }
-.msg-row.me .msg-bubble::before {
-  content: ""; position: absolute; inset: 0;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.20), transparent 55%);
-  border-radius: inherit;
+/* WeChat tail: a small triangle on the avatar side of the bubble.
+   The bubble already clips its own highlight via overflow:hidden, so the
+   tail has to be a child element or a pseudo on a non-clipped wrapper —
+   ::after on .msg-bubble works because overflow is only needed on the
+   image bubble. */
+.msg-row .msg-bubble::after {
+  content: "";
+  position: absolute;
+  top: 11px;
+  width: 0; height: 0;
   pointer-events: none;
+}
+/* mine: avatar on the right → tail points right */
+.msg-row.me .msg-bubble::after {
+  right: -6px;
+  border-left: 7px solid var(--bubble-me);
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+}
+/* theirs: avatar on the left → tail points left */
+.msg-row:not(.me) .msg-bubble::after {
+  left: -6px;
+  border-right: 7px solid var(--bubble-them-solid, var(--bubble-them-bg));
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+}
+/* Solid colour is required for the triangle (a gradient would render as a
+   transparent wedge), so thumbnails/frosted blur stays on the bubble itself
+   while the tail uses a matching flat colour. */
+body.dark .msg-row:not(.me) .msg-bubble::after {
+  border-right-color: #262a34;
 }
 /* Language button busy state while the translator is running. */
 @keyframes langPulse { 0%,100%{opacity:.45} 50%{opacity:.9} }
