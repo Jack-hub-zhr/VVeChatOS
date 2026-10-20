@@ -1000,7 +1000,6 @@ body.dark .chat-header { background: rgba(20, 24, 32, 0.30); border-bottom-color
 }
 /* WeChat style: "them" messages on the left, "me" messages on the right.
    The sender and receiver see the message on OPPOSITE sides (mirror view). */
-.msg-row.me { flex-direction: row-reverse; }
 .msg-row .msg-avatar {
   width: 34px; height: 34px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
@@ -1013,12 +1012,19 @@ body.dark .chat-header { background: rgba(20, 24, 32, 0.30); border-bottom-color
 }
 .msg-row .msg-content {
   display: flex; flex-direction: column; gap: 3px;
-  min-width: 0; max-width: 72%;
+  min-width: 0;
+  /* NOTE: a percentage max-width here is measured against .msg-row, which is
+     a shrink-to-fit box (align-self:flex-end/start). A percentage against a
+     shrink-to-fit parent is circular — it resolves only after intrinsic
+     sizing, which collapses to a tiny value and shreds English words
+     mid-word ("congratulatio / ns"). An absolute cap breaks the cycle: the
+     bubble inside is width:fit-content, so short messages hug their text
+     while long ones get a predictable 560px of room. */
+  max-width: 560px;
   align-items: flex-start;
   order: 2;
 }
 .msg-row.me .msg-content { align-items: flex-end; }
-.msg-row.me .msg-avatar { order: 3; }
 .msg-row .msg-meta {
   display: flex; align-items: center; gap: 6px;
   font-size: 11px; color: var(--muted);
@@ -1047,10 +1053,10 @@ body.dark .chat-header { background: rgba(20, 24, 32, 0.30); border-bottom-color
      70% max-width on the bubble, words wrap naturally. */
   overflow-wrap: anywhere;
   word-break: normal;
-  /* fit-content + 70% cap: bubble hugs its text up to 70% of the chat column,
-     then expands down with normal line breaks instead of mid-word splits. */
+  /* fit-content so short messages hug their text; 100% cap so the bubble can
+     never be wider than the content column it lives in. */
   width: fit-content;
-  max-width: 70%;
+  max-width: 100%;
   background: var(--bubble-them-bg);
   color: var(--bubble-them-text);
   border: 1px solid rgba(255, 255, 255, 0.7);
@@ -1098,9 +1104,7 @@ body.dark .chat-header { background: rgba(20, 24, 32, 0.30); border-bottom-color
    Task 2 — own messages are mirrored: avatar on the RIGHT,
    bubble right-aligned, timestamp under the bubble.
    ============================================================ */
-.msg-row.me { flex-direction: row-reverse; align-items: flex-start; }
-.msg-row.me > .msg-avatar,
-.msg-row.me > .avatar { order: 3; }
+.msg-row.me { flex-direction: row; align-items: flex-start; }
 .msg-row.me .msg-content { align-items: flex-end; }
 .msg-row.me .msg-meta { justify-content: flex-end; }
 
@@ -2313,35 +2317,47 @@ body.dark .chat-empty-mark {
 
 
 /* ============================================================
-   Mirror view (explicit, last so it wins over every earlier rule)
-   Sender sees their own message with the avatar on the RIGHT and the
-   bubble on the LEFT; everyone else sees it mirrored.
+   Mirror view — the LAST word on message-row layout.
+   Sender sees their own message with the avatar on the RIGHT of the
+   bubble; everyone else sees it mirrored.
+
+   WHY THERE IS NO flex-direction:row-reverse HERE
+   ----------------------------------------------
+   An earlier version set BOTH `row-reverse` AND `order` on the children.
+   Those compose into a DOUBLE reversal: row-reverse already flips the main
+   axis so the DOM-first avatar landed on the right, and then `order: 10`
+   moved it a second time, pushing it back to the LEFT of the bubble — the
+   exact opposite of the intent. Confirmed in headless Chrome: avatar
+   x=687 (row's left edge) while bubble right=768.
+
+   Only `order` is used now. One mechanism, one direction, no ambiguity.
    ============================================================ */
 .msg-row.me {
-  flex-direction: row-reverse !important;
+  flex-direction: row !important;
   align-items: flex-end !important;
-  justify-content: flex-start;
+  justify-content: flex-end;
   align-self: flex-end;
 }
-/* The avatar must be the visually right-most item. */
+/* mine → content renders first, avatar is the right-most item */
 .msg-row.me > .msg-avatar,
-.msg-row.me > .avatar { order: 10; }
+.msg-row.me > .avatar { order: 30 !important; }
 .msg-row.me > .msg-content,
-.msg-row.me > .msg-body { order: 1; }
+.msg-row.me > .msg-body { order: 20 !important; }
 
-/* Keep the content column narrow so the row hugs the right edge. */
+/* Keep the content column hugging the right edge. */
 .msg-row.me .msg-content { align-items: flex-end; }
 .msg-row.me .msg-meta,
 .msg-row.me .msg-time { justify-content: flex-end; text-align: right; }
 .msg-row.me .msg-bubble { align-self: flex-end; }
 
-/* Opposite side (their messages): avatar left, bubble right-aligned within. */
+/* theirs → avatar left, content after it */
 .msg-row:not(.me) {
   flex-direction: row !important;
   align-items: flex-end !important;
+  justify-content: flex-start;
   align-self: flex-start;
 }
 .msg-row:not(.me) > .msg-avatar,
-.msg-row:not(.me) > .avatar { order: 1; }
+.msg-row:not(.me) > .avatar { order: 20 !important; }
 .msg-row:not(.me) > .msg-content,
-.msg-row:not(.me) > .msg-body { order: 10; }
+.msg-row:not(.me) > .msg-body { order: 30 !important; }
