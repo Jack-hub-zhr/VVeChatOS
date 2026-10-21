@@ -1440,12 +1440,24 @@ body.dark .msg-jack-label {
     0 10px 32px rgba(30, 80, 150, 0.20),
     0 2px 6px rgba(30, 80, 150, 0.10);
   animation: msgBarIn 0.18s cubic-bezier(0.22, 1, 0.36, 1) both;
+  /* The JS sets `left` to the CENTRE of the message, and the keyframes
+     carry a translateX(-50%) to compensate. Without this base transform the
+     compensation only exists DURING the animation — once it finishes the
+     bar snaps half its width to the left and hangs off the screen on a
+     phone. */
+  transform: translateX(-50%);
   transform-origin: center bottom;
 }
 body.dark .msg-action-bar {
   background: rgba(20, 24, 32, 0.60);
   border-color: rgba(255, 255, 255, 0.12);
 }
+
+/* On a phone the five actions do not fit side by side — 320px of buttons
+   overflows a 390px viewport once the labels are counted. Let the bar
+   scroll horizontally instead of spilling off the screen, and keep it
+   pinned to the middle of the viewport so it is always fully reachable
+   with a thumb. */
 @keyframes msgBarIn {
   from { opacity: 0; transform: translateX(-50%) scale(0.85); }
   to   { opacity: 1; transform: translateX(-50%) scale(1); }
@@ -2389,48 +2401,43 @@ body.dark .chat-empty-mark {
    inside the mobile sheet, where an icon alone is not self-explanatory. */
 .mm-label { display: none !important; }
 
-/* ---------- The ⋮ affordance next to a message ---------- */
-/* Desktop keeps right-click; the dots are an extra, unobtrusive way in.
-   On touch layouts they become the primary affordance. */
+/* ---------- The "..." affordance under the timestamp ---------- */
+/* It lives INSIDE .msg-content (below .msg-meta), so it renders directly
+   beneath the time and inherits the same alignment — right for my own
+   messages, left for theirs. Three dots, laid out horizontally.
+   Desktop keeps the right-click menu and must look untouched, so the dots
+   stay hidden until the row is hovered; on touch devices there is no hover,
+   so they are always visible — otherwise reply/forward/delete would be
+   unreachable on iPad and iPhone. */
 .msg-dots {
   flex-shrink: 0;
-  width: 26px; height: 26px;
-  border-radius: 999px;
+  align-self: inherit;          /* follow .msg-content's align-items */
+  height: 18px;
+  margin: 1px 0 0;
+  padding: 0 3px;
+  border-radius: 8px;
   display: flex; align-items: center; justify-content: center;
   background: transparent;
   border: 1px solid transparent;
   color: var(--muted);
+  font-size: 0;
   cursor: pointer;
-  align-self: flex-start;
-  margin-top: 2px;
-  /* Desktop keeps the right-click menu and must look untouched, so the dots
-     stay hidden until the row is hovered. */
   opacity: 0;
   transition: opacity 0.18s ease, background 0.18s ease, transform 0.15s ease;
   -webkit-tap-highlight-color: transparent;
 }
 .msg-row:hover .msg-dots { opacity: 0.55; }
 .msg-dots:hover { opacity: 1 !important; background: rgba(255, 255, 255, 0.5); }
-.msg-dots:active { transform: scale(0.88); }
+.msg-dots:active { transform: scale(0.9); }
 body.dark .msg-dots:hover { background: rgba(255, 255, 255, 0.10); }
 
-/* On touch devices there is no hover, so the dots are always visible —
-   this is the only way to reach reply/forward/delete on iPad or iPhone. */
 @media (hover: none) and (pointer: coarse) {
-  .msg-dots { opacity: 0.55; }
+  .msg-dots { opacity: 0.6; }
 }
 
-/* WeChat puts the "more" affordance INSIDE the message cluster, level with
-   the top of the bubble, so it never steals horizontal space from a long
-   message. It sits on the far side of the bubble (right for my messages,
-   left for theirs), exactly where a thumb would reach. */
-.msg-row.me .msg-dots { order: 40; }
-.msg-row:not(.me) .msg-dots { order: 10; }
-
-/* The bubble needs breathing room so the dots do not touch it. */
-.msg-row .msg-content { padding-right: 0; }
-.msg-row:not(.me) .msg-content { padding-right: 26px; }
-.msg-row.me .msg-content { padding-left: 26px; }
+/* The dots sit under the timestamp, so the timestamp must not be pushed
+   around — keep its own padding symmetric with the dots' padding. */
+.msg-row .msg-meta { padding: 0 3px; }
 
 /* ============================================================
    MOBILE ONLY (max-width: 820px) — same breakpoint as the
@@ -2623,4 +2630,40 @@ body.dark .msg-dots:hover { background: rgba(255, 255, 255, 0.10); }
     to   { opacity: 1; transform: translateX(-50%) scale(1); }
   }
   .msg-action-bar { animation: msgBarFromDots 0.20s cubic-bezier(0.22, 1, 0.36, 1) both; }
+}
+
+
+/* ============================================================
+   Phone-sized message action bar — MUST stay last.
+   There are two other max-width:520px blocks in this file and the one
+   at the end of the file (`.msg-action-bar { padding: 4px; ... }`) would
+   otherwise win on source order and undo the sizing below.
+   ============================================================ */
+@media (max-width: 520px) {
+  .msg-action-bar {
+    /* A flex row's default min-width:auto lets the five buttons push the
+       bar wider than the viewport, which is why max-width alone was not
+       enough. min-width:0 lets the max-width actually bite and the row
+       scrolls inside instead of spilling off the screen. */
+    min-width: 0;
+    max-width: calc(100vw - 20px);
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding: 7px 8px;
+    border-radius: 18px;
+  }
+  .msg-action-bar::-webkit-scrollbar { display: none; }
+  .msg-action-btn {
+    flex-shrink: 0;
+    width: auto;
+    min-width: 56px;
+    height: 56px;
+    padding: 6px 8px 8px;
+  }
+  .msg-action-btn svg { width: 16px; height: 16px; }
+  /* The floating label above each icon needs room; on narrow screens the
+     label alone is enough — the icons are self-explanatory. */
+  .msg-action-btn .msg-action-label { font-size: 10px; }
 }

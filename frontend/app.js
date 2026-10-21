@@ -1184,16 +1184,18 @@
         : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12l5 5L17 6"/></svg>`}</span>`;
     }
     const metaHtml = `<div class="msg-meta"><span>${time}</span>${receipt}</div>`;
-    // Touch affordance: an explicit ⋮ button next to the message. On
+    // Touch affordance: an explicit "..." button under the timestamp. On
     // desktop the right-click menu still works, but a touch device has no
     // right-click — without this the reply/forward/delete actions are
     // unreachable on iPad/iPhone.
+    // The three dots are laid out HORIZONTALLY and live inside .msg-content
+    // so they sit directly beneath the time, aligned with it.
     const dotsHtml = `<button class="msg-dots" type="button" aria-label="更多操作" title="更多操作">
-      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-        <circle cx="12" cy="5" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="12" cy="19" r="1.9"/>
+      <svg viewBox="0 0 24 24" width="22" height="7" fill="currentColor">
+        <circle cx="4" cy="3.5" r="2.4"/><circle cx="12" cy="3.5" r="2.4"/><circle cx="20" cy="3.5" r="2.4"/>
       </svg>
     </button>`;
-    row.innerHTML = `${avatarHtml}<div class="msg-content">${senderName}${quoteHtml}${bubbleContent}${metaHtml}</div>${dotsHtml}`;
+    row.innerHTML = `${avatarHtml}<div class="msg-content">${senderName}${quoteHtml}${bubbleContent}${metaHtml}${dotsHtml}</div>`;
     row.addEventListener('contextmenu', (e) => { e.preventDefault(); openContextMenu(e, m); });
     // (long-press removed — short tap is enough for everyone now)
     // Any user can short-tap a message to show the floating action bar
