@@ -617,6 +617,9 @@
       } else {
         el.parentElement?.appendChild(pill);
       }
+      // On mobile the sheet owns the topbar buttons — the pill must follow
+      // them there instead of staying behind in the collapsed bar.
+      syncMobileMenuLayout();
     }
   }
 
@@ -1181,7 +1184,16 @@
         : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12l5 5L17 6"/></svg>`}</span>`;
     }
     const metaHtml = `<div class="msg-meta"><span>${time}</span>${receipt}</div>`;
-    row.innerHTML = `${avatarHtml}<div class="msg-content">${senderName}${quoteHtml}${bubbleContent}${metaHtml}</div>`;
+    // Touch affordance: an explicit ⋮ button next to the message. On
+    // desktop the right-click menu still works, but a touch device has no
+    // right-click — without this the reply/forward/delete actions are
+    // unreachable on iPad/iPhone.
+    const dotsHtml = `<button class="msg-dots" type="button" aria-label="更多操作" title="更多操作">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+        <circle cx="12" cy="5" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="12" cy="19" r="1.9"/>
+      </svg>
+    </button>`;
+    row.innerHTML = `${avatarHtml}<div class="msg-content">${senderName}${quoteHtml}${bubbleContent}${metaHtml}</div>${dotsHtml}`;
     row.addEventListener('contextmenu', (e) => { e.preventDefault(); openContextMenu(e, m); });
     // (long-press removed — short tap is enough for everyone now)
     // Any user can short-tap a message to show the floating action bar
@@ -1192,6 +1204,16 @@
         bubbleEl.addEventListener('click', (e) => {
           e.stopPropagation();
           if (m.is_deleted) return;
+          showMsgActionBar(row, m, e);
+        });
+      }
+      // The ⋮ button opens the same action bar — this is the touch-friendly
+      // path (iPad/iPhone have no right-click).
+      const dotsEl = row.querySelector('.msg-dots');
+      if (dotsEl) {
+        dotsEl.addEventListener('click', (e) => {
+          e.stopPropagation();
+          e.preventDefault();
           showMsgActionBar(row, m, e);
         });
       }
@@ -2071,6 +2093,187 @@
     renderAll();
   }
 
+  // ============================================================
+  // Mobile main menu — the FAB morphs into a vertical sheet.
+  //
+  // The desktop topbar keeps its original DOM and layout. On narrow
+  // screens we PHYSICALLY MOVE the topbar buttons into the sheet and
+  // move them back on resize, so the desktop markup is never altered.
+  //
+  // Interaction depth:
+  //   1) circular FAB with three lines  (this button)
+  //   2) vertical sheet holding the original topbar buttons
+  //   3) tapping a sheet item opens the app's existing modal
+  //      (profile / friend requests / search / theme) — the "third level"
+  // ============================================================
+  const MOBILE_BP = 820;           // must match the CSS breakpoint
+  const MOBILE_MENU_KEYS = [
+    'btn-profile', 'btn-bell', 'btn-plus', 'btn-logout',
+    'theme-menu-wrap', 'topbar-jack-pill'
+  ];
+  let _mobileMenuBound = false;
+  let _mobileMenuOpen = false;
+  let _mobileMenuMoved = false;
+
+  function isMobileLayout() {
+    return window.innerWidth <= MOBILE_BP;
+  }
+
+  // Labels for the sheet entries. The icons alone (avatar / bell / search /
+  // logout / theme) are cryptic on a phone, so each gets a text label that
+  // only exists inside the sheet.
+  const MOBILE_MENU_LABELS = {
+    'btn-profile': '我的资料',
+    'btn-bell': '好友申请',
+    'btn-plus': '搜索 / 添加',
+    'btn-logout': '退出登录',
+    'theme-menu-wrap': '切换主题'
+  };
+
+  function labelMobileMenuItems(sheet) {
+    for (const [id, text] of Object.entries(MOBILE_MENU_LABELS)) {
+      const el = document.getElementById(id);
+      if (!el) continue;
+      const host = (el.classList.contains('theme-toggle')) ? el.parentElement : el;
+      let tag = host.querySelector('.mm-label');
+      if (!tag) {
+        tag = document.createElement('span');
+        tag.className = 'mm-label';
+        host.appendChild(tag);
+      }
+      tag.textContent = text;
+    }
+    // The Jack shield pill is decorative — label it too.
+    const pill = document.getElementById('topbar-jack-pill');
+    if (pill) {
+      let tag = pill.querySelector('.mm-label');
+      if (!tag) {
+        tag = document.createElement('span');
+        tag.className = 'mm-label';
+        pill.appendChild(tag);
+      }
+      tag.textContent = '管理员';
+    }
+  }
+
+  // Move the real topbar buttons into the sheet (mobile) or back out (desktop).
+  function syncMobileMenuLayout() {
+    const sheet = $('#mobile-menu-sheet');
+    const right = $('.topbar-right');
+    if (!sheet || !right) return;
+    const mobile = isMobileLayout();
+    if (mobile && !_mobileMenuMoved) {
+      for (const id of MOBILE_MENU_KEYS) {
+        const el = document.getElementById(id);
+        if (!el) continue;
+        // Remember where it came from so we can restore it exactly.
+        if (!el.dataset.mmHome) el.dataset.mmHome = el.parentElement ? el.parentElement.id || '' : '';
+        sheet.appendChild(el);
+      }
+      _mobileMenuMoved = true;
+      labelMobileMenuItems(sheet);
+      closeMobileMenu(true);
+    } else if (!mobile && _mobileMenuMoved) {
+      for (const id of MOBILE_MENU_KEYS) {
+        const el = document.getElementById(id);
+        if (!el) continue;
+        // Put it back in .topbar-right, before the FAB so the order matches
+        // the original desktop markup.
+        right.insertBefore(el, right.firstChild);
+      }
+      _mobileMenuMoved = false;
+      closeMobileMenu(true);
+    } else if (mobile && _mobileMenuMoved) {
+      // Already in mobile mode — but a button may have been re-created
+      // (the Jack pill is rebuilt on every avatar render). Pull any
+      // stragglers that are sitting in the bar back into the sheet.
+      for (const id of MOBILE_MENU_KEYS) {
+        const el = document.getElementById(id);
+        if (el && el.parentElement !== sheet) sheet.appendChild(el);
+      }
+    }
+  }
+
+  function openMobileMenu() {
+    if (_mobileMenuOpen) return;
+    const sheet = $('#mobile-menu-sheet');
+    const fab = $('#btn-mobile-menu');
+    if (!sheet || !fab) return;
+    _mobileMenuOpen = true;
+    sheet.hidden = false;
+    // Force a reflow so the transition actually runs.
+    void sheet.offsetWidth;
+    sheet.classList.add('open');
+    fab.classList.add('active');
+    fab.setAttribute('aria-expanded', 'true');
+  }
+
+  function closeMobileMenu(instant) {
+    const sheet = $('#mobile-menu-sheet');
+    const fab = $('#btn-mobile-menu');
+    if (!sheet || !fab) return;
+    _mobileMenuOpen = false;
+    fab.classList.remove('active');
+    fab.setAttribute('aria-expanded', 'false');
+    if (instant) {
+      sheet.classList.remove('open');
+      sheet.hidden = true;
+    } else {
+      sheet.classList.remove('open');
+      // Wait out the collapse animation before hiding from the a11y tree.
+      setTimeout(() => { if (!_mobileMenuOpen) sheet.hidden = true; }, 260);
+    }
+  }
+
+  function toggleMobileMenu() {
+    if (_mobileMenuOpen) closeMobileMenu();
+    else openMobileMenu();
+  }
+
+  function ensureMobileMenuBound() {
+    if (_mobileMenuBound) return;
+    _mobileMenuBound = true;
+
+    document.addEventListener('click', (e) => {
+      const fab = e.target.closest('#btn-mobile-menu');
+      if (fab) {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleMobileMenu();
+        return;
+      }
+      // Clicking a sheet item = the third level: run the original action and
+      // let the sheet collapse behind the modal.
+      if (_mobileMenuOpen) {
+        const item = e.target.closest('#mobile-menu-sheet .icon-btn, #mobile-menu-sheet .theme-toggle, #mobile-menu-sheet .admin-pill');
+        if (item) {
+          // Let the button's own handler run first, then collapse the sheet.
+          setTimeout(() => closeMobileMenu(), 60);
+          return;
+        }
+        // Tap anywhere else → collapse.
+        if (!e.target.closest('#mobile-menu-sheet')) closeMobileMenu();
+      }
+    }, true);
+
+    // The theme menu is a dropdown inside the sheet; keep it from closing
+    // the sheet when the user picks a theme.
+    document.addEventListener('click', (e) => {
+      if (!_mobileMenuOpen) return;
+      if (e.target.closest('#theme-menu')) e.stopPropagation();
+    }, true);
+
+    let rzTimer = null;
+    window.addEventListener('resize', () => {
+      clearTimeout(rzTimer);
+      rzTimer = setTimeout(() => {
+        syncMobileMenuLayout();
+      }, 120);
+    });
+
+    syncMobileMenuLayout();
+  }
+
   // ---------- bootstrap ----------
   function enterApp() {
     showApp();
@@ -2092,6 +2295,7 @@
     ensurePlusActionsBound();
     ensureWipeBound();
     ensureBellBound();
+    ensureMobileMenuBound();
     renderTopbarAvatar();
     connectSocket();
     refreshAll();

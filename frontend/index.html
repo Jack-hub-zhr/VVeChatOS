@@ -59,6 +59,25 @@
           <span class="beta-tag">OS 1</span>
         </div>
         <div class="topbar-right">
+          <!-- Mobile-only hamburger. Sits FIRST in .topbar-right so it can
+               morph into the vertical sheet; on desktop it is display:none
+               and .topbar-right keeps its original layout untouched. -->
+          <button id="btn-mobile-menu" class="icon-btn mobile-menu-fab" type="button"
+                  aria-label="菜单" aria-haspopup="menu" aria-expanded="false" aria-controls="mobile-menu-sheet">
+            <svg class="mm-burger" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <line x1="4" y1="7"  x2="20" y2="7"/>
+              <line x1="4" y1="12" x2="20" y2="12"/>
+              <line x1="4" y1="17" x2="20" y2="17"/>
+            </svg>
+            <svg class="mm-close" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+              <line x1="6" y1="6" x2="18" y2="18"/>
+              <line x1="18" y1="6" x2="6" y2="18"/>
+            </svg>
+          </button>
+          <!-- The vertical sheet the FAB expands into. The real topbar
+               buttons are MOVED into it by JS on touch layouts (and moved
+               back on desktop), so the desktop DOM is byte-identical. -->
+          <div id="mobile-menu-sheet" class="mobile-menu-sheet" role="menu" aria-label="主菜单" hidden></div>
           <button id="btn-profile" class="icon-btn" title="我的资料">
             <div class="avatar sm" id="topbar-avatar"></div>
           </button>

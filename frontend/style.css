@@ -563,7 +563,7 @@ body.dark .app-shell { background: rgba(20, 24, 32, 0.30); border-color: rgba(25
 }
 body.dark .topbar { background: rgba(20, 24, 32, 0.30); border-bottom-color: rgba(255, 255, 255, 0.08); }
 .topbar-left { display: flex; align-items: center; gap: 8px; min-width: 0; flex-shrink: 0; }
-.topbar-right { display: flex; gap: 6px; align-items: center; margin-left: auto; flex-shrink: 0; }
+.topbar-right { display: flex; gap: 6px; align-items: center; margin-left: auto; flex-shrink: 0; position: relative; }
 /* Buttons must never be squeezed/overlapped by a long left side. */
 .topbar-right > * { flex-shrink: 0; }
 /* The Jack shield pill must not push the row wider than the bar. */
@@ -2361,3 +2361,266 @@ body.dark .chat-empty-mark {
 .msg-row:not(.me) > .avatar { order: 20 !important; }
 .msg-row:not(.me) > .msg-content,
 .msg-row:not(.me) > .msg-body { order: 30 !important; }
+
+/* ============================================================
+   Mobile main menu — FAB morphs into a vertical sheet
+   ------------------------------------------------------------
+   Desktop is untouched: the FAB is display:none and the sheet is
+   empty (JS moves the real topbar buttons into it only on narrow
+   screens). Every rule below is scoped to max-width:820px so the
+   desktop layout can never be affected.
+
+   Level 1 → circular FAB with three parallel lines
+   Level 2 → the sheet (vertical rounded rectangle) holding the
+             original topbar buttons
+   Level 3 → tapping a sheet item opens the app's existing modal
+             (profile / requests / search / theme)
+   ============================================================ */
+
+/* ---------- Level 1: the FAB ---------- */
+/* Hidden by default — only the mobile media query reveals it. */
+.mobile-menu-fab { display: none !important; }
+
+.mobile-menu-sheet {
+  display: none !important;
+}
+
+/* The sheet's text labels never appear on desktop — they only exist
+   inside the mobile sheet, where an icon alone is not self-explanatory. */
+.mm-label { display: none !important; }
+
+/* ---------- The ⋮ affordance next to a message ---------- */
+/* Desktop keeps right-click; the dots are an extra, unobtrusive way in.
+   On touch layouts they become the primary affordance. */
+.msg-dots {
+  flex-shrink: 0;
+  width: 26px; height: 26px;
+  border-radius: 999px;
+  display: flex; align-items: center; justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--muted);
+  cursor: pointer;
+  align-self: flex-start;
+  margin-top: 2px;
+  /* Desktop keeps the right-click menu and must look untouched, so the dots
+     stay hidden until the row is hovered. */
+  opacity: 0;
+  transition: opacity 0.18s ease, background 0.18s ease, transform 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.msg-row:hover .msg-dots { opacity: 0.55; }
+.msg-dots:hover { opacity: 1 !important; background: rgba(255, 255, 255, 0.5); }
+.msg-dots:active { transform: scale(0.88); }
+body.dark .msg-dots:hover { background: rgba(255, 255, 255, 0.10); }
+
+/* On touch devices there is no hover, so the dots are always visible —
+   this is the only way to reach reply/forward/delete on iPad or iPhone. */
+@media (hover: none) and (pointer: coarse) {
+  .msg-dots { opacity: 0.55; }
+}
+
+/* WeChat puts the "more" affordance INSIDE the message cluster, level with
+   the top of the bubble, so it never steals horizontal space from a long
+   message. It sits on the far side of the bubble (right for my messages,
+   left for theirs), exactly where a thumb would reach. */
+.msg-row.me .msg-dots { order: 40; }
+.msg-row:not(.me) .msg-dots { order: 10; }
+
+/* The bubble needs breathing room so the dots do not touch it. */
+.msg-row .msg-content { padding-right: 0; }
+.msg-row:not(.me) .msg-content { padding-right: 26px; }
+.msg-row.me .msg-content { padding-left: 26px; }
+
+/* ============================================================
+   MOBILE ONLY (max-width: 820px) — same breakpoint as the
+   existing mobile layout rules.
+   ============================================================ */
+@media (max-width: 820px) {
+  /* --- Level 1: reveal the FAB, hide the inline topbar buttons --- */
+  .mobile-menu-fab {
+    display: flex !important;
+    order: -1;                 /* first in .topbar-right */
+    margin-left: auto;
+    z-index: 1200;
+  }
+  /* The burger and the X are two separate icons that cross-fade —
+     rotating the three lines by 90 degrees would just make them vertical. */
+  .mobile-menu-fab .mm-burger,
+  .mobile-menu-fab .mm-close {
+    position: absolute;
+    transition: opacity 0.2s ease, transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .mobile-menu-fab .mm-close { opacity: 0; transform: rotate(-60deg) scale(0.7); }
+  .mobile-menu-fab.active .mm-burger { opacity: 0; transform: rotate(60deg) scale(0.7); }
+  .mobile-menu-fab.active .mm-close { opacity: 1; transform: rotate(0deg) scale(1); }
+  /* --- Level 2: the vertical sheet --- */
+  .mobile-menu-sheet {
+    display: flex !important;
+    /* Anchored to .topbar-right (position:relative) so the sheet always
+       hangs directly under the FAB, whatever the safe-area insets are. */
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 10px;
+    width: 58px;
+    height: 58px;
+    border-radius: 999px;       /* circle -> rounded rect on open */
+    background: rgba(255, 255, 255, 0.62);
+    backdrop-filter: blur(28px) saturate(200%);
+    -webkit-backdrop-filter: blur(28px) saturate(200%);
+    border: 1px solid rgba(255, 255, 255, 0.60);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.80),
+      0 12px 36px rgba(30, 80, 150, 0.22),
+      0 2px 8px rgba(30, 80, 150, 0.10);
+    overflow: hidden;
+    opacity: 0;
+    pointer-events: none;
+    transform-origin: top right;
+    transform: scale(0.35);
+    transition:
+      width 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+      height 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+      border-radius 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 0.20s ease,
+      transform 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+    z-index: 1150;
+  }
+  body.dark .mobile-menu-sheet {
+    background: rgba(20, 24, 32, 0.68);
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+  /* Open -> the circle grows into a vertical rounded rectangle.
+     The height is a fixed pixel value (not auto) so the growth can actually
+     be transitioned; `auto` heights are not animatable and collapse the
+     sheet to a sliver when the children are still at opacity 0. */
+  .mobile-menu-sheet.open {
+    /* The base rule sets display:none !important (desktop hides the empty
+       sheet entirely), so the open state MUST override it explicitly or
+       the sheet never becomes visible at all. */
+    display: flex !important;
+    width: 168px;
+    height: 272px;
+    border-radius: 26px;
+    opacity: 1;
+    pointer-events: auto;
+    transform: scale(1);
+  }
+  /* Hidden state must not be reachable by tab focus. */
+  .mobile-menu-sheet[hidden] { display: none !important; }
+
+  /* The buttons that live inside the sheet get a label so the sheet
+     reads as a menu, not a stack of mystery icons. */
+  .mobile-menu-sheet > * {
+    width: 100%;
+    justify-content: flex-start;
+    gap: 10px;
+    padding: 0 12px;
+    height: 42px;
+    opacity: 0;
+    transform: translateX(14px);
+    transition: opacity 0.22s ease, transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .mobile-menu-sheet.open > * {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  /* Staggered reveal — each row slides in slightly after the previous. */
+  .mobile-menu-sheet.open > *:nth-child(1) { transition-delay: 0.06s; }
+  .mobile-menu-sheet.open > *:nth-child(2) { transition-delay: 0.10s; }
+  .mobile-menu-sheet.open > *:nth-child(3) { transition-delay: 0.14s; }
+  .mobile-menu-sheet.open > *:nth-child(4) { transition-delay: 0.18s; }
+  .mobile-menu-sheet.open > *:nth-child(5) { transition-delay: 0.22s; }
+  .mobile-menu-sheet.open > *:nth-child(6) { transition-delay: 0.26s; }
+
+  /* Labels become visible inside the sheet on mobile. */
+  .mobile-menu-sheet .mm-label {
+    display: block !important;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.2;
+  }
+  body.dark .mobile-menu-sheet .mm-label { color: var(--ink); }
+  /* The theme toggle is a square icon button; inside the sheet it becomes a
+     labelled row. Its own dropdown (.theme-menu) is absolutely positioned
+     relative to the wrap, so it must not be clipped by the sheet. */
+  .mobile-menu-sheet .theme-menu-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    height: 42px;
+    padding: 0 12px;
+    position: relative;
+  }
+  .mobile-menu-sheet .theme-toggle {
+    width: 22px; height: 22px;
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    padding: 0;
+    flex-shrink: 0;
+  }
+  .mobile-menu-sheet .theme-toggle:hover { transform: none; background: transparent !important; }
+  .mobile-menu-sheet .theme-toggle .ico-auto,
+  .mobile-menu-sheet .theme-toggle .ico-light,
+  .mobile-menu-sheet .theme-toggle .ico-dark { display: block; }
+
+  /* The Jack shield pill is a span, not a button — centre it. */
+  .mobile-menu-sheet > .admin-pill {
+    justify-content: center;
+    padding: 0;
+  }
+  .mobile-menu-sheet > .admin-pill .mm-label {
+    flex: 1 1 auto;
+    text-align: left;
+  }
+
+  /* Theme toggle sits inside the sheet; its own dropdown must be able to
+     overflow the sheet, so it is lifted out of the clipped box. */
+  .mobile-menu-sheet .theme-menu-wrap { position: static; }
+  .mobile-menu-sheet .theme-menu {
+    position: absolute;
+    right: 12px;
+    top: 52px;
+    z-index: 1300;
+  }
+
+  /* --- Level 3 helpers --- */
+  /* The app's existing modals (profile / requests / search) already have
+     their own entrance animation. We only need them to appear ABOVE the
+     sheet and to feel connected to it. */
+  .modal { z-index: 1400; }
+  .msg-action-bar { z-index: 1500; }
+
+  /* Level 3 opens out of the sheet, so the card should grow from the
+     top-right (where the sheet lives) instead of popping from the middle.
+     Same easing as the sheet, so the two feel like one motion. */
+  @keyframes modalFromSheet {
+    from { opacity: 0; transform: translateY(-18px) scale(0.86); transform-origin: top right; }
+    to   { opacity: 1; transform: translateY(0) scale(1); transform-origin: top right; }
+  }
+  .modal:not(.hidden) .modal-card {
+    animation: modalFromSheet 0.30s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .modal:not(.hidden) .modal-mask {
+    animation: modalMaskIn 0.24s ease both;
+  }
+  /* The message action bar (reply / forward / delete) is the third level
+     for a message — same treatment, growing from the message's side. */
+  @keyframes msgBarFromDots {
+    from { opacity: 0; transform: translateX(-50%) scale(0.8); }
+    to   { opacity: 1; transform: translateX(-50%) scale(1); }
+  }
+  .msg-action-bar { animation: msgBarFromDots 0.20s cubic-bezier(0.22, 1, 0.36, 1) both; }
+}
