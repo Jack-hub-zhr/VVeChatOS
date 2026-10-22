@@ -1191,8 +1191,8 @@
     // The three dots are laid out HORIZONTALLY and live inside .msg-content
     // so they sit directly beneath the time, aligned with it.
     const dotsHtml = `<button class="msg-dots" type="button" aria-label="更多操作" title="更多操作">
-      <svg viewBox="0 0 24 24" width="22" height="7" fill="currentColor">
-        <circle cx="4" cy="3.5" r="2.4"/><circle cx="12" cy="3.5" r="2.4"/><circle cx="20" cy="3.5" r="2.4"/>
+      <svg viewBox="0 0 34 6" width="34" height="6" fill="currentColor">
+        <circle cx="4" cy="3" r="2.2"/><circle cx="17" cy="3" r="2.2"/><circle cx="30" cy="3" r="2.2"/>
       </svg>
     </button>`;
     row.innerHTML = `${avatarHtml}<div class="msg-content">${senderName}${quoteHtml}${bubbleContent}${metaHtml}${dotsHtml}</div>`;
@@ -1242,10 +1242,17 @@
     document.querySelectorAll('.msg-action-bar').forEach(el => el.remove());
     // NOTE: use isJack() (username-aware) not state.user.is_admin, and compare
     // against m.sender_id — messages carry sender_id, never user_id.
-    const isJack = isJack();
+    // NOTE: this used to read `const isJack = isJack();` — the local const
+    // shadowed the outer `function isJack()` and, being in its temporal
+    // dead zone at that point, threw
+    //   ReferenceError: Cannot access 'isJack' before initialization
+    // on EVERY call. The action bar was therefore never created, so tapping
+    // the "..." button (or the bubble) did nothing at all.
+    // Use a different local name.
+    const jack = isJack();
     const isMine = !!(state.user && m.sender_id === state.user.id);
     const ageMs = Date.now() - new Date(m.created_at).getTime();
-    const canDelete = isJack || (isMine && ageMs < 2 * 60 * 1000);
+    const canDelete = jack || (isMine && ageMs < 2 * 60 * 1000);
     const canReply = !m.is_deleted;
     const bar = document.createElement('div');
     bar.className = 'msg-action-bar';
@@ -1271,8 +1278,8 @@
           <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
         </svg>
       </button>
-      <button class="msg-action-btn msg-action-delete ${canDelete ? '' : 'msg-action-disabled'}" data-tip="${isJack ? '清除' : '撤回'}" title="${isJack ? '清除 — 管理员可永久清除任何消息' : '撤回 — 2 分钟内可撤回自己发送的消息'}" aria-label="${isJack ? '清除' : '撤回'}" ${canDelete ? '' : 'disabled'}>
-        <span class="msg-action-label">${isJack ? '清除' : '撤回'}</span>
+      <button class="msg-action-btn msg-action-delete ${canDelete ? '' : 'msg-action-disabled'}" data-tip="${jack ? '清除' : '撤回'}" title="${jack ? '清除 — 管理员可永久清除任何消息' : '撤回 — 2 分钟内可撤回自己发送的消息'}" aria-label="${jack ? '清除' : '撤回'}" ${canDelete ? '' : 'disabled'}>
+        <span class="msg-action-label">${jack ? '清除' : '撤回'}</span>
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
         </svg>
@@ -1293,23 +1300,23 @@
     bar.querySelector('.msg-action-delete').addEventListener('click', async (ev) => {
       ev.stopPropagation();
       if (!canDelete) {
-        toast(lang === 'zh' ? (isJack ? '该消息不能清除' : '该消息不能撤回') : (isJack ? 'Cannot clear this message' : 'Cannot recall this message'));
+        toast(lang === 'zh' ? (jack ? '该消息不能清除' : '该消息不能撤回') : (jack ? 'Cannot clear this message' : 'Cannot recall this message'));
         bar.remove();
         return;
       }
-      const confirmText = isJack
+      const confirmText = jack
         ? (lang === 'zh' ? '确定要清除这条消息？（永久删除）' : 'Clear this message permanently?')
         : (lang === 'zh' ? '确定要撤回这条消息？' : 'Recall this message?');
       if (!confirm(confirmText)) { bar.remove(); return; }
       try {
-        if (isJack) {
+        if (jack) {
           await jackDeleteMessage(m.id);
         } else {
           await api(`/api/messages/${m.id}`, { method: 'DELETE' });
           s.emit('message:deleted', { id: m.id, scope: 'self' });
         }
         bar.remove();
-        toast(isJack ? (lang === 'zh' ? '已清除' : 'Cleared') : (lang === 'zh' ? '已撤回' : 'Recalled'));
+        toast(jack ? (lang === 'zh' ? '已清除' : 'Cleared') : (lang === 'zh' ? '已撤回' : 'Recalled'));
       } catch (e) { toast(e.message); bar.remove(); }
     });
     bar.querySelector('.msg-action-forward').addEventListener('click', (ev) => {
@@ -2613,8 +2620,13 @@
     // logout
     $('#btn-logout')?.addEventListener('click', (e) => { e.currentTarget._handled = true; logout(); });
 
-    // Root console (Jack only)
-    initRootConsole();
+    // NOTE: the old `initRootConsole()` call was removed here. The root
+    // console feature was deleted from the UI, but the call stayed behind
+    // and threw `ReferenceError: initRootConsole is not defined` at runtime.
+    // Because it sat in the MIDDLE of bindAppEvents(), the throw aborted
+    // every binding that came after it — including the document-level
+    // fallbacks below. That is why topbar buttons and message actions
+    // stopped responding.
 
     // admin (deprecated old key system) — Jack-only mode uses regular auth
     // admin wipe button in chat header (Jack only)

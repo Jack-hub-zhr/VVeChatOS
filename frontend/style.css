@@ -1440,12 +1440,14 @@ body.dark .msg-jack-label {
     0 10px 32px rgba(30, 80, 150, 0.20),
     0 2px 6px rgba(30, 80, 150, 0.10);
   animation: msgBarIn 0.18s cubic-bezier(0.22, 1, 0.36, 1) both;
-  /* The JS sets `left` to the CENTRE of the message, and the keyframes
-     carry a translateX(-50%) to compensate. Without this base transform the
-     compensation only exists DURING the animation — once it finishes the
-     bar snaps half its width to the left and hangs off the screen on a
-     phone. */
-  transform: translateX(-50%);
+  /* NO translateX(-50%) HERE.
+     The JS already computes a LEFT EDGE for the bar:
+         left = rect.left + rect.width / 2 - barWidth / 2
+     i.e. the bar is centred over the message by its own left coordinate.
+     Adding translateX(-50%) on top of that shifts the whole bar half its
+     width to the left, which pushed it off-screen on a phone — tapping
+     the "..." appeared to do nothing because the menu opened outside the
+     viewport. */
   transform-origin: center bottom;
 }
 body.dark .msg-action-bar {
@@ -1459,8 +1461,8 @@ body.dark .msg-action-bar {
    pinned to the middle of the viewport so it is always fully reachable
    with a thumb. */
 @keyframes msgBarIn {
-  from { opacity: 0; transform: translateX(-50%) scale(0.85); }
-  to   { opacity: 1; transform: translateX(-50%) scale(1); }
+  from { opacity: 0; transform: scale(0.85); }
+  to   { opacity: 1; transform: scale(1); }
 }
 .msg-action-btn {
   min-width: 60px; height: 56px;
@@ -2346,7 +2348,11 @@ body.dark .chat-empty-mark {
    ============================================================ */
 .msg-row.me {
   flex-direction: row !important;
-  align-items: flex-end !important;
+  /* flex-start, NOT flex-end: the column now holds bubble + timestamp +
+     dots, so bottom-aligning pushed the avatar down next to the dots
+     instead of level with the message. WeChat lines the avatar up with
+     the FIRST line of the message. */
+  align-items: flex-start !important;
   justify-content: flex-end;
   align-self: flex-end;
 }
@@ -2365,7 +2371,7 @@ body.dark .chat-empty-mark {
 /* theirs → avatar left, content after it */
 .msg-row:not(.me) {
   flex-direction: row !important;
-  align-items: flex-end !important;
+  align-items: flex-start !important;
   justify-content: flex-start;
   align-self: flex-start;
 }
@@ -2412,9 +2418,12 @@ body.dark .chat-empty-mark {
 .msg-dots {
   flex-shrink: 0;
   align-self: inherit;          /* follow .msg-content's align-items */
+  /* Same width as the timestamp ("06:04" is ~34px at 11px) so the three
+     dots span exactly the clock's width and sit square under it. */
+  width: 34px;
   height: 18px;
   margin: 1px 0 0;
-  padding: 0 3px;
+  padding: 0;
   border-radius: 8px;
   display: flex; align-items: center; justify-content: center;
   background: transparent;
@@ -2435,9 +2444,10 @@ body.dark .msg-dots:hover { background: rgba(255, 255, 255, 0.10); }
   .msg-dots { opacity: 0.6; }
 }
 
-/* The dots sit under the timestamp, so the timestamp must not be pushed
-   around — keep its own padding symmetric with the dots' padding. */
-.msg-row .msg-meta { padding: 0 3px; }
+/* The dots sit under the timestamp, so the two must share the same left
+   edge for the dots to land exactly under the clock. Only the LAST meta
+   row (the timestamp) is zeroed — the sender-name row keeps its padding. */
+.msg-row .msg-content > .msg-meta:last-of-type { padding: 0; }
 
 /* ============================================================
    MOBILE ONLY (max-width: 820px) — same breakpoint as the
@@ -2626,8 +2636,8 @@ body.dark .msg-dots:hover { background: rgba(255, 255, 255, 0.10); }
   /* The message action bar (reply / forward / delete) is the third level
      for a message — same treatment, growing from the message's side. */
   @keyframes msgBarFromDots {
-    from { opacity: 0; transform: translateX(-50%) scale(0.8); }
-    to   { opacity: 1; transform: translateX(-50%) scale(1); }
+    from { opacity: 0; transform: scale(0.8); }
+    to   { opacity: 1; transform: scale(1); }
   }
   .msg-action-bar { animation: msgBarFromDots 0.20s cubic-bezier(0.22, 1, 0.36, 1) both; }
 }
