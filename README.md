@@ -30,6 +30,31 @@ control/             管理控制台（/control）
 | `KEEPALIVE` | `0` | 设为 0 可关闭保活 |
 | `ALLOW_ORIGIN` | *(留空)* | 仅开发时放开跨域 |
 
+### DeepSeek 中转（免费源）
+
+DeepSeek **官方 API 没有免费额度** —— 官方定价页只有按 token 计费，签到送额度之类的活动也不保证存在。
+所以 `/api/ai/chat` 是一个**多源自动回退**的中转站，按以下顺序尝试：
+
+| 顺序 | 源 | 环境变量 | 是否需要付费 |
+|---|---|---|---|
+| 1 | 自定义免费中转 | `RELAY_FREE_URL` + `RELAY_FREE_KEY` + `RELAY_FREE_MODEL` | ❌ 免费 |
+| 2 | BazaarLink 免费层 | `RELAY_BAZAAR_KEY`（模型默认 `auto:free`） | ❌ 免费（每天 50 次，无需绑卡）|
+| 3 | DeepSeek 官方 | `DEEPSEEK_API_KEY`（模型默认 `deepseek-v4-flash`） | ⚠️ 按 token 计费 |
+
+启用免费源只需在 Render 加一个环境变量：
+
+```
+RELAY_BAZAAR_KEY = <在 bazaarlink.ai 注册后拿到的 key>
+```
+
+浏览器端永远拿不到 key，所有请求都从服务端转发（`/api/ai/chat`，NDJSON 流式）。
+
+- 前端回答按 **每字符 0.1 秒** 逐字输出
+- 有 `reasoning_content` 时把思考过程单独放进「思考过程」卡片
+- 等待首个 token 时显示三个灰点波动 + `Thinking…` 呼吸动画
+- `GET /api/ai/status` 可查询当前可用的源（不泄露 key）
+
+
 ### 持久磁盘（重要）
 
 Render → Service → **Disk** → Create Disk
