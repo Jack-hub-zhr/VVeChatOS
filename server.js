@@ -81,6 +81,13 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conv_type, conv_id, created_at);
 
+  -- Runtime configuration for the AI relay (so the admin can plug in a key
+  -- from the UI instead of editing Render's environment variables).
+  CREATE TABLE IF NOT EXISTS ai_config (
+    key TEXT PRIMARY KEY,
+    value TEXT
+  );
+
   CREATE TABLE IF NOT EXISTS friend_requests (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     from_user_id INTEGER NOT NULL,
@@ -545,36 +552,115 @@ app.post('/api/admin/messages/wipe-group/:id', rateLimit('write'), authRequired,
 // The response is streamed as NDJSON so the browser can show the
 // reasoning trace and the answer as they arrive.
 // ============================================================
-const AI_SOURCES = [
-  // Operator-supplied free relay (highest priority).
-  ...(process.env.RELAY_FREE_URL ? [{
-    name: 'free-relay',
-    base: process.env.RELAY_FREE_URL.replace(/\/$/, ''),
-    key: process.env.RELAY_FREE_KEY || '',
-    model: process.env.RELAY_FREE_MODEL || 'auto:free',
-    free: true
-  }] : []),
-  // BazaarLink public free tier — no card required, 10 req/min,
-  // 50 req/day. Sign-up is free at bazaarlink.ai.
-  ...(process.env.RELAY_BAZAAR_ENABLED !== '0' ? [{
-    name: 'bazaarlink',
-    base: 'https://api.bazaarlink.ai/v1',
-    key: process.env.RELAY_BAZAAR_KEY || '',
-    model: process.env.RELAY_BAZAAR_MODEL || 'auto:free',
-    free: true
-  }] : []),
-  // Official DeepSeek — only used when a key is configured.
-  ...(process.env.DEEPSEEK_API_KEY ? [{
-    name: 'deepseek',
-    base: 'https://api.deepseek.com/v1',
-    key: process.env.DEEPSEEK_API_KEY,
-    model: process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash',
-    free: false
-  }] : []),
-];
+// Runtime configuration lives in the database so the admin can plug in a
+// key from the UI without touching Render's environment variables.
+// Table: ai_config(key TEXT PRIMARY KEY, value TEXT)
+function aiConfigGet(key) {
+  try {
+    const row = db.prepare('SELECT value FROM ai_config WHERE key = ?').get(key);
+    return row ? row.value : '';
+  } catch (_) { return ''; }
+}
+function aiConfigSet(key, value) {
+  db.prepare('INSERT INTO ai_config (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
+    .run(key, value === null || value === undefined ? '' : String(value));
+}
+
+// Build the ordered source list. DeepSeek models are tried FIRST (they are
+// what the panel promises), then the anonymous no-key fallbacks so the
+// feature always works even with zero configuration.
+function aiSources() {
+  const dbKey = (name) => aiConfigGet('ai_key_' + name);
+  const dbModel = (name, fallback) => (aiConfigGet('ai_model_' + name) || fallback);
+  const list = [];
+
+  // --- DeepSeek-capable sources, highest priority ---
+  // 1. An operator-configured generic relay.
+  if (process.env.RELAY_FREE_URL) {
+    list.push({
+      name: 'free-relay',
+      base: process.env.RELAY_FREE_URL.replace(/\/$/, ''),
+      path: '/chat/completions',
+      key: process.env.RELAY_FREE_KEY || '',
+      model: process.env.RELAY_FREE_MODEL || 'auto:free',
+      free: true, deepseek: false
+    });
+  }
+  // 2. llm7.io with a registered (free) token → DeepSeek V4.
+  const llm7Key = process.env.RELAY_LLM7_KEY || dbKey('llm7');
+  if (llm7Key) {
+    list.push({
+      name: 'llm7',
+      base: 'https://api.llm7.io/v1',
+      path: '/chat/completions',
+      key: llm7Key,
+      model: dbModel('llm7', 'deepseek-v4-flash-0731'),
+      free: true, deepseek: true
+    });
+  }
+  // 3. BazaarLink free tier (auto:free can route to DeepSeek V4 Flash).
+  const bazaarKey = process.env.RELAY_BAZAAR_KEY || dbKey('bazaarlink');
+  if (bazaarKey) {
+    list.push({
+      name: 'bazaarlink',
+      base: 'https://api.bazaarlink.ai/v1',
+      path: '/chat/completions',
+      key: bazaarKey,
+      model: dbModel('bazaarlink', 'auto:free'),
+      free: true, deepseek: false
+    });
+  }
+  // 4. SiliconFlow — generous free tier, DeepSeek V3/R1, fast in Asia.
+  const sfKey = process.env.RELAY_SILICONFLOW_KEY || dbKey('siliconflow');
+  if (sfKey) {
+    list.push({
+      name: 'siliconflow',
+      base: 'https://api.siliconflow.cn/v1',
+      path: '/chat/completions',
+      key: sfKey,
+      model: dbModel('siliconflow', 'deepseek-ai/DeepSeek-V3'),
+      free: true, deepseek: true
+    });
+  }
+  // 5. Official DeepSeek (billed, only if a key exists).
+  const dsKey = process.env.DEEPSEEK_API_KEY || dbKey('deepseek');
+  if (dsKey) {
+    list.push({
+      name: 'deepseek',
+      base: 'https://api.deepseek.com/v1',
+      path: '/chat/completions',
+      key: dsKey,
+      model: dbModel('deepseek', 'deepseek-v4-flash'),
+      free: false, deepseek: true
+    });
+  }
+
+  // --- Zero-configuration fallbacks: always available ---
+  // llm7.io serves a no-signup tier (about 1 req/s). Its DeepSeek models are
+  // gated, but these are open — the panel labels the actual model so nobody
+  // is misled about what answered.
+  for (const m of ['mistral-Nemo-Instruct-2407', 'codestral-latest', 'minimax-m2.7']) {
+    list.push({
+      name: 'llm7-free', base: 'https://api.llm7.io/v1', path: '/chat/completions', key: '',
+      model: m, free: true, deepseek: false
+    });
+  }
+  // Pollinations — no key, no signup, community-run.
+  list.push({
+    name: 'pollinations', base: 'https://text.pollinations.ai', path: '/openai', key: '',
+    model: 'openai-fast', free: true, deepseek: false
+  });
+
+  return list;
+}
 
 // Read an OpenAI-compatible SSE stream and forward each chunk as
 // {type:'reasoning'|'delta'|'done', text} NDJSON lines.
+//
+// Node 18's global fetch (undici) returns a WHATWG ReadableStream, not a
+// Node Readable — it has no .on('data'), only .getReader(). Reading it the
+// Node way threw "upstreamBody.on is not a function" and every relay
+// source failed. Support both shapes so the code also works on Node 20+.
 function relayStream(res, upstreamBody, source) {
   return new Promise((resolve) => {
     let done = false;
@@ -588,9 +674,11 @@ function relayStream(res, upstreamBody, source) {
     const write = (obj) => {
       try { res.write(JSON.stringify(obj) + '\n'); } catch (_) { finish('write_failed'); }
     };
+
+    // Parse an SSE buffer into relay events.
     let buf = '';
-    upstreamBody.on('data', (chunk) => {
-      buf += chunk.toString('utf8');
+    const consume = (chunkText) => {
+      buf += chunkText;
       const lines = buf.split('\n');
       buf = lines.pop() || '';
       for (const line of lines) {
@@ -609,9 +697,36 @@ function relayStream(res, upstreamBody, source) {
         if (think) write({ type: 'reasoning', text: String(think) });
         if (d.content) write({ type: 'delta', text: String(d.content) });
       }
-    });
-    upstreamBody.on('end', () => finish(null));
-    upstreamBody.on('error', (e) => finish(String(e.message || e)));
+    };
+
+    // --- WHATWG stream (Node 18+ global fetch) ---
+    if (upstreamBody && typeof upstreamBody.getReader === 'function') {
+      const reader = upstreamBody.getReader();
+      const decoder = new TextDecoder();
+      (async () => {
+        try {
+          while (true) {
+            const { value, done: rdone } = await reader.read();
+            if (rdone) break;
+            consume(decoder.decode(value, { stream: true }));
+          }
+          finish(null);
+        } catch (e) {
+          finish(String((e && e.message) || e));
+        }
+      })();
+      return;
+    }
+
+    // --- Node Readable (older runtimes / proxies) ---
+    if (upstreamBody && typeof upstreamBody.on === 'function') {
+      upstreamBody.on('data', (chunk) => consume(chunk.toString('utf8')));
+      upstreamBody.on('end', () => finish(null));
+      upstreamBody.on('error', (e) => finish(String(e.message || e)));
+      return;
+    }
+
+    finish('upstream body is not readable');
   });
 }
 
@@ -620,11 +735,9 @@ app.post('/api/ai/chat', rateLimit('write'), authRequired, async (req, res) => {
   const userMsg = String(message || '').trim();
   if (!userMsg) return res.status(400).json({ error: '消息不能为空' });
 
-  if (!AI_SOURCES.length) {
-    return res.status(503).json({
-      error: 'DeepSeek 中转尚未配置免费源',
-      hint: '在 Render 环境变量里设置 RELAY_BAZAAR_KEY（bazaarlink.ai 注册免费获取）即可启用。'
-    });
+  const SOURCES = aiSources();
+  if (!SOURCES.length) {
+    return res.status(503).json({ error: '没有可用的中转源' });
   }
 
   res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
@@ -642,13 +755,11 @@ app.post('/api/ai/chat', rateLimit('write'), authRequired, async (req, res) => {
   }
   msgs.push({ role: 'user', content: userMsg.slice(0, 4000) });
 
-  let lastErr = 'unknown';
-  for (const source of AI_SOURCES) {
-    if (!source.key && source.name !== 'free-relay') {
-      // A source without a key cannot be used (bazaarlink needs a free key).
-      if (source.name === 'bazaarlink') lastErr = '未配置免费源密钥';
-      continue;
-    }
+  const errors = [];
+  for (const source of SOURCES) {
+    // A source with no key is still worth trying: llm7.io and Pollinations
+    // both serve a no-signup tier. Sending a bogus Bearer header to them
+    // would be rejected, so only add the header when we actually have a key.
     try {
       const headers = { 'Content-Type': 'application/json' };
       if (source.key) headers['Authorization'] = `Bearer ${source.key}`;
@@ -658,12 +769,13 @@ app.post('/api/ai/chat', rateLimit('write'), authRequired, async (req, res) => {
         stream: true,
         temperature: 0.7
       };
-      const upstream = await fetch(`${source.base}/chat/completions`, {
+      const url = `${source.base}${source.path || '/chat/completions'}`;
+      const upstream = await fetch(url, {
         method: 'POST', headers, body: JSON.stringify(body)
       });
       if (!upstream.ok) {
         const txt = await upstream.text().catch(() => '');
-        lastErr = `${source.name}: HTTP ${upstream.status} ${txt.slice(0, 160)}`;
+        errors.push(`${source.name}: HTTP ${upstream.status} ${txt.slice(0, 120)}`);
         continue;
       }
       // Tell the client which source answered, then stream the payload.
@@ -671,21 +783,43 @@ app.post('/api/ai/chat', rateLimit('write'), authRequired, async (req, res) => {
       await relayStream(res, upstream.body, source);
       return;
     } catch (e) {
-      lastErr = `${source.name}: ${e.message || e}`;
+      errors.push(`${source.name}: ${e.message || e}`);
     }
   }
   try {
-    res.write(JSON.stringify({ type: 'error', message: '所有中转源都失败了：' + lastErr }) + '\n');
+    res.write(JSON.stringify({ type: 'error', message: '所有中转源都失败了：' + errors.join(' | ') }) + '\n');
     res.end();
   } catch (_) {}
 });
 
 // Report which relays are configured (no keys leaked).
 app.get('/api/ai/status', authRequired, (req, res) => {
+  const sources = aiSources();
   res.json({
-    ok: AI_SOURCES.length > 0,
-    sources: AI_SOURCES.map(s => ({ name: s.name, model: s.model, free: !!s.free, hasKey: !!s.key }))
+    ok: sources.length > 0,
+    // The first source that can actually answer with a DeepSeek model.
+    deepseekReady: sources.some(s => s.deepseek),
+    sources: sources.map(s => ({ name: s.name, model: s.model, free: !!s.free, deepseek: !!s.deepseek, hasKey: !!s.key }))
   });
+});
+
+// Admin-only: plug in a relay key from the UI. Stored in the database, so
+// no redeploy and no environment-variable editing is needed.
+app.post('/api/ai/config', rateLimit('write'), authRequired, requireAdmin, (req, res) => {
+  const { source, key, model } = req.body || {};
+  const allowed = ['llm7', 'bazaarlink', 'siliconflow', 'deepseek'];
+  if (!allowed.includes(source)) return res.status(400).json({ error: '未知的源' });
+  if (key === null || key === '') {
+    aiConfigSet('ai_key_' + source, '');
+  } else {
+    const k = String(key).trim();
+    if (k.length < 8 || k.length > 300) return res.status(400).json({ error: '密钥格式不正确' });
+    aiConfigSet('ai_key_' + source, k);
+  }
+  if (model !== undefined && model !== null && String(model).trim()) {
+    aiConfigSet('ai_model_' + source, String(model).trim().slice(0, 80));
+  }
+  res.json({ ok: true, sources: aiSources().map(s => ({ name: s.name, model: s.model, free: !!s.free, deepseek: !!s.deepseek, hasKey: !!s.key })) });
 });
 
 // Remove a member from a group. Allowed for the group owner and for Jack.

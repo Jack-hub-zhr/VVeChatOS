@@ -2491,17 +2491,101 @@
   async function aiCheckStatus() {
     try {
       const r = await api('/ai/status');
-      const free = (r.sources || []).filter(x => x.free);
-      if (!r.ok || !r.sources.length) {
-        aiSetStatus('未配置免费源', 'warn');
-      } else if (free.length) {
-        aiSetStatus(`免费源可用 · ${free.map(x => x.name).join('、')}`, 'ok');
+      const sources = r.sources || [];
+      // Prefer a source that actually serves DeepSeek; otherwise be honest
+      // about which model is really answering.
+      const ds = sources.find(x => x.deepseek && x.hasKey);
+      const anon = sources.find(x => !x.hasKey);
+      if (ds) {
+        aiSetStatus(`DeepSeek · ${ds.model}`, 'ok');
+      } else if (anon) {
+        aiSetStatus(`${anon.model} · 免费源`, 'ok');
+      } else if (sources.length) {
+        aiSetStatus(sources.map(x => x.name).join('、'), 'ok');
       } else {
-        aiSetStatus(`已连接 · ${r.sources.map(x => x.name).join('、')}`, 'ok');
+        aiSetStatus('没有可用的中转源', 'warn');
       }
+      // Offer the setup button when no real DeepSeek is wired up yet.
+      const setup = $('#ai-setup-btn');
+      if (setup) setup.classList.toggle('hidden', !!ds);
+      state.aiSources = sources;
+      state.aiDeepseekReady = !!ds;
     } catch (e) {
       aiSetStatus('中转暂不可用', 'warn');
     }
+  }
+
+  // Admin-only: paste a relay key in the UI. Stored server-side, so it takes
+  // effect immediately with no redeploy.
+  function aiOpenSetup() {
+    const dlg = document.createElement('div');
+    dlg.className = 'modal';
+    dlg.id = 'modal-ai-setup';
+    dlg.innerHTML = `
+      <div class="modal-mask"></div>
+      <div class="modal-card modal-card-sm" style="aspect-ratio:auto; width:min(92vw, 420px);">
+        <div class="modal-head">
+          <h3>接入 DeepSeek</h3>
+          <button class="icon-btn icon-btn-sm modal-close" data-close="modal-ai-setup">×</button>
+        </div>
+        <div class="modal-body">
+          <p style="margin:0 0 12px;font-size:13px;color:var(--muted);line-height:1.6;">
+            DeepSeek 官方 API 没有免费额度。要用真正的 DeepSeek 模型，任选一家免费注册后把密钥贴进来：
+          </p>
+          <div class="ai-provider-list">
+            <label class="ai-provider">
+              <span class="ai-provider-name">llm7.io</span>
+              <span class="ai-provider-note">注册后到 token.llm7.io 取 token，模型 deepseek-v4-flash-0731</span>
+              <input type="text" id="ai-key-llm7" placeholder="粘贴 llm7.io 的 token" autocomplete="off" />
+            </label>
+            <label class="ai-provider">
+              <span class="ai-provider-name">SiliconFlow</span>
+              <span class="ai-provider-note">国内速度快，模型 deepseek-ai/DeepSeek-V3</span>
+              <input type="text" id="ai-key-siliconflow" placeholder="粘贴 SiliconFlow 的 API Key" autocomplete="off" />
+            </label>
+            <label class="ai-provider">
+              <span class="ai-provider-name">BazaarLink</span>
+              <span class="ai-provider-note">模型 auto:free，可能路由到 DeepSeek V4 Flash</span>
+              <input type="text" id="ai-key-bazaarlink" placeholder="粘贴 BazaarLink 的 API Key" autocomplete="off" />
+            </label>
+            <label class="ai-provider">
+              <span class="ai-provider-name">DeepSeek 官方</span>
+              <span class="ai-provider-note">按 token 计费，最稳定</span>
+              <input type="text" id="ai-key-deepseek" placeholder="粘贴 DeepSeek 官方 API Key" autocomplete="off" />
+            </label>
+          </div>
+          <div class="modal-msg" id="ai-setup-msg"></div>
+          <div class="modal-actions">
+            <button type="button" class="btn btn-ghost" data-close="modal-ai-setup">取消</button>
+            <button type="button" class="btn btn-primary" id="ai-setup-save">保存</button>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(dlg);
+    const close = () => dlg.remove();
+    dlg.querySelectorAll('[data-close="modal-ai-setup"]').forEach(b => b.addEventListener('click', close));
+    dlg.querySelector('.modal-mask').addEventListener('click', close);
+    dlg.querySelector('#ai-setup-save').addEventListener('click', async () => {
+      const msg = dlg.querySelector('#ai-setup-msg');
+      msg.textContent = '';
+      let saved = 0;
+      for (const src of ['llm7', 'siliconflow', 'bazaarlink', 'deepseek']) {
+        const input = dlg.querySelector('#ai-key-' + src);
+        const val = input ? input.value.trim() : '';
+        if (!val) continue;
+        try {
+          await api('/ai/config', { method: 'POST', body: { source: src, key: val } });
+          saved++;
+        } catch (e) {
+          msg.textContent = e.message;
+          return;
+        }
+      }
+      if (!saved) { msg.textContent = '请至少填写一个密钥'; return; }
+      toast('已保存，正在重新检查中转源…');
+      close();
+      aiCheckStatus();
+    });
   }
 
   async function aiSend(text) {
@@ -2607,6 +2691,35 @@
     if (sendBtn) sendBtn.disabled = false;
   }
 
+  // The DeepSeek panel lives in the SAME big right-hand panel as the chat.
+  // Opening it hides the chat view and shows the AI view (and vice versa).
+  function openAiView() {
+    const ai = $('#ai-view');
+    if (!ai) return;
+    ai.classList.remove('hidden');
+    $('#chat-window')?.classList.add('hidden');
+    $('#chat-empty')?.classList.add('hidden');
+    // On mobile the chat pane is an overlay — make sure it is on screen.
+    if (window.innerWidth <= 820) {
+      $('.right-pane')?.classList.add('mobile-show');
+      $('.app-body')?.classList.add('chat-open');
+    }
+    ensureAiPanelBound();
+    aiCheckStatus();
+  }
+
+  function closeAiView() {
+    const ai = $('#ai-view');
+    if (!ai) return;
+    ai.classList.add('hidden');
+    // Restore the chat: either the open conversation, or the empty state.
+    if (state.currentChat) {
+      $('#chat-window')?.classList.remove('hidden');
+    } else {
+      $('#chat-empty')?.classList.remove('hidden');
+    }
+  }
+
   function ensureAiPanelBound() {
     const form = $('#ai-form');
     const input = $('#ai-input');
@@ -2633,6 +2746,22 @@
       input.style.height = Math.min(input.scrollHeight, 140) + 'px';
     });
     aiCheckStatus();
+
+    const setupBtn = $('#ai-setup-btn');
+    if (setupBtn && !setupBtn.__bound) {
+      setupBtn.__bound = true;
+      setupBtn.addEventListener('click', () => aiOpenSetup());
+    }
+
+    const closeBtn = $('#ai-close');
+    if (closeBtn && !closeBtn.__bound) {
+      closeBtn.__bound = true;
+      closeBtn.addEventListener('click', () => {
+        $$('.side-nav-item').forEach(b => b.classList.toggle('active', b.dataset.pane === 'chats'));
+        $$('.pane').forEach(p => p.classList.toggle('active', p.id === 'pane-chats'));
+        closeAiView();
+      });
+    }
   }
 
   // ---------- bootstrap ----------
@@ -2931,7 +3060,8 @@
       const target = btn.dataset.pane;
       $$('.pane').forEach(p => p.classList.toggle('active', p.id === `pane-${target}`));
       if (target === 'contacts') renderContacts();
-      if (target === 'ai') ensureAiPanelBound();
+      if (target === 'ai') openAiView();
+      else closeAiView();
     }));
     $('#btn-create-board')?.addEventListener('click', openCreateBoard);
 
