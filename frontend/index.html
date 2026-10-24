@@ -31,21 +31,21 @@
       <p class="brand-tagline" id="hello-cycler" aria-live="polite">你好</p>
 
       <div class="tabs" role="tablist">
-        <button class="tab active" data-tab="login" role="tab" data-zh="登录" data-en="Sign in">登录</button>
-        <button class="tab" data-tab="register" role="tab" data-zh="注册" data-en="Sign up">注册</button>
+        <button class="tab active" data-tab="login" role="tab">登录</button>
+        <button class="tab" data-tab="register" role="tab">注册</button>
       </div>
 
       <form id="auth-form" autocomplete="off">
         <label class="field">
-          <span class="field-label" data-zh="用户名" data-en="Username">用户名</span>
-          <input id="auth-username" name="username" type="text" required minlength="2" maxlength="24" data-zh-ph="2-24 位字符" data-en-ph="2-24 characters" placeholder="2-24 位字符" />
+          <span class="field-label">用户名</span>
+          <input id="auth-username" name="username" type="text" required minlength="2" maxlength="24" placeholder="2-24 位字符" />
         </label>
         <label class="field">
-          <span class="field-label" data-zh="密码" data-en="Password">密码</span>
-          <input id="auth-password" name="password" type="password" required minlength="4" data-zh-ph="至少 4 位" data-en-ph="At least 4 characters" placeholder="至少 4 位" />
+          <span class="field-label">密码</span>
+          <input id="auth-password" name="password" type="password" required minlength="4" placeholder="至少 4 位" />
         </label>
         <div class="auth-msg" id="auth-msg"></div>
-        <button id="auth-submit" class="btn btn-primary btn-lg" type="submit" data-zh="登录" data-en="Sign in">登录</button>
+        <button id="auth-submit" class="btn btn-primary btn-lg" type="submit">登录</button>
       </form>
     </section>
   </main>
@@ -55,7 +55,7 @@
     <section class="app-shell">
       <header class="topbar">
         <div class="topbar-left">
-          <span class="brand-name" data-zh="VVeChat" data-en="VVeChat">VVeChat</span>
+          <span class="brand-name">VVeChat</span>
           <span class="beta-tag">OS 1</span>
         </div>
         <div class="topbar-right">
@@ -147,21 +147,45 @@
       </header>
       <div class="app-body">
         <aside class="left-pane">
-          <nav class="tabbar">
-            <button class="tab2 active" data-pane="chats">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-              </svg>
-              <span data-zh="聊天" data-en="Chats">聊天</span>
+          <!-- ============ identity card ============ -->
+          <button class="side-me" id="side-me" type="button" title="我的资料">
+            <div class="avatar md" id="side-avatar"></div>
+            <div class="side-me-text">
+              <div class="side-me-name" id="side-name">—</div>
+              <div class="side-me-sub" id="side-sub">VVeChat</div>
+            </div>
+          </button>
+
+          <!-- ============ primary navigation ============ -->
+          <nav class="side-nav" role="tablist">
+            <button class="side-nav-item active" data-pane="chats" role="tab" title="聊天">
+              <span class="side-nav-ic">
+                <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                </svg>
+              </span>
+              <span class="side-nav-label">聊天</span>
             </button>
-            <button class="tab2" data-pane="contacts">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-                <circle cx="9" cy="7" r="4"/>
-                <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-              </svg>
-              <span data-zh="通讯录" data-en="Contacts">通讯录</span>
+            <button class="side-nav-item" data-pane="ai" role="tab" title="DeepSeek">
+              <span class="side-nav-ic">
+                <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="4" y="8" width="16" height="11" rx="4"/>
+                  <path d="M12 8V4"/><circle cx="12" cy="3" r="1.4"/>
+                  <path d="M9 13h.01M15 13h.01"/><path d="M9.5 16.5h5"/>
+                </svg>
+              </span>
+              <span class="side-nav-label">DeepSeek</span>
+            </button>
+            <button class="side-nav-item" data-pane="contacts" role="tab" title="通讯录">
+              <span class="side-nav-ic">
+                <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                  <circle cx="9" cy="7" r="4"/>
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                </svg>
+              </span>
+              <span class="side-nav-label">通讯录</span>
             </button>
           </nav>
 
@@ -169,27 +193,62 @@
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
             </svg>
-            <input id="search-input" type="text" data-zh-ph="搜索好友 / 群聊 / 用户" data-en-ph="Search friends / groups / users" placeholder="搜索好友 / 群聊 / 用户" />
+            <input id="search-input" type="text" placeholder="搜索好友 / 群聊 / 用户" />
           </div>
 
+          <!-- ============ 聊天：未读消息 + 群聊 ============ -->
           <div id="pane-chats" class="pane active">
-            <ul id="chats-list" class="list"></ul>
-            <div class="empty-hint hidden" id="chats-empty">
-              <div class="empty-illus">💬</div>
-              <p data-zh="暂无会话" data-en="No conversations yet">暂无会话</p>
-              <small data-zh="点右上角 🔍 搜索好友，或点官方群打个招呼吧" data-en="Tap 🔍 to find friends, or say hi in the official group">点右上角 🔍 搜索好友，或点官方群打个招呼吧</small>
-              <button class="btn primary small hidden" id="chats-open-official" data-zh="进入官方群" data-en="Open official group">进入官方群</button>
+            <div class="side-section">
+              <span class="side-section-title">未读消息</span>
+              <span class="side-badge hidden" id="unread-count">0</span>
             </div>
+            <ul id="unread-list" class="list"></ul>
+            <div class="side-empty hidden" id="unread-empty">没有未读消息</div>
+
+            <div class="side-section">
+              <span class="side-section-title">群聊</span>
+            </div>
+            <ul id="chats-list" class="list"></ul>
+            <div class="side-empty hidden" id="chats-empty">还没有加入任何群聊</div>
           </div>
 
+          <!-- ============ DeepSeek ============ -->
+          <div id="pane-ai" class="pane">
+            <div class="ai-head">
+              <div class="ai-head-title">DeepSeek</div>
+              <div class="ai-head-sub" id="ai-status">正在检查中转状态…</div>
+            </div>
+            <div class="ai-log" id="ai-log">
+              <div class="ai-welcome">
+                <div class="ai-welcome-mark">
+                  <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="4" y="8" width="16" height="11" rx="4"/>
+                    <path d="M12 8V4"/><circle cx="12" cy="3" r="1.4"/>
+                    <path d="M9 13h.01M15 13h.01"/><path d="M9.5 16.5h5"/>
+                  </svg>
+                </div>
+                <p class="ai-welcome-title">有什么可以帮你？</p>
+                <p class="ai-welcome-sub">消息会转发给 DeepSeek，它的回答会回到这里。</p>
+              </div>
+            </div>
+            <form class="ai-composer" id="ai-form">
+              <textarea id="ai-input" rows="1" placeholder="给 DeepSeek 发消息…" autocomplete="off"></textarea>
+              <button type="submit" class="ai-send" id="ai-send" title="发送">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                </svg>
+              </button>
+            </form>
+          </div>
+
+          <!-- ============ 通讯录 ============ -->
           <div id="pane-contacts" class="pane">
-            <div class="section-title" data-zh="群聊" data-en="Groups">群聊</div>
-            <ul id="groups-list" class="list"></ul>
-            <div class="section-title" data-zh="好友" data-en="Friends">好友</div>
+            <div class="side-section">
+              <span class="side-section-title">好友</span>
+            </div>
             <ul id="friends-list" class="list"></ul>
-            <div class="empty-hint hidden" id="contacts-empty">
-              <p data-zh="还没有好友" data-en="No friends yet">还没有好友</p>
-              <small data-zh="点击右上角放大镜搜索" data-en="Tap magnifier to search">点击右上角放大镜搜索</small>
+            <div class="side-empty hidden" id="contacts-empty">
+              还没有好友，点右上角放大镜添加
             </div>
           </div>
 
@@ -198,8 +257,8 @@
         <section class="right-pane" id="right-pane">
           <div class="chat-empty" id="chat-empty">
             <div class="chat-empty-mark">💬</div>
-            <h2 data-zh="选择一个会话开始聊天" data-en="Pick a conversation to start">选择一个会话开始聊天</h2>
-            <p data-zh="可以从左侧选一个，或点右上角放大镜添加好友/群聊" data-en="Pick from the left, or tap the magnifier to add">可以从左侧选一个，或点右上角放大镜添加好友/群聊</p>
+            <h2>选择一个会话开始聊天</h2>
+            <p>可以从左侧选一个，或点右上角放大镜添加好友/群聊</p>
           </div>
 
           <div class="chat-window hidden" id="chat-window">
@@ -259,8 +318,8 @@
                   </svg>
                 </button>
                 <input type="file" id="img-input" accept="image/*" class="hidden" />
-                <input id="chat-input" type="text" data-zh-ph="输入消息…" data-en-ph="Type a message…" placeholder="输入消息…" autocomplete="off" />
-                <button class="btn btn-primary" type="submit" id="send-btn" data-zh="发送" data-en="Send">发送</button>
+                <input id="chat-input" type="text" placeholder="输入消息…" autocomplete="off" />
+                <button class="btn btn-primary" type="submit" id="send-btn">发送</button>
               </div>
               <div id="emoji-picker" class="emoji-picker hidden"></div>
             </form>
@@ -280,7 +339,7 @@
     <div class="modal-mask"></div>
     <div class="modal-card modal-card-sm modal-plus-card">
       <div class="modal-head">
-        <h3 data-zh="搜索 / 添加" data-en="Search / Add">搜索 / 添加</h3>
+        <h3>搜索 / 添加</h3>
         <button class="icon-btn icon-btn-sm modal-close" data-close="modal-plus">×</button>
       </div>
       <div class="modal-body modal-plus-body">
@@ -313,18 +372,18 @@
     <div class="modal-mask"></div>
     <div class="modal-card modal-card-sm">
       <div class="modal-head">
-        <h3 data-zh="添加用户" data-en="Add user">添加用户</h3>
+        <h3>添加用户</h3>
         <button class="icon-btn icon-btn-sm modal-close" data-close="modal-add-friend">×</button>
       </div>
       <form class="modal-body" id="form-add-friend">
         <label class="field">
-          <span class="field-label" data-zh="对方的用户名" data-en="Friend's username">对方的用户名</span>
-          <input id="add-friend-username" type="text" required maxlength="24" data-zh-ph="输入任何部分即可" data-en-ph="Any part of username" placeholder="输入任何部分即可" />
+          <span class="field-label">对方的用户名</span>
+          <input id="add-friend-username" type="text" required maxlength="24" placeholder="输入任何部分即可" />
         </label>
         <div class="modal-msg" id="add-friend-msg"></div>
         <div class="modal-actions">
-          <button type="button" class="btn btn-ghost" data-close="modal-add-friend" data-zh="取消" data-en="Cancel">取消</button>
-          <button type="submit" class="btn btn-primary" data-zh="发送申请" data-en="Send">发送申请</button>
+          <button type="button" class="btn btn-ghost" data-close="modal-add-friend">取消</button>
+          <button type="submit" class="btn btn-primary">发送申请</button>
         </div>
       </form>
     </div>
@@ -335,11 +394,11 @@
     <div class="modal-mask"></div>
     <div class="modal-card">
       <div class="modal-head">
-        <h3 data-zh="好友申请" data-en="Friend requests">好友申请</h3>
+        <h3>好友申请</h3>
         <button class="icon-btn icon-btn-sm modal-close" data-close="modal-bell">×</button>
       </div>
       <div class="modal-body" id="bell-list">
-        <div class="empty-hint small"><p data-zh="暂无好友申请" data-en="No friend requests">暂无好友申请</p></div>
+        <div class="empty-hint small"><p>暂无好友申请</p></div>
       </div>
     </div>
   </div>
@@ -349,7 +408,7 @@
     <div class="modal-mask"></div>
     <div class="modal-card">
       <div class="modal-head">
-        <h3 data-zh="群成员" data-en="Members">群成员</h3>
+        <h3>群成员</h3>
         <button class="icon-btn icon-btn-sm modal-close" data-close="modal-group-info">×</button>
       </div>
       <div class="modal-body" id="group-info-list"></div>
@@ -361,7 +420,7 @@
     <div class="modal-mask"></div>
     <div class="modal-card" id="profile-card">
       <div class="modal-head">
-        <h3 id="profile-title" data-zh="个人资料" data-en="Profile">个人资料</h3>
+        <h3 id="profile-title">个人资料</h3>
         <button class="icon-btn icon-btn-sm modal-close" data-close="modal-profile">×</button>
       </div>
       <div class="modal-body" id="profile-body"></div>
@@ -373,14 +432,14 @@
     <div class="modal-mask"></div>
     <div class="modal-card modal-card-sm">
       <div class="modal-head">
-        <h3 data-zh="确认" data-en="Confirm">确认</h3>
+        <h3>确认</h3>
         <button class="icon-btn icon-btn-sm modal-close" data-close="modal-confirm">×</button>
       </div>
       <div class="modal-body">
         <p id="confirm-msg" style="margin:0;color:var(--ink-2);line-height:1.6;"></p>
         <div class="modal-actions">
-          <button type="button" class="btn btn-ghost" data-close="modal-confirm" id="confirm-cancel" data-zh="取消" data-en="Cancel">取消</button>
-          <button type="button" class="btn btn-danger" id="confirm-ok" data-zh="确定" data-en="OK">确定</button>
+          <button type="button" class="btn btn-ghost" data-close="modal-confirm" id="confirm-cancel">取消</button>
+          <button type="button" class="btn btn-danger" id="confirm-ok">确定</button>
         </div>
       </div>
     </div>
@@ -388,7 +447,7 @@
 
   <div id="lightbox" class="lightbox hidden"></div>
   <div id="toast" class="toast hidden"></div>
-  <div id="offline-banner" class="offline-banner hidden"><span class="dot"></span> <span data-zh="正在重新连接…" data-en="Reconnecting…">正在重新连接…</span></div>
+  <div id="offline-banner" class="offline-banner hidden"><span class="dot"></span> <span>正在重新连接…</span></div>
 
   <!-- Socket.io client is served by this same Express app at /socket.io/socket.io.js,
        so there is no third-party CDN to fail (or be blocked). -->

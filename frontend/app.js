@@ -315,21 +315,17 @@
   };
 
   // ---------- i18n helpers ----------
+  // The UI is Chinese-only: `lang` is a constant and the data-zh /
+  // data-zh-ph attributes have been removed from the markup, so t() just
+  // reads the Chinese table.
   function t(key, ...args) {
-    const s = (STRINGS[lang] && STRINGS[lang][key]) || STRINGS.zh[key] || key;
+    const s = STRINGS.zh[key] || key;
     if (!args.length) return s;
     return s.replace(/\{(\d+)\}/g, (m, i) => args[Number(i)] ?? m);
   }
-  // Re-render every static string as Chinese and refresh dynamic views.
-  // (The language toggle was removed — the UI is Chinese-only now.)
+  // Refresh every view after a profile change.
   function setLang() {
     document.documentElement.lang = 'zh-CN';
-    document.querySelectorAll('[data-zh]').forEach(el => {
-      el.textContent = el.dataset.zh;
-    });
-    document.querySelectorAll('[data-zh-ph]').forEach(el => {
-      el.placeholder = el.dataset.zhPh;
-    });
     if (state.user) {
       renderAll();
       if (state.currentChat) { renderChatHeader(); renderMessages(); }
@@ -403,7 +399,26 @@
     if (u.avatar_color) return `background:linear-gradient(135deg, ${u.avatar_color}, ${shade(u.avatar_color, -25)});`;
     return '';
   }
-  function avatarInner(u) { return escapeHtml(initials(u && u.username || '?')); }
+  // An emoji avatar wins over the auto-generated initial.
+  const EMOJI_AVATARS = [
+    '🦊','🐼','🐨','🦁','🐯','🐸','🐵','🐧','🐦','🦉',
+    '🐶','🐱','🐭','🐹','🐰','🦄','🐝','🦋','🐢','🐙',
+    '🌟','✨','🔥','💎','🎯','🚀','☕️','🍀','🌊','🌙',
+    '👑','🧠','👾','🤖','👻','🎨','🎧','📷','🧩','🗝'
+  ];
+
+  function emojiOf(c) {
+    if (!c) return null;
+    if (c.avatar_emoji) return c.avatar_emoji;
+    if (state.user && c.id === state.user.id && state.user.avatar_emoji) return state.user.avatar_emoji;
+    return null;
+  }
+
+  function avatarInner(u) {
+    const e = emojiOf(u);
+    if (e) return `<span class="avatar-emoji">${escapeHtml(e)}</span>`;
+    return escapeHtml(initials(u && u.username || '?'));
+  }
   function isOnline(uid) { return uid && state.online.has(uid); }
   function showOffline() { $('#offline-banner')?.classList.remove('hidden'); }
   function hideOffline() { $('#offline-banner')?.classList.add('hidden'); }
@@ -568,7 +583,26 @@
   }
 
   // ---------- rendering ----------
-  function renderAll() { renderChats(); renderContacts(); renderBell(); renderTopbarAvatar(); }
+  function renderAll() { renderChats(); renderContacts(); renderBell(); renderTopbarAvatar(); renderSideMe(); }
+
+  // The identity card at the top of the sidebar.
+  function renderSideMe() {
+    const av = $('#side-avatar');
+    const nm = $('#side-name');
+    const sb = $('#side-sub');
+    if (!av || !state.user) return;
+    const emoji = state.user.avatar_emoji || null;
+    const color = state.user.avatar_color || '#5eead4';
+    av.innerHTML = emoji
+      ? `<span class="avatar-emoji">${escapeHtml(emoji)}</span>`
+      : escapeHtml(initials(state.user.username));
+    av.style.background = emoji
+      ? 'rgba(255,255,255,0.55)'
+      : `linear-gradient(135deg, ${color}, ${shade(color, -25)})`;
+    av.classList.toggle('avatar-jack-glow', state.user.username === 'Jack');
+    if (nm) nm.textContent = state.user.username;
+    if (sb) sb.textContent = state.user.username === 'Jack' ? '管理员' : 'VVeChat';
+  }
 
   function renderTopbarAvatar() {
     const el = $('#topbar-avatar');
@@ -576,10 +610,13 @@
     // Jack ALWAYS gets the signature gold — don't trust stale localStorage.
     const isJack = state.user.username === 'Jack' || !!state.user.is_admin;
     const color = isJack ? '#fbbf24' : (state.user.avatar_color || '#5eead4');
-    const letter = initials(state.user.username);
+    const emoji = state.user.avatar_emoji || null;
+    const letter = emoji ? null : initials(state.user.username);
     // Always show the user's first letter (or upload image if set)
-    el.textContent = letter;
-    el.setAttribute('data-letter', letter);
+    el.innerHTML = emoji
+      ? `<span class="avatar-emoji">${escapeHtml(emoji)}</span>`
+      : escapeHtml(letter || '');
+    el.setAttribute('data-letter', letter || '');
     if (state.user.avatar) {
       el.style.backgroundImage = `url('${state.user.avatar}')`;
       el.style.backgroundSize = 'cover';
@@ -623,12 +660,80 @@
     }
   }
 
+  // Build one sidebar row for a conversation.
+  function buildConvRow(c, opts) {
+    opts = opts || {};
+    const li = document.createElement('li');
+    li.className = 'list-item';
+    if (state.currentChat && state.currentChat.type===c.type && String(state.currentChat.id)===String(c.id)) li.classList.add('active');
+    const isGroup = c.type==='group';
+    const isOfficial = !!c.is_official;
+    const online = c.type==='user' && isOnline(c.id);
+    const ac = isGroup ? `avatar group ${isOfficial?'official':''}` : 'avatar';
+    const preview = c.last_message ? c.last_message : (isGroup?(isOfficial?t('official_sub'):t('group_sub')):t('new_msg'));
+    const officialTag = isOfficial ? `<span class="tag-official">官方</span>` : '';
+    const avatarBg = isGroup ? '' : avatarStyle(c);
+    const dot = (isGroup || isOfficial) ? '' : `<span class="online-dot"></span>`;
+    const avatarCls = [ac, online?'online':''].filter(Boolean).join(' ');
+    const senderPrefix = c.last_sender_id && c.last_sender_id !== state.user.id && isGroup
+      ? `<span style="color:var(--accent);font-weight:600;">${escapeHtml(userInfo(c.last_sender_id).username)}:</span> ` : '';
+    const unreadHtml = c.unread > 0 ? `<span class="unread">${c.unread>99?'99+':c.unread}</span>` : '';
+    const inner = isGroup
+      ? escapeHtml(groupLetter(c.username, isOfficial))
+      : avatarInner(c);
+    li.innerHTML = `<div class="${avatarCls}"${avatarBg} data-peer="${isGroup ? '' : c.id}">${inner}${dot}</div>
+      <div class="meta"><div class="name">${escapeHtml(c.username)} ${officialTag}</div>
+      <div class="preview">${senderPrefix}${escapeHtml(preview)}</div></div>
+      <div class="time">${fmtTime(c.last_at)}</div>${unreadHtml}`;
+    li.addEventListener('click', () => {
+      openChat(c.type, c.id, c.username, isOfficial);
+      // Opening the conversation IS the read receipt — the row must drop out
+      // of the 未读消息 block immediately, not on the next refresh.
+      if (c.unread > 0) {
+        c.unread = 0;
+        renderUnread();
+      }
+    });
+    return li;
+  }
+
+  // The 未读消息 block: only conversations with unread messages. When the
+  // user opens one, the server records the read receipt and the row
+  // disappears from here.
+  function renderUnread() {
+    const list = $('#unread-list');
+    const empty = $('#unread-empty');
+    const badge = $('#unread-count');
+    if (!list) return;
+    list.innerHTML = '';
+    const unread = state.conversations.filter(c => (c.unread || 0) > 0)
+      .sort((a,b) => (b.unread||0)-(a.unread||0) || (b.last_at||0)-(a.last_at||0));
+    const total = unread.reduce((n,c) => n + (c.unread||0), 0);
+    if (badge) {
+      badge.textContent = total > 99 ? '99+' : String(total);
+      badge.classList.toggle('hidden', total === 0);
+    }
+    if (empty) empty.classList.toggle('hidden', unread.length > 0);
+    for (const c of unread) list.appendChild(buildConvRow(c, { unread: true }));
+  }
+
+  // The 群聊 block: every group the user belongs to, official first.
   function renderChats() {
+    const list = $('#chats-list'); const empty = $('#chats-empty');
+    if (!list) return;
+    list.innerHTML = '';
+    const groups = state.conversations.filter(c => c.type === 'group')
+      .sort((a,b) => (b.is_official||0)-(a.is_official||0) || (b.last_at||0)-(a.last_at||0));
+    if (empty) empty.classList.toggle('hidden', groups.length > 0);
+    for (const c of groups) list.appendChild(buildConvRow(c));
+    renderUnread();
+  }
+
+  function _renderChatsLegacy() {
     const list = $('#chats-list'); const empty = $('#chats-empty');
     list.innerHTML = '';
     if (!state.conversations.length) {
       empty.classList.remove('hidden');
-      // Show "open official group" CTA if there's an official group available
       const cta = $('#chats-open-official');
       if (cta) {
         const official = state.groups.find(g => g.is_official);
@@ -670,18 +775,12 @@
   }
 
   function renderContacts() {
-    const grpList = $('#groups-list'); grpList.innerHTML = '';
-    for (const g of state.groups) {
-      const li = document.createElement('li'); li.className = 'list-item';
-      const ac = `avatar group ${g.is_official?'official':''}`;
-      const officialTag = g.is_official ? `<span style="font-size:10px;background:rgba(245,158,11,0.14);color:#b45309;padding:2px 7px;border-radius:6px;border:1px solid rgba(245,158,11,0.30);font-weight:600;">${t('group_sub')==='群聊'?'官方':'Off'}</span>` : '';
-      li.innerHTML = `<div class="${ac}">${escapeHtml(groupLetter(g.name, g.is_official))}</div>
-        <div class="meta"><div class="name">${escapeHtml(g.name)} ${officialTag}</div>
-        <div class="preview">${g.is_official?t('official_sub'):t('group_sub')}</div></div>`;
-      li.addEventListener('click', () => openChat('group', g.id, g.name, g.is_official));
-      grpList.appendChild(li);
-    }
-    const frList = $('#friends-list'); frList.innerHTML = '';
+    // NOTE: the group list used to be rendered here into #groups-list.
+    // Groups now live in the 群聊 block of the 聊天 pane, and the element
+    // no longer exists — referencing it here crashed renderContacts().
+    const frList = $('#friends-list');
+    if (!frList) return;
+    frList.innerHTML = '';
     if (!state.friends.length) {
       frList.innerHTML = `<li class="empty-hint"><p>${t('no_friends_yet') || '还没有好友'}</p><small>${t('tap_magnifier_to_search') || '点击右上角放大镜搜索'}</small></li>`;
     }
@@ -763,7 +862,7 @@
       li.addEventListener('click', () => {
         if (g.joined) {
           $$('.pane').forEach(p => p.classList.toggle('active', p.id === 'pane-chats'));
-          $$('.tabbar .tab2').forEach(b => b.classList.toggle('active', b.dataset.pane === 'chats'));
+          $$('.side-nav-item').forEach(b => b.classList.toggle('active', b.dataset.pane === 'chats'));
           openChat('group', g.id, g.name, 0);
         }
       });
@@ -1165,7 +1264,8 @@
     const isJackAvatar = u.username === 'Jack';
     const glowCls = isJackAvatar ? ' avatar-jack-glow' : '';
     // Task: tap a group member's avatar to open their profile and add them.
-    const avatarHtml = `<div class="msg-avatar avatar sm${glowCls}" style="${bgStyle}" data-uid="${m.sender_id}" role="button" title="查看资料">${escapeHtml(initials(u.username))}</div>`;
+    const msgEmoji = emojiOf(u);
+    const avatarHtml = `<div class="msg-avatar avatar sm${glowCls}" style="${bgStyle}" data-uid="${m.sender_id}" role="button" title="查看资料">${msgEmoji ? `<span class="avatar-emoji">${escapeHtml(msgEmoji)}</span>` : escapeHtml(initials(u.username))}</div>`;
     // sender name — show for group chats when message is from someone else
     const senderName = ctype === 'group' && !mine
       ? `<div class="msg-meta"><span class="sender">${escapeHtml(m.sender_username)}</span></div>`
@@ -1263,7 +1363,14 @@
     // Each action button has a Chinese tooltip explaining what it does.
     // Tooltips are shown both via native title (hover) and a visible label
     // above each icon so they're always readable on touch devices.
-    bar.innerHTML = `
+    // A row of quick-reply emojis at the TOP of the bar. Tapping one sends
+    // that emoji as a brand new message in the current conversation — the
+    // whole point is a one-tap reply, so it must not require the composer.
+    const QUICK_EMOJIS = ['👍','❤️','😂','🎉','😮','😢','🙏','🔥'];
+    const quickRow = `<div class="msg-action-quick">${QUICK_EMOJIS.map(em =>
+      `<button class="msg-quick-emoji" data-quick-emoji="${em}" title="发送 ${em}" aria-label="发送 ${em}">${em}</button>`
+    ).join('')}</div>`;
+    bar.innerHTML = `${quickRow}
       <button class="msg-action-btn msg-action-forward" data-tip="转发" title="转发 — 把这条消息发给其他好友或群聊" aria-label="转发">
         <span class="msg-action-label">转发</span>
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1339,6 +1446,21 @@
       bar.remove();
     });
     bar.querySelector('.msg-action-cancel').addEventListener('click', (ev) => { ev.stopPropagation(); bar.remove(); });
+    // Quick emoji → send it right away as a new message.
+    bar.querySelectorAll('[data-quick-emoji]').forEach((btn) => {
+      btn.addEventListener('click', async (ev) => {
+        ev.stopPropagation();
+        const em = btn.dataset.quickEmoji;
+        bar.remove();
+        if (!em || !state.currentChat) return;
+        try {
+          await sendMessage(em);
+        } catch (e) {
+          console.error('[VVeChat] quick emoji failed:', e);
+          toast(e.message || '发送失败');
+        }
+      });
+    });
     // Dismiss on the NEXT tap elsewhere. On touch devices the click that
     // opened this bar is delivered ~50-300ms later, so a 50ms timeout made
     // the bar delete itself the instant it appeared. Wait for a full touch
@@ -1817,12 +1939,22 @@
     const initial = state.user.username.charAt(0).toUpperCase();
     // Avatar color is set at registration and is not user-editable.
     const previewStyle = `background:linear-gradient(135deg, ${current}, ${shade(current, -25)});`;
-    const previewInner = escapeHtml(initials(state.user.username));
+    const curEmoji = state.user.avatar_emoji || '';
+    const previewInner = curEmoji
+      ? `<span class="avatar-emoji">${escapeHtml(curEmoji)}</span>`
+      : escapeHtml(initials(state.user.username));
+    const emojiGrid = EMOJI_AVATARS.map(em =>
+      `<button type="button" class="emoji-pick ${em === curEmoji ? 'selected' : ''}" data-emoji="${em}" title="${em}">${em}</button>`
+    ).join('');
     $('#profile-body').innerHTML = `<form id="form-edit-profile">
       <div class="profile-head"><div class="avatar lg" id="edit-avatar-preview" style="${previewStyle}">${previewInner}</div></div>
 
-      <div class="field" style="text-align:center;color:var(--muted);font-size:12px;">
-        ${lang==='zh' ? '头像颜色在注册时随机分配，不可修改' : 'Avatar color is set at registration and is read-only'}
+      <div class="field">
+        <span class="field-label">选择头像表情</span>
+        <div class="emoji-picker-grid" id="emoji-picker-grid">
+          ${emojiGrid}
+          <button type="button" class="emoji-pick-clear" id="emoji-clear">${lang==='zh' ? '恢复默认头像（用用户名首字母）' : 'Reset to the default (first letter)'}</button>
+        </div>
       </div>
 
       <label class="field"><span class="field-label">${t('profile_username')}</span><input id="edit-username" type="text" value="${escapeHtml(state.user.username)}" maxlength="24" /></label>
@@ -1833,16 +1965,51 @@
         <button type="submit" class="btn btn-primary">${t('btn_save')}</button>
       </div></form>`;
 
+    // Emoji picker: pick one, or clear it to go back to the initial.
+    let pickedEmoji = curEmoji;
+    const preview = $('#edit-avatar-preview');
+    const grid = $('#emoji-picker-grid');
+    const paint = () => {
+      if (!preview) return;
+      preview.innerHTML = pickedEmoji
+        ? `<span class="avatar-emoji">${escapeHtml(pickedEmoji)}</span>`
+        : escapeHtml(initials(state.user.username));
+      if (grid) {
+        grid.querySelectorAll('.emoji-pick').forEach(b => {
+          b.classList.toggle('selected', b.dataset.emoji === pickedEmoji);
+        });
+      }
+    };
+    if (grid) {
+      grid.addEventListener('click', (e) => {
+        const pick = e.target.closest('.emoji-pick');
+        if (pick) {
+          pickedEmoji = pick.dataset.emoji || null;
+          paint();
+          return;
+        }
+        if (e.target.closest('#emoji-clear')) {
+          pickedEmoji = '';
+          paint();
+        }
+      });
+    }
+
     $('#form-edit-profile').addEventListener('submit', async (e) => {
       e.preventDefault();
       const msg = $('#edit-profile-msg'); msg.classList.remove('ok'); msg.textContent = '';
       const username = $('#edit-username').value.trim();
       const bio = $('#edit-bio').value.trim();
       try {
-        const r = await api('/me', { method: 'PUT', body: { username, bio } });
+        const r = await api('/me', { method: 'PUT', body: { username, bio, avatar_emoji: pickedEmoji } });
         Object.assign(state.user, r.user);
         localStorage.setItem('vve:user', JSON.stringify(state.user));
         renderTopbarAvatar();
+        renderSideMe();
+        // The emoji shows up in every message row and in the friend list,
+        // so those need repainting too.
+        renderContacts();
+        renderMessages();
         msg.classList.add('ok'); msg.textContent = t('profile_saved');
         setTimeout(() => { closeModal('modal-profile'); openProfileModal(state.user); }, 600);
       } catch (err) { msg.textContent = err.message; }
@@ -1899,6 +2066,24 @@
     s.on('friend:request:resolved', onRequestResolved);
     s.on('friend:added', onFriendAdded);
     s.on('group:added', onGroupAdded);
+    // Jack wiped every message in a group. The server broadcasts this, but
+    // nobody was listening — so the other users' clients kept showing the
+    // old messages until they refreshed. Clear the local cache and repaint.
+    s.on('group:wiped', ({ group_id } = {}) => {
+      const gid = Number(group_id);
+      if (!Number.isFinite(gid)) return;
+      const key = convKey('group', gid);
+      if (state.messagesByConv[key]) state.messagesByConv[key] = [];
+      // Any other cached conversation that belonged to that group too.
+      for (const k of Object.keys(state.messagesByConv)) {
+        if (k.startsWith('group:')) state.messagesByConv[k] = [];
+      }
+      if (state.currentChat && state.currentChat.type === 'group') {
+        renderMessages();
+      }
+      refreshConversations();
+      toast('群消息已被管理员清除');
+    });
     s.on('group:renamed', ({ groupId, name }) => {
       const g = state.groups.find(x => x.id === groupId);
       if (g) g.name = name;
@@ -2224,6 +2409,232 @@
     syncMobileMenuLayout();
   }
 
+  // The identity card opens the profile modal.
+  let _sideMeBound = false;
+  function ensureSideMeBound() {
+    if (_sideMeBound) return;
+    _sideMeBound = true;
+    document.addEventListener('click', (e) => {
+      const card = e.target.closest('#side-me');
+      if (!card) return;
+      e.preventDefault(); e.stopPropagation();
+      if (state.user) openProfileModal(state.user);
+    }, true);
+  }
+
+  // ============================================================
+  // DeepSeek panel
+  // ------------------------------------------------------------
+  // The user's message goes to the server relay, the relay streams back
+  // the reasoning trace and the answer, and we type them out here:
+  //   • the answer, one character every 100ms (as requested)
+  //   • the reasoning trace in a collapsible block, typed faster
+  // While waiting for the first token we show a "Thinking…" indicator
+  // with three breathing dots.
+  // ============================================================
+  const AI_TYPE_MS = 100;          // 0.1s per character
+  const AI_THINK_TYPE_MS = 16;    // the trace reads faster than the answer
+  let _aiBusy = false;
+
+  function aiLogEl() { return $('#ai-log'); }
+
+  function aiAppendBlock(kind) {
+    const log = aiLogEl();
+    if (!log) return null;
+    const welcome = log.querySelector('.ai-welcome');
+    if (welcome) welcome.remove();
+    const row = document.createElement('div');
+    row.className = 'ai-row ' + kind;
+    if (kind === 'think') {
+      row.innerHTML = `<div class="ai-think-head">
+          <span class="ai-think-dots"><i></i><i></i><i></i></span>
+          <span class="ai-think-title">思考中</span>
+        </div>
+        <div class="ai-think-body"></div>`;
+    } else if (kind === 'user') {
+      row.innerHTML = `<div class="ai-bubble user"></div>`;
+    } else {
+      row.innerHTML = `<div class="ai-bubble bot"></div>`;
+    }
+    log.appendChild(row);
+    log.scrollTop = log.scrollHeight;
+    return row;
+  }
+
+  // Type text into an element one character at a time.
+  function aiType(el, text, speed) {
+    return new Promise((resolve) => {
+      if (!el) return resolve();
+      let i = 0;
+      const step = () => {
+        if (i >= text.length) return resolve();
+        // Add a few characters per tick so long chunks do not crawl, but
+        // keep the average rhythm at roughly `speed` ms per character.
+        const chunk = text.length > 400 ? 3 : 1;
+        el.textContent += text.slice(i, i + chunk);
+        i += chunk;
+        const log = aiLogEl();
+        if (log) log.scrollTop = log.scrollHeight;
+        setTimeout(step, speed);
+      };
+      step();
+    });
+  }
+
+  function aiSetStatus(text, cls) {
+    const el = $('#ai-status');
+    if (!el) return;
+    el.textContent = text;
+    el.className = 'ai-head-sub' + (cls ? ' ' + cls : '');
+  }
+
+  async function aiCheckStatus() {
+    try {
+      const r = await api('/ai/status');
+      const free = (r.sources || []).filter(x => x.free);
+      if (!r.ok || !r.sources.length) {
+        aiSetStatus('未配置免费源', 'warn');
+      } else if (free.length) {
+        aiSetStatus(`免费源可用 · ${free.map(x => x.name).join('、')}`, 'ok');
+      } else {
+        aiSetStatus(`已连接 · ${r.sources.map(x => x.name).join('、')}`, 'ok');
+      }
+    } catch (e) {
+      aiSetStatus('中转暂不可用', 'warn');
+    }
+  }
+
+  async function aiSend(text) {
+    if (_aiBusy) return;
+    const msg = String(text || '').trim();
+    if (!msg) return;
+    _aiBusy = true;
+    const sendBtn = $('#ai-send');
+    if (sendBtn) sendBtn.disabled = true;
+
+    const userRow = aiAppendBlock('user');
+    const userBubble = userRow && userRow.querySelector('.ai-bubble');
+    if (userBubble) userBubble.textContent = msg;
+
+    // The answer bubble starts with the "Thinking…" indicator.
+    const botRow = aiAppendBlock('bot');
+    const botBubble = botRow && botRow.querySelector('.ai-bubble');
+    if (botBubble) {
+      botBubble.innerHTML = `<span class="ai-thinking">
+        <span class="ai-dots"><i></i><i></i><i></i></span>
+        <span class="ai-thinking-text">Thinking…</span>
+      </span>`;
+    }
+
+    // Collect the streamed text, then type it out.
+    let answer = '';
+    let reasoning = '';
+    let thinkRow = null;
+    let thinkBody = null;
+
+    try {
+      const resp = await fetch(`${API_BASE}/api/ai/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${state.token}` },
+        body: JSON.stringify({ message: msg, history: state.aiHistory || [] })
+      });
+      if (!resp.ok) {
+        let detail = '';
+        try { detail = (await resp.json()).error || ''; } catch (_) {}
+        throw new Error(detail || `HTTP ${resp.status}`);
+      }
+      const reader = resp.body.getReader();
+      const dec = new TextDecoder();
+      let buf = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop() || '';
+        for (const line of lines) {
+          const t = line.trim();
+          if (!t) continue;
+          let j;
+          try { j = JSON.parse(t); } catch (_) { continue; }
+          if (j.type === 'reasoning') {
+            reasoning += j.text || '';
+            if (!thinkRow) {
+              thinkRow = aiAppendBlock('think');
+              thinkBody = thinkRow && thinkRow.querySelector('.ai-think-body');
+              const title = thinkRow && thinkRow.querySelector('.ai-think-title');
+              if (title) title.textContent = '思考过程';
+            }
+            if (thinkBody) thinkBody.textContent = reasoning;
+            const log = aiLogEl();
+            if (log) log.scrollTop = log.scrollHeight;
+          } else if (j.type === 'delta') {
+            answer += j.text || '';
+          } else if (j.type === 'error') {
+            throw new Error(j.message || '中转失败');
+          }
+        }
+      }
+    } catch (e) {
+      if (botBubble) {
+        botBubble.innerHTML = `<span class="ai-error">${escapeHtml(e.message || '请求失败')}</span>`;
+      }
+      aiSetStatus('请求失败：' + (e.message || ''), 'warn');
+      _aiBusy = false;
+      if (sendBtn) sendBtn.disabled = false;
+      return;
+    }
+
+    // Reasoning first (typed fast), then the answer (0.1s per character).
+    if (thinkBody && reasoning) {
+      await aiType(thinkBody, reasoning, AI_THINK_TYPE_MS);
+    }
+    if (botBubble) {
+      botBubble.innerHTML = '';
+      await aiType(botBubble, answer, AI_TYPE_MS);
+    }
+    if (!answer) {
+      if (botBubble) botBubble.innerHTML = `<span class="ai-error">没有收到回复</span>`;
+    }
+
+    state.aiHistory = state.aiHistory || [];
+    state.aiHistory.push({ role: 'user', content: msg });
+    state.aiHistory.push({ role: 'assistant', content: answer.slice(0, 2000) });
+    if (state.aiHistory.length > 8) state.aiHistory = state.aiHistory.slice(-8);
+
+    aiSetStatus('就绪', 'ok');
+    _aiBusy = false;
+    if (sendBtn) sendBtn.disabled = false;
+  }
+
+  function ensureAiPanelBound() {
+    const form = $('#ai-form');
+    const input = $('#ai-input');
+    if (!form || !input) return;
+    if (form.__aiBound) return;
+    form.__aiBound = true;
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const v = input.value;
+      input.value = '';
+      input.style.height = 'auto';
+      aiSend(v);
+    });
+    // Enter sends, Shift+Enter makes a new line.
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        form.requestSubmit ? form.requestSubmit() : form.dispatchEvent(new Event('submit', { cancelable: true }));
+      }
+    });
+    // Auto-grow the textarea.
+    input.addEventListener('input', () => {
+      input.style.height = 'auto';
+      input.style.height = Math.min(input.scrollHeight, 140) + 'px';
+    });
+    aiCheckStatus();
+  }
+
   // ---------- bootstrap ----------
   function enterApp() {
     showApp();
@@ -2246,7 +2657,10 @@
     ensureWipeBound();
     ensureBellBound();
     ensureMobileMenuBound();
+    ensureAiPanelBound();
+    ensureSideMeBound();
     renderTopbarAvatar();
+    renderSideMe();
     connectSocket();
     refreshAll();
     // Always re-fetch the canonical user object from the server so that
@@ -2511,13 +2925,13 @@
     // language toggle button in main app topbar
     $$('#lang-btn-top').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); setLang(lang === 'zh' ? 'en' : 'zh'); }));
 
-    // tabs
-    $$('.tabbar .tab2').forEach(btn => btn.addEventListener('click', () => {
-      $$('.tabbar .tab2').forEach(b => b.classList.toggle('active', b === btn));
+    // Sidebar navigation: 聊天 / DeepSeek / 通讯录
+    $$('.side-nav-item').forEach(btn => btn.addEventListener('click', () => {
+      $$('.side-nav-item').forEach(b => b.classList.toggle('active', b === btn));
       const target = btn.dataset.pane;
       $$('.pane').forEach(p => p.classList.toggle('active', p.id === `pane-${target}`));
       if (target === 'contacts') renderContacts();
-      if (target === 'discover') refreshRecommended();
+      if (target === 'ai') ensureAiPanelBound();
     }));
     $('#btn-create-board')?.addEventListener('click', openCreateBoard);
 

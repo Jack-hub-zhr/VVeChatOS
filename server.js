@@ -119,6 +119,12 @@ db.exec(`
   if (!names.has('pinned')) db.exec("ALTER TABLE groups ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0");
   if (!names.has('icon_color')) db.exec("ALTER TABLE groups ADD COLUMN icon_color TEXT");
   if (!names.has('owner_id')) db.exec("ALTER TABLE groups ADD COLUMN owner_id INTEGER");
+  // Emoji avatar: a single character chosen by the user, rendered instead of
+  // the auto-generated initial. Takes priority over the colour/initial.
+  {
+    const userCols = new Set(db.prepare('PRAGMA table_info(users)').all().map(r => r.name));
+    if (!userCols.has('avatar_emoji')) db.exec("ALTER TABLE users ADD COLUMN avatar_emoji TEXT");
+  }
   // Backfill: existing groups (official group) default to recommended=1
   db.exec("UPDATE groups SET recommended = 1 WHERE recommended = 0");
 }
@@ -149,6 +155,7 @@ function userPublic(u) {
     avatar: u.avatar || null,
     bio: u.bio || null,
     avatar_color: u.avatar_color || null,
+    avatar_emoji: u.avatar_emoji || null,
     is_admin: u.username === ADMIN_USERNAME,
   };
 }
@@ -524,6 +531,163 @@ app.post('/api/admin/messages/wipe-group/:id', rateLimit('write'), authRequired,
   try { if (io) io.emit('group:wiped', { group_id: gid }); } catch {}
   res.json({ ok: true, matched: ids.length, deleted });
 });
+// ============================================================
+// DeepSeek relay — a free-first, multi-source proxy.
+//
+// The official DeepSeek API has NO free tier (verified 2026-10: the
+// pricing page lists per-token rates only). So this proxy tries, in
+// order:
+//   1. any operator-configured free relay (RELAY_FREE_URL / key)
+//   2. the public BazaarLink free tier (model "auto:free", no card)
+//   3. the official DeepSeek API if a key is configured
+// The user's browser never sees any key; everything goes through here.
+//
+// The response is streamed as NDJSON so the browser can show the
+// reasoning trace and the answer as they arrive.
+// ============================================================
+const AI_SOURCES = [
+  // Operator-supplied free relay (highest priority).
+  ...(process.env.RELAY_FREE_URL ? [{
+    name: 'free-relay',
+    base: process.env.RELAY_FREE_URL.replace(/\/$/, ''),
+    key: process.env.RELAY_FREE_KEY || '',
+    model: process.env.RELAY_FREE_MODEL || 'auto:free',
+    free: true
+  }] : []),
+  // BazaarLink public free tier — no card required, 10 req/min,
+  // 50 req/day. Sign-up is free at bazaarlink.ai.
+  ...(process.env.RELAY_BAZAAR_ENABLED !== '0' ? [{
+    name: 'bazaarlink',
+    base: 'https://api.bazaarlink.ai/v1',
+    key: process.env.RELAY_BAZAAR_KEY || '',
+    model: process.env.RELAY_BAZAAR_MODEL || 'auto:free',
+    free: true
+  }] : []),
+  // Official DeepSeek — only used when a key is configured.
+  ...(process.env.DEEPSEEK_API_KEY ? [{
+    name: 'deepseek',
+    base: 'https://api.deepseek.com/v1',
+    key: process.env.DEEPSEEK_API_KEY,
+    model: process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash',
+    free: false
+  }] : []),
+];
+
+// Read an OpenAI-compatible SSE stream and forward each chunk as
+// {type:'reasoning'|'delta'|'done', text} NDJSON lines.
+function relayStream(res, upstreamBody, source) {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (err) => {
+      if (done) return;
+      done = true;
+      try { res.write(JSON.stringify({ type: 'done', source: source.name, error: err || null }) + '\n'); } catch (_) {}
+      try { res.end(); } catch (_) {}
+      resolve();
+    };
+    const write = (obj) => {
+      try { res.write(JSON.stringify(obj) + '\n'); } catch (_) { finish('write_failed'); }
+    };
+    let buf = '';
+    upstreamBody.on('data', (chunk) => {
+      buf += chunk.toString('utf8');
+      const lines = buf.split('\n');
+      buf = lines.pop() || '';
+      for (const line of lines) {
+        const t = line.trim();
+        if (!t.startsWith('data:')) continue;
+        const payload = t.slice(5).trim();
+        if (!payload || payload === '[DONE]') continue;
+        let j;
+        try { j = JSON.parse(payload); } catch (_) { continue; }
+        const ch = j.choices && j.choices[0];
+        if (!ch) continue;
+        const d = ch.delta || {};
+        // DeepSeek's reasoning models expose the chain-of-thought in
+        // `reasoning_content`; other providers use `reasoning`.
+        const think = d.reasoning_content || d.reasoning || null;
+        if (think) write({ type: 'reasoning', text: String(think) });
+        if (d.content) write({ type: 'delta', text: String(d.content) });
+      }
+    });
+    upstreamBody.on('end', () => finish(null));
+    upstreamBody.on('error', (e) => finish(String(e.message || e)));
+  });
+}
+
+app.post('/api/ai/chat', rateLimit('write'), authRequired, async (req, res) => {
+  const { message, history } = req.body || {};
+  const userMsg = String(message || '').trim();
+  if (!userMsg) return res.status(400).json({ error: '消息不能为空' });
+
+  if (!AI_SOURCES.length) {
+    return res.status(503).json({
+      error: 'DeepSeek 中转尚未配置免费源',
+      hint: '在 Render 环境变量里设置 RELAY_BAZAAR_KEY（bazaarlink.ai 注册免费获取）即可启用。'
+    });
+  }
+
+  res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders && res.flushHeaders();
+
+  // Build a small conversation from the last few user turns.
+  const msgs = [];
+  const hist = Array.isArray(history) ? history.slice(-8) : [];
+  for (const h of hist) {
+    if (h && (h.role === 'user' || h.role === 'assistant') && typeof h.content === 'string' && h.content.trim()) {
+      msgs.push({ role: h.role, content: h.content.slice(0, 4000) });
+    }
+  }
+  msgs.push({ role: 'user', content: userMsg.slice(0, 4000) });
+
+  let lastErr = 'unknown';
+  for (const source of AI_SOURCES) {
+    if (!source.key && source.name !== 'free-relay') {
+      // A source without a key cannot be used (bazaarlink needs a free key).
+      if (source.name === 'bazaarlink') lastErr = '未配置免费源密钥';
+      continue;
+    }
+    try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (source.key) headers['Authorization'] = `Bearer ${source.key}`;
+      const body = {
+        model: source.model,
+        messages: msgs,
+        stream: true,
+        temperature: 0.7
+      };
+      const upstream = await fetch(`${source.base}/chat/completions`, {
+        method: 'POST', headers, body: JSON.stringify(body)
+      });
+      if (!upstream.ok) {
+        const txt = await upstream.text().catch(() => '');
+        lastErr = `${source.name}: HTTP ${upstream.status} ${txt.slice(0, 160)}`;
+        continue;
+      }
+      // Tell the client which source answered, then stream the payload.
+      res.write(JSON.stringify({ type: 'source', source: source.name, model: source.model, free: !!source.free }) + '\n');
+      await relayStream(res, upstream.body, source);
+      return;
+    } catch (e) {
+      lastErr = `${source.name}: ${e.message || e}`;
+    }
+  }
+  try {
+    res.write(JSON.stringify({ type: 'error', message: '所有中转源都失败了：' + lastErr }) + '\n');
+    res.end();
+  } catch (_) {}
+});
+
+// Report which relays are configured (no keys leaked).
+app.get('/api/ai/status', authRequired, (req, res) => {
+  res.json({
+    ok: AI_SOURCES.length > 0,
+    sources: AI_SOURCES.map(s => ({ name: s.name, model: s.model, free: !!s.free, hasKey: !!s.key }))
+  });
+});
+
 // Remove a member from a group. Allowed for the group owner and for Jack.
 
 // register
@@ -592,7 +756,7 @@ app.get('/api/me', authRequired, (req, res) => {
 });
 
 app.put('/api/me', rateLimit('write'), authRequired, (req, res) => {
-  const { bio, username, avatar_color, avatar } = req.body || {};
+  const { bio, username, avatar_color, avatar, avatar_emoji } = req.body || {};
   const u = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
   if (!u) return res.status(404).json({ error: 'user not found' });
   const updates = [];
@@ -621,6 +785,19 @@ app.put('/api/me', rateLimit('write'), authRequired, (req, res) => {
         return res.status(413).json({ error: '头像图片过大（>2.5MB）' });
       }
       updates.push('avatar = ?'); values.push(avatar);
+    }
+  }
+  // avatar_emoji: a single emoji character, or empty to clear it.
+  if (avatar_emoji !== undefined) {
+    if (avatar_emoji === null || avatar_emoji === '') {
+      updates.push('avatar_emoji = ?'); values.push(null);
+    } else {
+      const e = String(avatar_emoji).trim();
+      // One code point (emoji may be a surrogate pair), max 8 chars overall.
+      if ([...e].length > 1 || e.length > 8) {
+        return res.status(400).json({ error: '请选择单个 emoji' });
+      }
+      updates.push('avatar_emoji = ?'); values.push(e);
     }
   }
   if (typeof username === 'string' && username.trim() && username !== u.username) {
