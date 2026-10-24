@@ -32,27 +32,48 @@ control/             管理控制台（/control）
 
 ### DeepSeek 中转（免费源）
 
-DeepSeek **官方 API 没有免费额度** —— 官方定价页只有按 token 计费，签到送额度之类的活动也不保证存在。
-所以 `/api/ai/chat` 是一个**多源自动回退**的中转站，按以下顺序尝试：
+#### 先说清楚现状（2026-10 实测）
 
-| 顺序 | 源 | 环境变量 | 是否需要付费 |
-|---|---|---|---|
-| 1 | 自定义免费中转 | `RELAY_FREE_URL` + `RELAY_FREE_KEY` + `RELAY_FREE_MODEL` | ❌ 免费 |
-| 2 | BazaarLink 免费层 | `RELAY_BAZAAR_KEY`（模型默认 `auto:free`） | ❌ 免费（每天 50 次，无需绑卡）|
-| 3 | DeepSeek 官方 | `DEEPSEEK_API_KEY`（模型默认 `deepseek-v4-flash`） | ⚠️ 按 token 计费 |
+**DeepSeek 官方 API 没有免费额度** —— 官方定价页只有按 token 计费。
+所有提供 DeepSeek 的免费层（llm7.io / SiliconFlow / BazaarLink / ModelScope）
+都**必须注册 + 邮箱验证**，无法自动开通。
 
-启用免费源只需在 Render 加一个环境变量：
+但**完全不需要 key 的公共端点确实存在**，只是它们不提供 DeepSeek：
+llm7.io 的免注册层、Pollinations。它们当前在线的模型是
+`mistral-Nemo` / `codestral` / `minimax-m2.7` / `gpt-oss-20b`（Pollinations，带思维链）。
 
-```
-RELAY_BAZAAR_KEY = <在 bazaarlink.ai 注册后拿到的 key>
-```
+所以 `/api/ai/chat` 是一个**多源自动回退**的中转站：
+
+| 优先级 | 源 | 需要密钥 | 提供 DeepSeek | 说明 |
+|---|---|---|---|---|
+| 1 | llm7.io | ✅ 免费 token | ✅ `deepseek-v4-flash-0731` | 注册后到 token.llm7.io 取 token |
+| 2 | SiliconFlow | ✅ 免费 key | ✅ `deepseek-ai/DeepSeek-V3` | 国内延迟低 |
+| 3 | BazaarLink | ✅ 免费 key | ⚠️ `auto:free` 可能路由到 | 每天 50 次，不绑卡 |
+| 4 | DeepSeek 官方 | ✅ 付费 key | ✅ | 最稳定 |
+| 5 | llm7.io 免注册层 | ❌ | ❌ | 兜底，永远可用 |
+| 6 | Pollinations | ❌ | ❌ | 最终兜底，带思维链 |
+
+**所以：装完就能用，一行配置都不需要。** 面板顶部会**如实显示当前回答问题的模型名**，
+不会拿别的模型冒充 DeepSeek。
+
+#### 想用真正的 DeepSeek？三步
+
+1. **注册拿 key**（任选一家，都免费、不绑卡）：
+   - **llm7.io** → 注册 → 打开 <https://token.llm7.io/> → 填邮箱 → 复制 token
+   - **SiliconFlow** → <https://cloud.siliconflow.cn> 注册 → 「API Keys」新建
+   - **BazaarLink** → <https://bazaarlink.ai> 注册 → 复制 API key
+2. 登录 VVeChat，点侧边栏 **DeepSeek** → 点 **「接入 DeepSeek 密钥」**
+3. 把 key 粘进去 → 保存 → **立即生效**（存在数据库里，不用改环境变量、不用重新部署）
 
 浏览器端永远拿不到 key，所有请求都从服务端转发（`/api/ai/chat`，NDJSON 流式）。
 
 - 前端回答按 **每字符 0.1 秒** 逐字输出
 - 有 `reasoning_content` 时把思考过程单独放进「思考过程」卡片
 - 等待首个 token 时显示三个灰点波动 + `Thinking…` 呼吸动画
-- `GET /api/ai/status` 可查询当前可用的源（不泄露 key）
+- `GET /api/ai/status` 查询当前可用源（不泄露 key），`POST /api/ai/config` 保存（仅管理员）
+
+环境变量方式也支持（优先级高于界面配置）：
+`RELAY_LLM7_KEY` / `RELAY_SILICONFLOW_KEY` / `RELAY_BAZAAR_KEY` / `DEEPSEEK_API_KEY`。
 
 
 ### 持久磁盘（重要）

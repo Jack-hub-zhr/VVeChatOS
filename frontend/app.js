@@ -2506,8 +2506,16 @@
         aiSetStatus('没有可用的中转源', 'warn');
       }
       // Offer the setup button when no real DeepSeek is wired up yet.
+      // Only the admin can actually save a key, so for everyone else the
+      // button becomes a "ask the admin" hint instead of a dead end.
       const setup = $('#ai-setup-btn');
-      if (setup) setup.classList.toggle('hidden', !!ds);
+      if (setup) {
+        const admin = isJack();
+        setup.classList.toggle('hidden', !!ds);
+        setup.textContent = admin ? '接入 DeepSeek 密钥' : '尚未接入 DeepSeek（请联系管理员）';
+        setup.disabled = !admin;
+        setup.title = admin ? '粘贴一个免费中转的密钥，立即生效' : '只有管理员可以配置';
+      }
       state.aiSources = sources;
       state.aiDeepseekReady = !!ds;
     } catch (e) {
