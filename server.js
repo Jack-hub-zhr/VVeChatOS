@@ -654,6 +654,23 @@ function aiSources() {
   return list;
 }
 
+// Turn a noisy upstream error into one readable line.
+function summarizeUpstreamError(text) {
+  if (!text) return '未知错误';
+  let msg = String(text);
+  // Pull the upstream's own message field if there is one.
+  const m = msg.match(/"message"\s*:\s*"([^"]+)"/);
+  if (m) msg = m[1];
+  else if (/<[^>]+>/.test(msg)) msg = msg.replace(/<[^>]+>/g, ' ');
+  msg = msg.replace(/\s+/g, ' ').trim();
+  if (/Daily token quota exceeded/i.test(msg)) msg = '免费源的每日额度已用完，请稍后再试或接入自己的密钥';
+  else if (/previous request is still running|RATE_LIMITED/i.test(msg)) msg = '请求过于频繁，请稍后再试';
+  else if (/concurrent/i.test(msg)) msg = '并发过高，请稍后再试';
+  else if (/insufficient_quota|402/i.test(msg)) msg = '余额不足';
+  else if (/401|invalid_api_key|Missing API key/i.test(msg)) msg = '密钥无效';
+  return msg.length > 90 ? msg.slice(0, 90) + '…' : msg;
+}
+
 // Read an OpenAI-compatible SSE stream and forward each chunk as
 // {type:'reasoning'|'delta'|'done', text} NDJSON lines.
 //
@@ -760,34 +777,61 @@ app.post('/api/ai/chat', rateLimit('write'), authRequired, async (req, res) => {
     // A source with no key is still worth trying: llm7.io and Pollinations
     // both serve a no-signup tier. Sending a bogus Bearer header to them
     // would be rejected, so only add the header when we actually have a key.
-    try {
-      const headers = { 'Content-Type': 'application/json' };
-      if (source.key) headers['Authorization'] = `Bearer ${source.key}`;
-      const body = {
-        model: source.model,
-        messages: msgs,
-        stream: true,
-        temperature: 0.7
-      };
-      const url = `${source.base}${source.path || '/chat/completions'}`;
-      const upstream = await fetch(url, {
-        method: 'POST', headers, body: JSON.stringify(body)
-      });
-      if (!upstream.ok) {
-        const txt = await upstream.text().catch(() => '');
-        errors.push(`${source.name}: HTTP ${upstream.status} ${txt.slice(0, 120)}`);
-        continue;
+    //
+    // These public tiers are shared and heavily rate-limited, so every
+    // source gets a couple of attempts with a growing backoff. The
+    // upstream's own "retry after N seconds" hint is honoured when it
+    // sends one.
+    const MAX_ATTEMPTS = 3;
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      try {
+        const headers = { 'Content-Type': 'application/json' };
+        if (source.key) headers['Authorization'] = `Bearer ${source.key}`;
+        const body = {
+          model: source.model,
+          messages: msgs,
+          stream: true,
+          temperature: 0.7
+        };
+        const url = `${source.base}${source.path || '/chat/completions'}`;
+        const upstream = await fetch(url, {
+          method: 'POST', headers, body: JSON.stringify(body)
+        });
+        if (!upstream.ok) {
+          const txt = await upstream.text().catch(() => '');
+          const retryAfter = Number(upstream.headers.get('retry-after')) || 0;
+          const quotaHit = /429|quota|RATE_LIMIT|rate limit/i.test(upstream.status + txt);
+          errors.push(`${source.name}: HTTP ${upstream.status} ${summarizeUpstreamError(txt)}`);
+          if (!quotaHit || attempt === MAX_ATTEMPTS) break;
+          // Wait before the next attempt. Respect the upstream hint, but
+          // cap it so a request never hangs for minutes.
+          const wait = Math.min(retryAfter > 0 ? retryAfter * 1000 : 1200 * attempt, 8000);
+          await new Promise(r => setTimeout(r, wait));
+          continue;
+        }
+        // Tell the client which source answered, then stream the payload.
+        res.write(JSON.stringify({ type: 'source', source: source.name, model: source.model, free: !!source.free }) + '\n');
+        await relayStream(res, upstream.body, source);
+        return;
+      } catch (e) {
+        errors.push(`${source.name}: ${e.message || e}`);
+        if (attempt === MAX_ATTEMPTS) break;
+        await new Promise(r => setTimeout(r, 1000 * attempt));
       }
-      // Tell the client which source answered, then stream the payload.
-      res.write(JSON.stringify({ type: 'source', source: source.name, model: source.model, free: !!source.free }) + '\n');
-      await relayStream(res, upstream.body, source);
-      return;
-    } catch (e) {
-      errors.push(`${source.name}: ${e.message || e}`);
     }
+    // A short pause before the next source: hammering a shared endpoint
+    // right after it refused us is what gets the whole IP throttled.
+    await new Promise(r => setTimeout(r, 600));
   }
   try {
-    res.write(JSON.stringify({ type: 'error', message: '所有中转源都失败了：' + errors.join(' | ') }) + '\n');
+    // Keep the message short — the raw upstream JSON is unreadable on a
+    // phone and used to fill the whole screen with red text.
+    const reason = summarizeUpstreamError(errors.join(' | '));
+    res.write(JSON.stringify({
+      type: 'error',
+      message: '所有中转源都失败了：' + reason,
+      detail: errors.slice(0, 6)
+    }) + '\n');
     res.end();
   } catch (_) {}
 });
@@ -1018,6 +1062,93 @@ app.get('/api/groups/:id/members', authRequired, (req, res) => {
     ORDER BY u.username
   `).all(gid);
   res.json({ members: rows });
+});
+
+// ------------------------------------------------------------
+// Group administration (the official group only).
+//
+// The user-created-group feature was removed, but Jack still needs to
+// manage the official group: pull people in, remove them, rename it and
+// set the notice. The frontend still calls these endpoints, so they are
+// restored here — scoped to the official group so no second group can be
+// created behind the scenes.
+function isOfficialGroup(gid) {
+  const row = db.prepare('SELECT id FROM groups WHERE id = ? AND is_official = 1').get(Number(gid));
+  return !!row;
+}
+
+// Pull a member in. Owner or Jack only.
+app.post('/api/groups/:id/members', rateLimit('write'), authRequired, (req, res) => {
+  const gid = Number(req.params.id);
+  if (!isOfficialGroup(gid)) return res.status(404).json({ error: '群不存在' });
+  if (!canManageGroup(req.user, db.prepare('SELECT * FROM groups WHERE id = ?').get(gid))) {
+    return res.status(403).json({ error: '只有群主或管理员可以添加成员' });
+  }
+  const memberId = Number((req.body || {}).memberId);
+  if (!Number.isFinite(memberId)) return res.status(400).json({ error: '成员无效' });
+  const u = db.prepare('SELECT id, username FROM users WHERE id = ?').get(memberId);
+  if (!u) return res.status(404).json({ error: '用户不存在' });
+  db.prepare('INSERT OR IGNORE INTO group_members (group_id, user_id, joined_at) VALUES (?, ?, ?)')
+    .run(gid, memberId, now());
+  try { if (io) io.to(`group:${gid}`).emit('group:member-added', { group_id: gid, user_id: memberId }); } catch {}
+  res.json({ ok: true });
+});
+
+// Remove a member. Owner or Jack only.
+app.delete('/api/groups/:id/members/:uid', rateLimit('write'), authRequired, (req, res) => {
+  const gid = Number(req.params.id);
+  const uid = Number(req.params.uid);
+  if (!isOfficialGroup(gid)) return res.status(404).json({ error: '群不存在' });
+  if (!canManageGroup(req.user, db.prepare('SELECT * FROM groups WHERE id = ?').get(gid))) {
+    return res.status(403).json({ error: '只有群主或管理员可以移除成员' });
+  }
+  db.prepare('DELETE FROM group_members WHERE group_id = ? AND user_id = ?').run(gid, uid);
+  try { if (io) io.to(`group:${gid}`).emit('group:member-removed', { group_id: gid, user_id: uid }); } catch {}
+  res.json({ ok: true });
+});
+
+// Members that are NOT in this group yet — powers the "添加成员" picker.
+app.get('/api/groups/:gid/candidates', authRequired, (req, res) => {
+  const gid = Number(req.params.gid);
+  if (!isOfficialGroup(gid)) return res.status(404).json({ error: '群不存在' });
+  const rows = db.prepare(`
+    SELECT u.id, u.username, u.avatar_color FROM users u
+    WHERE u.id != ? AND u.id NOT IN (SELECT user_id FROM group_members WHERE group_id = ?)
+    ORDER BY u.username LIMIT 100
+  `).all(req.user.id, gid);
+  res.json({ candidates: rows });
+});
+
+// Rename the official group. Jack only (the name is a shared label).
+app.put('/api/groups/:id', rateLimit('write'), authRequired, requireAdmin, (req, res) => {
+  const gid = Number(req.params.id);
+  if (!isOfficialGroup(gid)) return res.status(404).json({ error: '群不存在' });
+  const name = String((req.body || {}).name || '').trim();
+  if (!name) return res.status(400).json({ error: '群名称不能为空' });
+  if (name.length > 40) return res.status(400).json({ error: '群名称不超过 40 字' });
+  db.prepare('UPDATE groups SET name = ? WHERE id = ?').run(name, gid);
+  try { if (io) io.emit('group:renamed', { groupId: gid, name }); } catch {}
+  res.json({ ok: true, group: { id: gid, name } });
+});
+
+// Announcement. Jack only.
+app.post('/api/groups/:id/announcement', rateLimit('write'), authRequired, requireAdmin, (req, res) => {
+  const gid = Number(req.params.id);
+  if (!isOfficialGroup(gid)) return res.status(404).json({ error: '群不存在' });
+  const text = String((req.body || {}).text || '').trim();
+  if (text.length > 500) return res.status(400).json({ error: '公告不超过 500 字' });
+  db.prepare('UPDATE groups SET announcement = ? WHERE id = ?').run(text || null, gid);
+  try { if (io) io.emit('group:announcement', { groupId: gid, announcement: text }); } catch {}
+  res.json({ ok: true });
+});
+
+// Re-join the official group (self-service, used by the empty-state CTA).
+app.post('/api/groups/:id/join', rateLimit('write'), authRequired, (req, res) => {
+  const gid = Number(req.params.id);
+  if (!isOfficialGroup(gid)) return res.status(404).json({ error: '群不存在' });
+  db.prepare('INSERT OR IGNORE INTO group_members (group_id, user_id, joined_at) VALUES (?, ?, ?)')
+    .run(gid, req.user.id, now());
+  res.json({ ok: true });
 });
 
 // Add a member to a group. Owner or Jack only.

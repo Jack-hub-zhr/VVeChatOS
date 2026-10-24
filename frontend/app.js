@@ -1300,21 +1300,10 @@
     // The quoted reply sits BELOW the message it answers and ABOVE the
     // timestamp, as requested.
     row.innerHTML = `${avatarHtml}<div class="msg-content">${senderName}${bubbleContent}${quoteHtml}${metaHtml}${dotsHtml}</div>`;
-    row.addEventListener('contextmenu', (e) => { e.preventDefault(); openContextMenu(e, m); });
-    // (long-press removed — short tap is enough for everyone now)
-    // Any user can short-tap a message to show the floating action bar
-    // (forward / copy / delete-own / cancel)
+    // The message action bar opens ONLY from the "..." button. Tapping the
+    // bubble and right-clicking used to open it too, which made it easy to
+    // trigger by accident and left two different menus for the same action.
     if (!m.is_deleted) {
-      const bubbleEl = row.querySelector('.msg-bubble');
-      if (bubbleEl) {
-        bubbleEl.addEventListener('click', (e) => {
-          e.stopPropagation();
-          if (m.is_deleted) return;
-          showMsgActionBar(row, m, e);
-        });
-      }
-      // The ⋮ button opens the same action bar — this is the touch-friendly
-      // path (iPad/iPhone have no right-click).
       const dotsEl = row.querySelector('.msg-dots');
       if (dotsEl) {
         dotsEl.addEventListener('click', (e) => {
@@ -1630,64 +1619,11 @@
     }
   }
 
-  // ---------- context menu ----------
-  function openContextMenu(e, msg) {
-    closeContextMenu();
-    const menu = document.createElement('div');
-    menu.className = 'ctx-menu';
-    const isMine = msg.sender_id === state.user.id;
-    const quickEmojis = ['❤️','👍','😂','🎉','😮','😢'];
-    const emojiRow = quickEmojis.map(em => `<button class="emoji-cell" data-react="${em}">${em}</button>`).join('');
-    let items = `<div class="ctx-emoji-row">${emojiRow}</div>`;
-    items += `<button class="ctx-item" data-act="reply">${t('btn_reply')}</button>`;
-    if (msg.type !== 'image') items += `<button class="ctx-item" data-act="copy">${t('btn_copy')}</button>`;
-    if (isMine && !msg.is_deleted) items += `<button class="ctx-item danger" data-act="delete">${t('btn_delete')}</button>`;
-    if (isJack() && !msg.is_deleted) items += `<button class="ctx-item danger" data-act="jack-delete" data-mid="${msg.id}">🛡 ${t('jack_delete')||'Jack 删除'}</button>`;
-    menu.innerHTML = items;
-    document.body.appendChild(menu);
-    menu.style.left = Math.min(e.clientX, window.innerWidth - 200) + 'px';
-    menu.style.top = Math.min(e.clientY, window.innerHeight - 240) + 'px';
-    menu.addEventListener('click', async (ev) => {
-      const emBtn = ev.target.closest('[data-react]');
-      const it = ev.target.closest('[data-act]');
-      if (emBtn) { reactTo(msg.id, emBtn.dataset.react); closeContextMenu(); }
-      else if (it) {
-        if (it.dataset.act === 'reply') {
-          state.pendingReply = { id: msg.id, sender_username: msg.sender_username, content: msg.content, type: msg.type };
-          $('#reply-preview-name').textContent = `${t('reply')} ${msg.sender_username}`;
-          $('#reply-preview-text').textContent = msg.type === 'image' ? t('type_image') : (msg.content || '').slice(0,60);
-          $('#reply-preview').classList.remove('hidden');
-          $('#chat-input').focus();
-        } else if (it.dataset.act === 'copy') {
-          try { await navigator.clipboard.writeText(msg.content); toast(t('toast_copied')); } catch { toast(t('err_action')); }
-        } else if (it.dataset.act === 'delete') {
-          if (confirm(t('msg_deleted_title'))) { await deleteMessage(msg.id); }
-        } else if (it.dataset.act === 'jack-delete') {
-          if (confirm(t('confirm_jack_delete') || '确定要删除这条消息？')) {
-            try {
-              await jackDeleteMessage(Number(it.dataset.mid));
-              // remove from local state
-              for (const key in state.messagesByConv) {
-                state.messagesByConv[key] = state.messagesByConv[key].filter(m => m.id !== Number(it.dataset.mid));
-              }
-              const row = document.querySelector(`.msg-row[data-msg-id="${it.dataset.mid}"]`);
-              if (row) row.remove();
-              toast(t('msg_deleted'));
-              refreshConversations();
-            } catch (e) { toast(e.message); }
-          }
-        }
-        closeContextMenu();
-      }
-    });
-    setTimeout(() => document.addEventListener('click', closeContextMenu, { once: true }), 0);
-  }
-  function closeContextMenu() { $$('.ctx-menu').forEach(m => m.remove()); }
+  // NOTE: openContextMenu() / closeContextMenu() / reactTo() were removed.
+  // The right-click menu was a SECOND way to reach the message actions, and
+  // the user asked for the "..." button to be the only entry point — having
+  // two different menus for the same action was confusing on touch screens.
 
-  async function reactTo(msgId, emoji) {
-    if (state.socket && state.socket.emit) state.socket.emit('message:react', { id: msgId, emoji });
-    else try { await api(`/messages/${msgId}/react`, { method:'POST', body: { emoji } }); } catch (e) { toast(e.message); }
-  }
   async function deleteMessage(id) {
     if (state.socket && state.socket.emit) state.socket.emit('message:delete', { id }, ack => { if (!ack.ok) toast(ack.error || t('err_action')); });
     else try { await api(`/messages/${id}`, { method: 'DELETE' }); } catch (e) { toast(e.message); }
@@ -2329,6 +2265,20 @@
     }
   }
 
+  // A scrim dims the page behind the open menu so the sheet reads as its
+  // own layer. Tapping it closes the menu.
+  function mobileMenuScrim() {
+    let scrim = document.getElementById('mobile-menu-scrim');
+    if (!scrim) {
+      scrim = document.createElement('div');
+      scrim.id = 'mobile-menu-scrim';
+      scrim.className = 'mobile-menu-scrim';
+      scrim.addEventListener('click', () => closeMobileMenu());
+      document.body.appendChild(scrim);
+    }
+    return scrim;
+  }
+
   function openMobileMenu() {
     if (_mobileMenuOpen) return;
     const sheet = $('#mobile-menu-sheet');
@@ -2341,6 +2291,7 @@
     sheet.classList.add('open');
     fab.classList.add('active');
     fab.setAttribute('aria-expanded', 'true');
+    mobileMenuScrim().classList.add('open');
   }
 
   function closeMobileMenu(instant) {
@@ -2350,6 +2301,7 @@
     _mobileMenuOpen = false;
     fab.classList.remove('active');
     fab.setAttribute('aria-expanded', 'false');
+    document.getElementById('mobile-menu-scrim')?.classList.remove('open');
     if (instant) {
       sheet.classList.remove('open');
       sheet.hidden = true;
@@ -2462,9 +2414,13 @@
   }
 
   // Type text into an element one character at a time.
+  // The element is CLEARED first: the reasoning card has already been
+  // filled with the raw trace while it streamed in, and appending on top of
+  // that duplicated the whole paragraph.
   function aiType(el, text, speed) {
     return new Promise((resolve) => {
       if (!el) return resolve();
+      el.textContent = '';
       let i = 0;
       const step = () => {
         if (i >= text.length) return resolve();
@@ -2608,21 +2564,27 @@
     const userBubble = userRow && userRow.querySelector('.ai-bubble');
     if (userBubble) userBubble.textContent = msg;
 
-    // The answer bubble starts with the "Thinking…" indicator.
-    const botRow = aiAppendBlock('bot');
-    const botBubble = botRow && botRow.querySelector('.ai-bubble');
-    if (botBubble) {
-      botBubble.innerHTML = `<span class="ai-thinking">
-        <span class="ai-dots"><i></i><i></i><i></i></span>
-        <span class="ai-thinking-text">Thinking…</span>
-      </span>`;
-    }
+    // Order on screen:
+    //   user message
+    //   思考过程 (only if the model actually sends a reasoning trace)
+    //   answer bubble  ← created only when the first token arrives
+    //
+    // The answer bubble is NOT pre-created with a "Thinking…" animation any
+    // more: the reasoning trace IS the thinking indicator, so an animation
+    // floating above an empty answer box was both redundant and confusing.
+    // While we wait for the very first token we only show one quiet line
+    // of text — no dots, no bubble.
+    const waiting = document.createElement('div');
+    waiting.className = 'ai-waiting';
+    waiting.textContent = '正在思考…';
+    (aiLogEl() || document.body).appendChild(waiting);
 
-    // Collect the streamed text, then type it out.
     let answer = '';
     let reasoning = '';
     let thinkRow = null;
     let thinkBody = null;
+    let botRow = null;
+    let botBubble = null;
 
     try {
       const resp = await fetch(`${API_BASE}/api/ai/chat`, {
@@ -2656,30 +2618,64 @@
               thinkBody = thinkRow && thinkRow.querySelector('.ai-think-body');
               const title = thinkRow && thinkRow.querySelector('.ai-think-title');
               if (title) title.textContent = '思考过程';
+              waiting.remove();
             }
             if (thinkBody) thinkBody.textContent = reasoning;
             const log = aiLogEl();
             if (log) log.scrollTop = log.scrollHeight;
           } else if (j.type === 'delta') {
             answer += j.text || '';
+            if (!botBubble) {
+              // First token arrived → now the answer bubble appears.
+              waiting.remove();
+              botRow = aiAppendBlock('bot');
+              botBubble = botRow && botRow.querySelector('.ai-bubble');
+              // Make sure the answer bubble sits BELOW the reasoning card.
+              if (botRow && thinkRow && thinkRow.parentElement === botRow.parentElement) {
+                botRow.parentElement.insertBefore(botRow, thinkRow.nextSibling);
+              }
+            }
           } else if (j.type === 'error') {
+            // The server already tried every source. Surface a short,
+            // readable message instead of a wall of upstream JSON.
             throw new Error(j.message || '中转失败');
           }
         }
       }
     } catch (e) {
+      waiting.remove();
+      const msgText = String(e.message || '请求失败');
+      const showErr = (row) => {
+        const b = row && row.querySelector('.ai-bubble');
+        if (b) b.innerHTML = `<span class="ai-error">${escapeHtml(msgText)}</span>`;
+      };
       if (botBubble) {
-        botBubble.innerHTML = `<span class="ai-error">${escapeHtml(e.message || '请求失败')}</span>`;
+        showErr(botRow);
+      } else if (!thinkRow) {
+        // Nothing streamed at all — show the error where the bubble would be.
+        showErr(aiAppendBlock('bot'));
       }
-      aiSetStatus('请求失败：' + (e.message || ''), 'warn');
+      // Keep the header status short too.
+      aiSetStatus(msgText.length > 60 ? msgText.slice(0, 60) + '…' : msgText, 'warn');
       _aiBusy = false;
       if (sendBtn) sendBtn.disabled = false;
       return;
     }
 
-    // Reasoning first (typed fast), then the answer (0.1s per character).
+    waiting.remove();
+
+    // The reasoning trace is typed first (fast), then the answer, one
+    // character every 100ms. The reasoning card always stays ABOVE the
+    // answer bubble.
     if (thinkBody && reasoning) {
       await aiType(thinkBody, reasoning, AI_THINK_TYPE_MS);
+    }
+    if (!botBubble && answer) {
+      botRow = aiAppendBlock('bot');
+      botBubble = botRow && botRow.querySelector('.ai-bubble');
+      if (botRow && thinkRow && thinkRow.parentElement === botRow.parentElement) {
+        botRow.parentElement.insertBefore(botRow, thinkRow.nextSibling);
+      }
     }
     if (botBubble) {
       botBubble.innerHTML = '';
@@ -2687,6 +2683,11 @@
     }
     if (!answer) {
       if (botBubble) botBubble.innerHTML = `<span class="ai-error">没有收到回复</span>`;
+      else {
+        const errRow = aiAppendBlock('bot');
+        const errBubble = errRow && errRow.querySelector('.ai-bubble');
+        if (errBubble) errBubble.innerHTML = `<span class="ai-error">没有收到回复</span>`;
+      }
     }
 
     state.aiHistory = state.aiHistory || [];
@@ -2707,10 +2708,14 @@
     ai.classList.remove('hidden');
     $('#chat-window')?.classList.add('hidden');
     $('#chat-empty')?.classList.add('hidden');
-    // On mobile the chat pane is an overlay — make sure it is on screen.
+    // On mobile the chat pane is an overlay that covers the sidebar.
+    // Remember whether a conversation was open so the back arrow can
+    // restore exactly what was on screen before.
+    state.aiHadChat = !!state.currentChat;
     if (window.innerWidth <= 820) {
       $('.right-pane')?.classList.add('mobile-show');
       $('.app-body')?.classList.add('chat-open');
+      $('#chat-back')?.classList.add('mobile-show');
     }
     ensureAiPanelBound();
     aiCheckStatus();
@@ -2719,12 +2724,24 @@
   function closeAiView() {
     const ai = $('#ai-view');
     if (!ai) return;
+    ai.classList.remove('hidden');
     ai.classList.add('hidden');
     // Restore the chat: either the open conversation, or the empty state.
     if (state.currentChat) {
       $('#chat-window')?.classList.remove('hidden');
+      $('#chat-empty')?.classList.add('hidden');
     } else {
+      $('#chat-window')?.classList.add('hidden');
       $('#chat-empty')?.classList.remove('hidden');
+    }
+    // On mobile, if no conversation was open when DeepSeek was entered,
+    // the back arrow must return to the SIDEBAR — not to the empty chat
+    // screen. Leaving `chat-open` on kept the sidebar hidden and the user
+    // landed on "选择一个会话开始聊天" instead of the conversation list.
+    if (window.innerWidth <= 820 && !state.aiHadChat) {
+      $('.right-pane')?.classList.remove('mobile-show');
+      $('.app-body')?.classList.remove('chat-open');
+      $('#chat-back')?.classList.remove('mobile-show');
     }
   }
 

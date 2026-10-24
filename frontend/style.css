@@ -2525,7 +2525,9 @@ body.dark .msg-dots:hover { background: rgba(255, 255, 255, 0.10); }
     width: 58px;
     height: 58px;
     border-radius: 999px;       /* circle -> rounded rect on open */
-    background: rgba(255, 255, 255, 0.62);
+    /* Solid enough to read as a floating panel rather than a smudge over
+       the chat — at 0.62 the labels vanished against the wallpaper. */
+    background: rgba(255, 255, 255, 0.88);
     backdrop-filter: blur(28px) saturate(200%);
     -webkit-backdrop-filter: blur(28px) saturate(200%);
     border: 1px solid rgba(255, 255, 255, 0.60);
@@ -2547,8 +2549,8 @@ body.dark .msg-dots:hover { background: rgba(255, 255, 255, 0.10); }
     z-index: 1150;
   }
   body.dark .mobile-menu-sheet {
-    background: rgba(20, 24, 32, 0.68);
-    border-color: rgba(255, 255, 255, 0.12);
+    background: rgba(24, 29, 40, 0.92);
+    border-color: rgba(255, 255, 255, 0.14);
   }
   /* Open -> the circle grows into a vertical rounded rectangle.
      The height is a fixed pixel value (not auto) so the growth can actually
@@ -2580,7 +2582,13 @@ body.dark .msg-dots:hover { background: rgba(255, 255, 255, 0.10); }
     opacity: 0;
     transform: translateX(14px);
     transition: opacity 0.22s ease, transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+    /* The labels must be readable, not a faint suggestion. */
+    color: var(--ink);
+    font-weight: 600;
   }
+  .mobile-menu-sheet > .icon-btn { color: var(--ink); }
+  .mobile-menu-sheet > .icon-btn svg { color: var(--ink-2); }
+  .mobile-menu-sheet > .theme-toggle { color: var(--ink); }
   .mobile-menu-sheet.open > * {
     opacity: 1;
     transform: translateX(0);
@@ -2985,7 +2993,6 @@ body.dark .tag-official { color: #fcd34d; background: rgba(245, 158, 11, 0.16); 
   flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
   border-radius: 14px;
-  color: #fff;
   background: var(--accent-grad);
   box-shadow: 0 4px 14px rgba(76, 111, 255, 0.32);
 }
@@ -3017,12 +3024,31 @@ body.dark .tag-official { color: #fcd34d; background: rgba(245, 158, 11, 0.16); 
   text-align: center;
   padding: 24px 12px;
 }
+/* The whale. Apple renders 🐋 as a blue whale, so the emoji IS the logo —
+   no hand-drawn SVG that reads as "a robot" or "a blob". */
+.whale-emoji {
+  font-size: 20px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.18));
+}
+.whale-emoji-lg { font-size: 24px; }
+.whale-emoji-xl { font-size: 38px; }
+
+/* The sidebar entry keeps the accent tile, the whale sits on top of it. */
+.side-nav-ic-whale { background: var(--accent-grad); color: #fff; }
+.side-nav-item.active .side-nav-ic-whale { color: #fff; }
+body.dark .side-nav-ic-whale { color: #fff; }
+
 .ai-welcome-mark {
-  width: 62px; height: 62px;
+  width: 68px; height: 68px;
   margin: 0 auto 14px;
   display: flex; align-items: center; justify-content: center;
-  border-radius: 22px;
-  color: #fff;
+  border-radius: 24px;
   background: var(--accent-grad);
   box-shadow: 0 8px 24px rgba(76, 111, 255, 0.34);
 }
@@ -3095,7 +3121,18 @@ body.dark .tag-official { color: #fcd34d; background: rgba(245, 158, 11, 0.16); 
   overflow-y: auto;
 }
 
-/* Three breathing dots. */
+/* While the first token is still on its way we show ONE quiet line of text.
+   No dots, no bubble — the reasoning trace that follows is the real
+   "thinking" indicator. */
+.ai-waiting {
+  align-self: flex-start;
+  padding: 2px 2px 0;
+  font-size: 12.5px;
+  color: var(--muted);
+  opacity: 0.75;
+}
+
+/* Three breathing dots (used only in the reasoning card header). */
 .ai-dots, .ai-think-dots { display: inline-flex; align-items: center; gap: 4px; }
 .ai-dots i, .ai-think-dots i {
   width: 6px; height: 6px;
@@ -3268,3 +3305,19 @@ body.dark .ai-send { color: #0d1a12; }
   outline: none;
 }
 .ai-provider input:focus { border-color: var(--accent); }
+
+/* Scrim behind the open mobile menu — dims the page so the sheet reads as
+   a separate layer instead of floating over the chat. */
+.mobile-menu-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1140;
+  background: rgba(18, 26, 40, 0.16);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.28s ease;
+}
+.mobile-menu-scrim.open { opacity: 1; pointer-events: auto; }
+body.dark .mobile-menu-scrim { background: rgba(0, 0, 0, 0.34); }
