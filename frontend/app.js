@@ -1195,7 +1195,11 @@
         <circle cx="4" cy="3" r="2.2"/><circle cx="17" cy="3" r="2.2"/><circle cx="30" cy="3" r="2.2"/>
       </svg>
     </button>`;
-    row.innerHTML = `${avatarHtml}<div class="msg-content">${senderName}${quoteHtml}${bubbleContent}${metaHtml}${dotsHtml}</div>`;
+    // Layout order inside the column:
+    //   sender name → bubble → quoted reply → timestamp → dots
+    // The quoted reply sits BELOW the message it answers and ABOVE the
+    // timestamp, as requested.
+    row.innerHTML = `${avatarHtml}<div class="msg-content">${senderName}${bubbleContent}${quoteHtml}${metaHtml}${dotsHtml}</div>`;
     row.addEventListener('contextmenu', (e) => { e.preventDefault(); openContextMenu(e, m); });
     // (long-press removed — short tap is enough for everyone now)
     // Any user can short-tap a message to show the floating action bar
@@ -2342,8 +2346,13 @@
     }, true);
   }
 
-  // Delegated handler for the three "搜索 / 添加" actions. Bound once, at the
+  // Delegated handler for the "搜索 / 添加" panel. Bound once, at the
   // document level, so re-entering the app can never break it.
+  //
+  // The group cards (创建群聊 / 添加群聊) were removed together with the
+  // user-created-group feature; their handlers are gone too, so those
+  // branches are no longer referenced here — calling the deleted functions
+  // would have thrown.
   let _plusBound = false;
   function ensurePlusActionsBound() {
     if (_plusBound) return;
@@ -2361,12 +2370,91 @@
         if (m) m.textContent = '';
         openModal('modal-add-friend');
         setTimeout(() => $('#add-friend-username')?.focus(), 80);
-      } else if (act === 'group') {
-        try { openCreateGroup(); } catch (err) { console.error('openCreateGroup', err); toast('创建群聊失败：' + err.message); }
-      } else if (act === 'join-group') {
-        try { openJoinGroup(); } catch (err) { console.error('openJoinGroup', err); toast('加入群聊失败：' + err.message); }
       }
     }, true);
+
+    // Inline user search inside the panel. Typing filters the user list;
+    // each result can be added as a friend or opened in a private chat.
+    const input = $('#plus-search-input');
+    const results = $('#plus-results');
+    if (input && results) {
+      let timer = null;
+      input.addEventListener('input', () => {
+        clearTimeout(timer);
+        const q = input.value.trim();
+        if (!q) { results.innerHTML = ''; return; }
+        timer = setTimeout(() => renderPlusResults(q), 220);
+      });
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const first = results.querySelector('[data-uid]');
+          if (first) first.click();
+        }
+      });
+      // Clicking a result row: 加好友 or 发消息.
+      results.addEventListener('click', async (e) => {
+        const actBtn = e.target.closest('button[data-act]');
+        if (!actBtn) return;
+        e.preventDefault(); e.stopPropagation();
+        const uid = Number(actBtn.dataset.uid);
+        const name = actBtn.dataset.name || '';
+        if (!Number.isFinite(uid)) return;
+        if (actBtn.dataset.act === 'add') {
+          try {
+            await api(`/api/friend/request/${uid}`, { method: 'POST' });
+            toast('已向 ' + name + ' 发送好友申请');
+            actBtn.textContent = '已申请';
+            actBtn.disabled = true;
+          } catch (err) {
+            toast(err.message || '发送失败');
+          }
+        } else if (actBtn.dataset.act === 'chat') {
+          closeModal('modal-plus');
+          // Open (or create) the 1:1 conversation with that user.
+          try {
+            await openDirectChat(uid, name);
+          } catch (err) {
+            toast(err.message || '无法打开会话');
+          }
+        }
+      });
+    }
+  }
+
+  // Render the search hits inside the "搜索 / 添加" panel.
+  async function renderPlusResults(q) {
+    const results = $('#plus-results');
+    if (!results) return;
+    try {
+      const r = await api(`/users/search?q=${encodeURIComponent(q)}`);
+      const users = r.users || [];
+      if (!users.length) {
+        results.innerHTML = '<div class="plus-empty">没有找到用户</div>';
+        return;
+      }
+      results.innerHTML = users.map(u => {
+        const bg = u.avatar_color
+          ? `background:linear-gradient(135deg, ${u.avatar_color}, ${shade(u.avatar_color, -25)});`
+          : '';
+        const letter = escapeHtml((u.username || '?').slice(0, 1).toUpperCase());
+        return `<div class="plus-result">
+          <div class="avatar sm" style="${bg}">${letter}</div>
+          <div class="plus-result-name">${escapeHtml(u.username)}</div>
+          <button class="plus-result-btn" data-act="add" data-uid="${u.id}" data-name="${escapeHtml(u.username)}">加好友</button>
+          <button class="plus-result-btn" data-act="chat" data-uid="${u.id}" data-name="${escapeHtml(u.username)}">发消息</button>
+        </div>`;
+      }).join('');
+    } catch (err) {
+      results.innerHTML = `<div class="plus-empty">搜索失败：${escapeHtml(err.message || '')}</div>`;
+    }
+  }
+
+  // Open a 1:1 chat with a user. openChat() already switches the current
+  // conversation, expands the chat pane on mobile, loads the messages and
+  // refreshes the sidebar — exactly what this needs.
+  async function openDirectChat(userId, name) {
+    await openChat('user', userId, name || '', false);
   }
 
   // ---- Wipe every message in the current group (Jack only) ----
