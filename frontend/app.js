@@ -1849,78 +1849,15 @@
     });
   }
 
-  // ---------- create group ----------
-  function openCreateGroup() {
-    const picker = $('#group-member-picker');
-    const count = $('#group-selected-count');
-    count.textContent = `(${t('group_count')} 0)`;
-    picker.innerHTML = '';
-    if (!state.friends.length) {
-      picker.innerHTML = `<div class="empty-hint small"><p>${t('empty')}</p></div>`;
-    } else {
-      for (const f of state.friends) {
-        const row = document.createElement('div'); row.className = 'member-pick'; row.dataset.id = f.id;
-        const bg = f.avatar_color ? `background:linear-gradient(135deg, ${f.avatar_color}, ${shade(f.avatar_color, -25)})` : '';
-        row.innerHTML = `<div class="avatar sm" style="${bg}">${escapeHtml(initials(f.username))}</div>
-          <div class="meta"><div class="name">${escapeHtml(f.username)}</div></div>
-          <div class="check">✓</div>`;
-        row.addEventListener('click', () => {
-          row.classList.toggle('selected');
-          count.textContent = `(${t('group_count')} ${$$('#group-member-picker .member-pick.selected').length})`;
-        });
-        picker.appendChild(row);
-      }
-    }
-    $('#group-name').value = ''; $('#create-group-msg').textContent = '';
-    openModal('modal-create-group');
-  }
-
-  // ---------- join group ----------
-  function openJoinGroup() {
-    $('#join-group-input').value = '';
-    $('#join-group-results').innerHTML = `<div class="empty-hint"><p>${t('empty')}</p></div>`;
-    openModal('modal-join-group');
-    setTimeout(() => $('#join-group-input').focus(), 80);
-  }
-  let joinT = null;
-  async function searchGroups(q) {
-    if (!q) { $('#join-group-results').innerHTML = `<div class="empty-hint"><p>${t('empty')}</p></div>`; return; }
-    try {
-      const r = await api(`/groups/search?q=${encodeURIComponent(q)}`);
-      renderJoinGroupResults(r.groups || []);
-    } catch (e) {
-      $('#join-group-results').innerHTML = `<div class="empty-hint"><p>${escapeHtml(e.message)}</p></div>`;
-    }
-  }
-  function renderJoinGroupResults(groups) {
-    const wrap = $('#join-group-results');
-    if (!groups.length) { wrap.innerHTML = `<div class="empty-hint"><p>${t('empty')}</p></div>`; return; }
-    wrap.innerHTML = '';
-    for (const g of groups) {
-      const li = document.createElement('div');
-      li.className = 'list-item'; li.style.cursor = 'default';
-      li.innerHTML = `<div class="avatar sm group">${escapeHtml(groupLetter(g.name, g.is_official))}</div>
-        <div class="meta"><div class="name">${escapeHtml(g.name)}</div><div class="preview">${g.member_count} ${t('member_sub')}</div></div>
-        <button class="btn btn-ok btn-sm" data-join="${g.id}">${t('add')}</button>`;
-      wrap.appendChild(li);
-    }
-    wrap.onclick = async (e) => {
-      const b = e.target.closest('[data-join]');
-      if (!b) return;
-      b.disabled = true;
-      const gid = Number(b.dataset.join);
-      try {
-        await api(`/groups/${gid}/join`, { method: 'POST' });
-        await refreshGroups();
-        await refreshConversations();
-        renderAll();
-        closeModal('modal-join-group');
-        const g = state.groups.find(x => x.id === gid);
-        if (g) openChat('group', g.id, g.name);
-        toast(t('ok_joined') + ': ' + (g ? g.name : ''));
-      } catch (err) { b.disabled = false; toast(err.message); }
-    };
-  }
+  // NOTE: openCreateGroup() / openJoinGroup() used to live here. They were
+  // dead code after the user-created-group feature was removed — the modals
+  // they opened (modal-create-group, modal-join-group) no longer exist in
+  // the HTML, so calling either one would have thrown on a null element.
+  // Both are now deleted.
+  // NOTE: searchGroups() / renderJoinGroupResults() were dead code after
+  // the user-created-group feature was removed. They wrote into
+  // #join-group-results and called /groups/search + /groups/:id/join —
+  // none of which exist any more.
 
   // ---------- image handling ----------
   function handleImageFile(file) {
@@ -2735,14 +2672,6 @@
     // instead of per-element binding — enterApp() can run more than once and
     // duplicated handlers made these buttons fire twice / get swallowed.
 
-    // join group search
-    $('#join-group-input')?.addEventListener('input', (e) => {
-      const q = e.target.value.trim();
-      clearTimeout(joinT);
-      if (!q) { $('#join-group-results').innerHTML = `<div class="empty-hint"><p>${t('empty')}</p></div>`; return; }
-      joinT = setTimeout(() => searchGroups(q), 200);
-    });
-
     // bell
     $('#btn-bell')?.addEventListener('click', (e) => { e.currentTarget._handled = true; renderBell(); openModal('modal-bell'); });
 
@@ -2758,22 +2687,6 @@
         msg.textContent = r.autoAccepted ? t('ok_auto_friend') : t('ok_request_sent');
         if (r.autoAccepted) { await refreshFriends(); await refreshConversations(); renderAll(); setTimeout(() => closeModal('modal-add-friend'), 900); }
         else setTimeout(() => closeModal('modal-add-friend'), 1500);
-      } catch (err) { msg.textContent = err.message; }
-    });
-
-    // create group form
-    $('#form-create-group')?.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const name = $('#group-name').value.trim();
-      const msg = $('#create-group-msg'); msg.classList.remove('ok'); msg.textContent = '';
-      const selected = $$('#group-member-picker .member-pick.selected').map(el => Number(el.dataset.id));
-      if (!name) { msg.textContent = t('err_group_create_name'); return; }
-      if (selected.length < 1) { msg.textContent = t('err_group_create_min'); return; }
-      try {
-        const r = await api('/groups', { method: 'POST', body: { name, memberIds: selected } });
-        msg.classList.add('ok'); msg.textContent = t('ok_group_created');
-        await refreshGroups(); await refreshConversations(); renderAll();
-        setTimeout(() => { closeModal('modal-create-group'); openChat('group', r.group.id, r.group.name, 0); }, 600);
       } catch (err) { msg.textContent = err.message; }
     });
 
