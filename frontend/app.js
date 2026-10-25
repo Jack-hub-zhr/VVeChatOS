@@ -2444,6 +2444,17 @@
     return row;
   }
 
+  // The thinking is over: the title becomes 「思考过程」 and the three
+  // dots stop pulsing — they were a "still working" signal, and it is
+  // noise once the answer is on screen.
+  function aiFinishThinking() {
+    const row = $('.ai-row.think');
+    if (!row || row.classList.contains('think-done')) return;
+    row.classList.add('think-done');
+    const title = row.querySelector('.ai-think-title');
+    if (title) title.textContent = '思考过程';
+  }
+
   // Type text into an element one character at a time.
   // The element is CLEARED first: the reasoning card has already been
   // filled with the raw trace while it streamed in, and appending on top
@@ -2559,12 +2570,24 @@
 
     const searchBtn = $('#ai-search');
     if (searchBtn) {
+      // The button belongs to the MODEL: it only springs into view when
+      // the picked model can actually search, and it hides again when the
+      // user switches to one that cannot.
       const can = !!(cur && cur.search && cur.search !== 'none');
-      searchBtn.classList.toggle('hidden', !cur);
+      const wasHidden = searchBtn.classList.contains('hidden');
+      searchBtn.classList.toggle('hidden', !can);
       searchBtn.disabled = !can;
       searchBtn.classList.toggle('on', can && prefs.search);
       searchBtn.setAttribute('aria-pressed', can && prefs.search ? 'true' : 'false');
-      searchBtn.title = can ? '开启后先联网查资料再回答' : '该模型暂不支持搜索';
+      searchBtn.title = can
+        ? (cur.search === 'provider' ? '开启后由模型自己联网搜索' : '开启后先联网查资料再回答')
+        : '该模型不支持搜索';
+      // Replay the pop animation every time it comes back.
+      if (can && wasHidden) {
+        searchBtn.classList.remove('ai-tool-pop');
+        void searchBtn.offsetWidth;
+        searchBtn.classList.add('ai-tool-pop');
+      }
     }
   }
 
@@ -2705,7 +2728,7 @@
     // of text — no dots, no bubble.
     const waiting = document.createElement('div');
     waiting.className = 'ai-waiting';
-    waiting.textContent = '正在思考…';
+    waiting.textContent = prefs.search ? '正在联网搜索…' : '正在思考…';
     (aiLogEl() || document.body).appendChild(waiting);
 
     let answer = '';
@@ -2755,6 +2778,19 @@
             answeredBy = `${j.label || j.model} · ${j.provider || j.source}`;
             if (j.fallback) answeredBy += '（已切换）';
             aiSetStatus(answeredBy, 'ok');
+          } else if (j.type === 'search') {
+            // The server tells us what the search actually produced, so the
+            // answer never looks like it came from nowhere.
+            const note = document.createElement('div');
+            note.className = 'ai-search-note';
+            note.textContent = j.provider
+              ? '已开启联网搜索（由模型自己搜索）'
+              : (j.count > 0 ? `已联网搜索 · ${j.count} 条来源` : '联网搜索没有找到结果');
+            const log = aiLogEl();
+            if (log) {
+              log.appendChild(note);
+              log.scrollTop = log.scrollHeight;
+            }
           } else if (j.type === 'reasoning') {
             // The upstream likes to open with a newline or two; those would
             // show up as a blank first line inside the reasoning card.
@@ -2767,8 +2803,8 @@
             if (!thinkRow) {
               thinkRow = aiAppendBlock('think');
               thinkBody = thinkRow && thinkRow.querySelector('.ai-think-body');
-              const title = thinkRow && thinkRow.querySelector('.ai-think-title');
-              if (title) title.textContent = '思考过程';
+              // The title stays 「思考中」 — and the three dots keep
+              // pulsing — until the model starts writing the answer.
               waiting.remove();
             }
             // The trace is written as it arrives. It must NOT be typed out
@@ -2782,6 +2818,7 @@
             if (!botBubble) {
               // First token arrived → now the answer bubble appears.
               waiting.remove();
+              aiFinishThinking();
               botRow = aiAppendBlock('bot');
               botBubble = botRow && botRow.querySelector('.ai-bubble');
               // Make sure the answer bubble sits BELOW the reasoning card.
@@ -2798,6 +2835,7 @@
       }
     } catch (e) {
       waiting.remove();
+      aiFinishThinking();
       const msgText = String(e.message || '请求失败');
       const showErr = (row) => {
         const b = row && row.querySelector('.ai-bubble');
@@ -2817,6 +2855,7 @@
     }
 
     waiting.remove();
+    aiFinishThinking();
 
     // The reasoning trace was already written while it streamed in, so
     // there is nothing to type out here. The answer is typed out now,

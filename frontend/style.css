@@ -3248,6 +3248,14 @@ body.dark .ai-welcome-title { color: var(--ink); }
 }
 .ai-tool-btn:hover:not(:disabled) { background: var(--glass-bg-strong); color: var(--ink); }
 .ai-tool-btn:disabled { opacity: 0.42; cursor: default; }
+/* The search button springs into view when the picked model can search. */
+@keyframes aiToolPop {
+  from { opacity: 0; transform: translateY(5px) scale(0.88); }
+  to { opacity: 1; transform: none; }
+}
+.ai-tool-btn.ai-tool-pop:not(.hidden) {
+  animation: aiToolPop 0.26s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
 .ai-tool-btn.on {
   color: #fff;
   background: var(--accent-grad);
@@ -3256,6 +3264,28 @@ body.dark .ai-welcome-title { color: var(--ink); }
 }
 .ai-tool-btn.on:disabled { opacity: 0.85; }
 body.dark .ai-tool-btn.on { color: #0d1a12; }
+
+/* The three dots under the thinking title were a "still working" signal —
+   once the answer starts they would just be noise, so they freeze. */
+.ai-row.think.think-done .ai-think-dots i {
+  animation: none !important;
+  opacity: 0.3;
+}
+
+/* "已联网搜索 · N 条来源" — proof that the answer was grounded. */
+.ai-search-note {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 11px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--glass-bg-soft);
+  border: 1px solid var(--glass-border-soft);
+}
 
 .ai-send {
   width: 36px; height: 36px;

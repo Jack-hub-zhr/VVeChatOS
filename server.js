@@ -656,8 +656,10 @@ const QWEN_MODELS = [
 ];
 
 // 上游超时：免费端点偶尔连上了却不出声，必须自己先放弃。
-const UPSTREAM_FIRST_TOKEN_MS = 50000;   // 第一个 token 的最长等待
-const UPSTREAM_TOTAL_MS = 150000;        // 整个上游请求的最长时间
+const UPSTREAM_FIRST_TOKEN_MS = 40000;   // 第一个 token 的最长等待
+const UPSTREAM_TOTAL_MS = 120000;        // 整个上游请求的最长时间
+// 一个源最多试几次：配额类的 429 值得重试，沉默的源试一次就换人。
+const MAX_TIMEOUT_ATTEMPTS = 2;
 
 // 思考档位 → thinking_budget（token 数）
 const THINK_BUDGETS = { low: 1024, medium: 4096, high: 16384 };
@@ -715,13 +717,15 @@ function buildQwenBody(entry, opts) {
     body.enable_thinking = wantThink;
     if (wantThink) body.thinking_budget = budget;
     // max_tokens must leave room for the answer on top of the thinking.
-    body.max_tokens = wantThink ? Math.max(4096, budget + 2048) : 2048;
+    body.max_tokens = wantThink ? Math.max(8192, budget + 4096) : 2048;
   } else if (entry.thinking === 'toggle') {
     body.enable_thinking = wantThink;
-    body.max_tokens = 2048;
+    body.max_tokens = 4096;
   } else if (entry.thinking === 'always') {
     // The endpoint always thinks; the trace is streamed back to the UI.
-    body.max_tokens = 4096;
+    // The trace alone can eat 2-3k tokens, so give it real headroom —
+    // otherwise the model thinks itself out of the answer and says nothing.
+    body.max_tokens = 8192;
   } else {
     body.max_tokens = 2048;
   }
@@ -749,11 +753,27 @@ function stripHtml(s) {
 }
 
 
+// Words that say nothing about the topic. Without this list every result
+// "matched" because the query contained words like "the" and "one".
+const SEARCH_STOPWORDS = new Set([
+  'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'of', 'for',
+  'with', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'it', 'its',
+  'this', 'that', 'these', 'those', 'as', 'by', 'from', 'you', 'your', 'i',
+  'we', 'they', 'he', 'she', 'do', 'does', 'did', 'has', 'have', 'had',
+  'will', 'would', 'can', 'could', 'should', 'what', 'who', 'whom', 'which',
+  'when', 'where', 'why', 'how', 'tell', 'give', 'answer', 'sentence',
+  'one', 'plus', 'also', 'just', 'very', 'much', 'many', 'more', 'most',
+  'some', 'any', 'all', 'both', 'each', 'few', 'other', 'such', 'than',
+  'then', 'there', 'their', 'them', 'same', 'only', 'own', 'too',
+  'source', 'please', 'about', 'me', 'my', 'our', 'not', 'no', 'so',
+  '一个', '一句', '请', '告诉', '回答', '来源', '句子', '一下'
+]);
+
 // Does a result actually look like it is about the query? Chinese search
 // engines sometimes answer a long Chinese question with dictionary
 // entries for a single character ("通_百度百科" for a question about
 // 通义千问), so a result must share a real term with the query — a
-// two-character CJK fragment or a Latin word — to be kept.
+// two-character CJK fragment or a distinctive Latin word — to be kept.
 function searchTerms(query) {
   const terms = [];
   const q = String(query || '');
@@ -762,11 +782,34 @@ function searchTerms(query) {
     if (run.length === 1) { terms.push(run); continue; }
     for (let i = 0; i < run.length - 1; i++) terms.push(run.slice(i, i + 2));
   }
-  // Latin / digit words
-  for (const w of (q.toLowerCase().match(/[a-z0-9][a-z0-9._+-]*/g) || [])) {
-    if (w.length >= 2) terms.push(w);
+  // Latin / digit words — but only the distinctive ones. Trailing
+  // punctuation has to go ("source." must still match the stop word
+  // "source", otherwise the instruction leaks into the query).
+  for (const raw of (q.toLowerCase().match(/[a-z0-9][a-z0-9._+-]*/g) || [])) {
+    const w = raw.replace(/[._+-]+$/, '');
+    if (w.length >= 3 && !SEARCH_STOPWORDS.has(w)) terms.push(w);
   }
   return terms;
+}
+
+// The question the user asked is not always the best thing to hand to a
+// search engine: "Who won the 2022 World Cup? One sentence plus the source."
+// drags the instruction along. Take the question part first, and keep a
+// keyword-only version as a second try.
+function searchVariants(raw) {
+  const q = String(raw || '').trim();
+  const variants = [];
+  const m = q.match(/^[^?？]*[?？]/);
+  if (m && m[0].trim().length >= 5) variants.push(m[0].replace(/[?？]\s*$/, '').trim());
+  else variants.push(q.slice(0, 120));
+  // Keyword-only fallback: drop the stop words, keep what identifies the topic.
+  const cjk = (q.match(/[\u4e00-\u9fff]+/g) || []).join('');
+  const words = (q.toLowerCase().match(/[a-z0-9][a-z0-9._+-]*/g) || [])
+    .map((w) => w.replace(/[._+-]+$/, ''))
+    .filter((w) => w.length >= 3 && !SEARCH_STOPWORDS.has(w));
+  const kw = [cjk ? cjk.slice(0, 24) : '', words.slice(0, 8).join(' ')].filter(Boolean).join(' ').trim();
+  if (kw && kw !== variants[0]) variants.push(kw);
+  return variants;
 }
 
 function resultMatches(result, terms) {
@@ -813,92 +856,99 @@ async function webSearch(query, limit) {
     } catch (_) { return ''; }
   };
 
-  // 1) Tavily — optional, best quality.
-  const tavilyKey = String(process.env.TAVILY_API_KEY || aiConfigGet('ai_key_tavily') || '').trim();
-  if (tavilyKey) {
-    try {
-      const r = await fetch('https://api.tavily.com/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ api_key: tavilyKey, query: q, max_results: max }),
-        signal: AbortSignal.timeout(SEARCH_TIMEOUT_MS)
-      });
-      if (r.ok) {
-        const j = await r.json();
-        const items = (j.results || []).map((it) => ({
-          title: it.title || '', url: it.url || '', snippet: String(it.content || '').slice(0, 400)
-        }));
-        if (collect(items)) return out;
-      }
-    } catch (_) { /* fall through to the keyless engines */ }
-  }
+  // Run every keyless engine against one query string.
+  const runEngines = async (queryStr) => {
+    const items = [];
 
-  // 2) DuckDuckGo HTML — no key, and it handles Chinese well.
-  {
-    const html = await fetchText('https://html.duckduckgo.com/html/?q=' + encodeURIComponent(q), { 'User-Agent': SEARCH_UA });
-    if (html) {
-      const items = [];
-      const re = /<a[^>]+class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
-      let m;
-      while ((m = re.exec(html)) && items.length < max) {
-        let url = m[1];
-        const um = url.match(/[?&]uddg=([^&]+)/);
-        if (um) { try { url = decodeURIComponent(um[1]); } catch (_) {} }
-        items.push({
-          title: stripHtml(m[2]).slice(0, 160),
-          url,
-          snippet: stripHtml(m[3]).slice(0, 400)
-        });
-      }
-      if (collect(items)) return out;
-    }
-  }
-
-  // 3) Bing HTML — no key.
-  {
-    const html = await fetchText(
-      'https://www.bing.com/search?q=' + encodeURIComponent(q) + '&setlang=zh-hans',
-      { 'User-Agent': SEARCH_UA, 'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8' }
-    );
-    if (html) {
-      const items = [];
-      for (const b of html.split('<li class="b_algo"').slice(1)) {
-        const m = b.match(/<h2>[\s\S]*?<a[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i);
-        if (!m) continue;
-        const sn = b.match(/<p[^>]*>([\s\S]*?)<\/p>/i);
-        items.push({
-          title: stripHtml(m[2]).slice(0, 160),
-          url: m[1],
-          snippet: sn ? stripHtml(sn[1]).slice(0, 400) : ''
-        });
-        if (items.length >= max) break;
-      }
-      if (collect(items)) return out;
-    }
-  }
-
-  // 4) DuckDuckGo instant answer — no key, structured JSON.
-  {
-    const html = await fetchText(
-      'https://api.duckduckgo.com/?q=' + encodeURIComponent(q) + '&format=json&no_html=1',
-      { 'User-Agent': SEARCH_UA }
-    );
-    if (html) {
+    // 1) Tavily — optional, best quality.
+    const tavilyKey = String(process.env.TAVILY_API_KEY || aiConfigGet('ai_key_tavily') || '').trim();
+    if (tavilyKey) {
       try {
-        const j = JSON.parse(html);
-        const items = [];
-        if (j && j.AbstractText) {
-          items.push({ title: String(j.Heading || q).slice(0, 160), url: j.AbstractURL || '', snippet: String(j.AbstractText).slice(0, 400) });
-        }
-        for (const t of (j.RelatedTopics || [])) {
-          if (items.length >= max) break;
-          if (t && t.Text && t.FirstURL) {
-            items.push({ title: String(t.Text).split(' - ')[0].slice(0, 160), url: t.FirstURL, snippet: String(t.Text).slice(0, 400) });
+        const r = await fetch('https://api.tavily.com/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ api_key: tavilyKey, query: queryStr, max_results: max }),
+          signal: AbortSignal.timeout(SEARCH_TIMEOUT_MS)
+        });
+        if (r.ok) {
+          const j = await r.json();
+          for (const it of (j.results || [])) {
+            items.push({ title: it.title || '', url: it.url || '', snippet: String(it.content || '').slice(0, 400) });
           }
         }
-        if (collect(items)) return out;
-      } catch (_) { /* not JSON — ignore */ }
+      } catch (_) { /* fall through to the keyless engines */ }
     }
+
+    // 2) DuckDuckGo HTML — no key, and it handles Chinese well.
+    {
+      const html = await fetchText('https://html.duckduckgo.com/html/?q=' + encodeURIComponent(queryStr), { 'User-Agent': SEARCH_UA });
+      if (html) {
+        const re = /<a[^>]+class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
+        let m;
+        while ((m = re.exec(html)) && items.length < max) {
+          let url = m[1];
+          const um = url.match(/[?&]uddg=([^&]+)/);
+          if (um) { try { url = decodeURIComponent(um[1]); } catch (_) {} }
+          items.push({
+            title: stripHtml(m[2]).slice(0, 160),
+            url,
+            snippet: stripHtml(m[3]).slice(0, 400)
+          });
+        }
+      }
+    }
+
+    // 3) Bing HTML — no key.
+    {
+      const html = await fetchText(
+        'https://www.bing.com/search?q=' + encodeURIComponent(queryStr) + '&setlang=zh-hans',
+        { 'User-Agent': SEARCH_UA, 'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8' }
+      );
+      if (html) {
+        for (const b of html.split('<li class="b_algo"').slice(1)) {
+          const m = b.match(/<h2>[\s\S]*?<a[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i);
+          if (!m) continue;
+          const sn = b.match(/<p[^>]*>([\s\S]*?)<\/p>/i);
+          items.push({
+            title: stripHtml(m[2]).slice(0, 160),
+            url: m[1],
+            snippet: sn ? stripHtml(sn[1]).slice(0, 400) : ''
+          });
+          if (items.length >= max) break;
+        }
+      }
+    }
+
+    // 4) DuckDuckGo instant answer — no key, structured JSON.
+    {
+      const html = await fetchText(
+        'https://api.duckduckgo.com/?q=' + encodeURIComponent(queryStr) + '&format=json&no_html=1',
+        { 'User-Agent': SEARCH_UA }
+      );
+      if (html) {
+        try {
+          const j = JSON.parse(html);
+          if (j && j.AbstractText) {
+            items.push({ title: String(j.Heading || queryStr).slice(0, 160), url: j.AbstractURL || '', snippet: String(j.AbstractText).slice(0, 400) });
+          }
+          for (const t of (j.RelatedTopics || [])) {
+            if (items.length >= max) break;
+            if (t && t.Text && t.FirstURL) {
+              items.push({ title: String(t.Text).split(' - ')[0].slice(0, 160), url: t.FirstURL, snippet: String(t.Text).slice(0, 400) });
+            }
+          }
+        } catch (_) { /* not JSON — ignore */ }
+      }
+    }
+
+    return items;
+  };
+
+  // Try the question as asked first; if that produced nothing usable, try
+  // the keyword-only version.
+  for (const variant of searchVariants(q)) {
+    const items = await runEngines(variant);
+    if (collect(items)) return out;
   }
 
   return out;
@@ -991,7 +1041,11 @@ function relayStream(res, upstreamBody, source, opts) {
         // `reasoning_content` instead. Accept both.
         const think = d.reasoning || d.reasoning_content || null;
         if (think) { onFirstChunk(); write({ type: 'reasoning', text: String(think) }); }
-        if (d.content) { onFirstChunk(); write({ type: 'delta', text: String(d.content) }); }
+        if (d.content) {
+          onFirstChunk();
+          if (o.onDelta) { try { o.onDelta(String(d.content)); } catch (_) {} }
+          write({ type: 'delta', text: String(d.content) });
+        }
       }
     };
 
@@ -1075,6 +1129,11 @@ app.post('/api/ai/chat', rateLimit('write'), authRequired, async (req, res) => {
     if (searchCtx !== null) return searchCtx;
     const q = userMsg.slice(0, 200);
     const results = await webSearch(q, 5);
+    // Tell the client the search really happened — otherwise a model that
+    // already knew the answer looks exactly like one that never searched.
+    try {
+      res.write(JSON.stringify({ type: 'search', count: results.length, query: q }) + '\n');
+    } catch (_) {}
     if (!results.length) {
       searchCtx = '\n\n【联网搜索】本次搜索没有取到结果，请基于你已有的知识回答，并提醒用户信息可能不是最新的。';
       return searchCtx;
@@ -1097,6 +1156,12 @@ app.post('/api/ai/chat', rateLimit('write'), authRequired, async (req, res) => {
     // 百炼 cannot search natively while it is thinking, so in that case
     // the search is done here instead.
     const nativeSearch = entry.search === 'provider' && wantSearch && !(entry.thinking === 'budget' && wantThink);
+    if (nativeSearch) {
+      // The provider does the searching itself; we only know it was asked to.
+      try {
+        res.write(JSON.stringify({ type: 'search', count: -1, query: userMsg.slice(0, 200), provider: true }) + '\n');
+      } catch (_) {}
+    }
 
     const messages = [{ role: 'system', content: BASE_SYSTEM }];
     if (wantSearch && !nativeSearch) {
@@ -1143,9 +1208,11 @@ app.post('/api/ai/chat', rateLimit('write'), authRequired, async (req, res) => {
         // source in the chain gets its turn.
         // `fallback` is true whenever the model that answered is NOT the one
         // the user picked — the UI says so, instead of silently swapping.
+        let gotContent = false;
         const result = await relayStream(res, upstream.body, source, {
           abort: () => { try { ac.abort(); } catch (_) {} },
           firstTokenMs: UPSTREAM_FIRST_TOKEN_MS,
+          onDelta: () => { gotContent = true; },
           onFirst: () => {
             wrote = true;
             res.write(JSON.stringify({
@@ -1160,11 +1227,24 @@ app.post('/api/ai/chat', rateLimit('write'), authRequired, async (req, res) => {
           }
         });
         clearTimeout(hardKill);
-        if (result && result.ok) return;
+        if (result && result.ok) {
+          // A model that thought a lot but never wrote an answer is a
+          // failure, not a reply — try the next source instead of showing
+          // the user an empty bubble. Retrying the same model would not
+          // help, so move on right away.
+          if (!gotContent) {
+            errors.push(`${entry.label}: 只返回了思考过程，没有正文`);
+            break;
+          }
+          return;
+        }
         // The source stalled or died mid-stream. Nothing was written to
         // the client yet, so the next source in the chain gets a turn.
-        errors.push(`${entry.label}: ${(result && result.error) || 'stream_failed'}`);
+        const err = (result && result.error) || 'stream_failed';
+        errors.push(`${entry.label}: ${err}`);
         if (wrote) { try { res.end(); } catch (_) {} return; }
+        // A silent upstream is not worth three rounds of waiting.
+        if (err === 'first_token_timeout' && attempt >= MAX_TIMEOUT_ATTEMPTS) break;
         if (attempt === MAX_ATTEMPTS) break;
         await new Promise(r => setTimeout(r, 1000 * attempt));
         continue;
