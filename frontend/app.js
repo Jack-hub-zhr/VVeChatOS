@@ -545,12 +545,12 @@
     // an override that could yank the switch back mid-session.
     let touched = false;
     try { touched = localStorage.getItem('vve:boot550c') !== null; } catch (_) {}
-    const on = touched ? boot550cOn() : !!user.boot_550c;
-    if (on === boot550cOn()) return false;
-    window.Boot550C.setEnabled(on);
+    const wantOn = touched ? boot550cOn() : !!user.boot_550c;
+    if (wantOn === boot550cOn()) return false;
+    window.Boot550C.setEnabled(wantOn);
     applyTheme(currentThemeMode());
     const t = $('#toggle-boot-550c');
-    if (t) t.checked = on;
+    if (t) t.checked = wantOn;
     return true;
   }
   function initTheme() {
@@ -3389,10 +3389,38 @@
   }
 
   // ---------- bind events ----------
+  // ---------- idempotent event binding ----------
+  // enterApp() can run more than once (sign in → sign out → sign in
+  // again), and every plain addEventListener() stacked another copy of
+  // the handler onto the same element.  For the composer that was
+  // fatal: one press of 发送 ran the submit handler once per stacked
+  // copy, so the same message went out two, then four times.
+  //
+  // `bindOnce()` keeps exactly one handler per (element, type) and replaces
+  // the previous one instead of stacking.  Elements that are created
+  // later still get bound the next time bindAppEvents() runs, because
+  // the bookkeeping is per element — not a global "already bound" flag.
+  const _boundHandlers = new WeakMap();
+  function bindOnce(el, type, handler, opts, key) {
+    if (!el || typeof el.addEventListener !== 'function') return;
+    let map = _boundHandlers.get(el);
+    if (!map) { map = Object.create(null); _boundHandlers.set(el, map); }
+    // `key` separates several unrelated handlers that share one element and
+    // one event type — document carries three click delegations that all
+    // have to live side by side, each one still bound exactly once.
+    const k = key ? type + ':' + key : type;
+    const prev = map[k];
+    if (prev) {
+      try { el.removeEventListener(type, prev.handler, prev.opts); } catch (_) {}
+    }
+    el.addEventListener(type, handler, opts);
+    map[k] = { handler, opts };
+  }
+
   function bindAppEvents() {
     // theme toggle (light / dark / system)
     const tt = $('#btn-theme-toggle');
-    if (tt) tt.addEventListener('click', () => {
+    if (tt) bindOnce(tt, 'click', () => {
       const current = localStorage.getItem('vve:theme') || 'auto';
       const next = current === 'light' ? 'dark' : current === 'dark' ? 'auto' : 'light';
       applyTheme(next);
@@ -3401,39 +3429,46 @@
     });
 
     // language toggle button in main app topbar
-    $$('#lang-btn-top').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); setLang(lang === 'zh' ? 'en' : 'zh'); }));
+    $$('#lang-btn-top').forEach(b => bindOnce(b, 'click', (e) => { e.stopPropagation(); setLang(lang === 'zh' ? 'en' : 'zh'); }));
 
     // 「更多」面板：550C 启动动画主题开关
     const t550 = $('#toggle-boot-550c');
     if (t550) {
       t550.checked = boot550cOn();
-      t550.addEventListener('change', async () => {
-        const on = t550.checked;
-        window.Boot550C.setEnabled(on);
+      bindOnce(t550, 'change', async () => {
+        const isOn = t550.checked;
+        window.Boot550C.setEnabled(isOn);
         applyTheme(currentThemeMode());
-        if (window.toast) toast(on ? '已开启 550C 启动动画主题' : '已关闭 550C 启动动画主题');
-        saveBoot550cToServer(on);
+        if (window.toast) toast(isOn ? '已开启 550C 启动动画主题' : '已关闭 550C 启动动画主题');
+        saveBoot550cToServer(isOn);
       });
     }
 
     // Sidebar navigation: 聊天 / Qwen
-    $$('.side-nav-item').forEach(btn => btn.addEventListener('click', () => {
+    $$('.side-nav-item').forEach(btn => bindOnce(btn, 'click', () => {
       $$('.side-nav-item').forEach(b => b.classList.toggle('active', b === btn));
       const target = btn.dataset.pane;
       $$('.pane').forEach(p => p.classList.toggle('active', p.id === `pane-${target}`));
       if (target === 'ai') openAiView();
       else closeAiView();
     }));
-    $('#btn-create-board')?.addEventListener('click', openCreateBoard);
+    // NOTE: the handler is wrapped in a thunk on purpose. `#btn-create-board`
+    // is not in the markup and `openCreateBoard` is not defined any more, so
+    // passing the bare identifier would evaluate it (and throw) even when
+    // the button is absent — which is exactly how a stray ReferenceError
+    // once aborted the rest of this function and silently killed every
+    // later binding, the composer included.
+    const createBoardBtn = $('#btn-create-board');
+    if (createBoardBtn) bindOnce(createBoardBtn, 'click', () => openCreateBoard());
 
     initSearch();
 
     // lang toggle
-    $$('.lang-toggle').forEach(b => b.addEventListener('click', () => setLang(lang === 'zh' ? 'en' : 'zh')));
+    $$('.lang-toggle').forEach(b => bindOnce(b, 'click', () => setLang(lang === 'zh' ? 'en' : 'zh')));
 
     // safety net: event delegation on topbar-right for all icon-btns
     // (handles the case where direct addEventListener somehow misses — e.g. on older WebKit)
-    $('.topbar-right')?.addEventListener('click', (e) => {
+    bindOnce($('.topbar-right'), 'click', (e) => {
       const btn = e.target.closest('button.icon-btn');
       if (!btn) return;
       if (btn._handled) return;     // already handled by direct listener
@@ -3446,7 +3481,7 @@
     }, true);
 
     // chat header
-    $('#chat-back')?.addEventListener('click', () => {
+    bindOnce($('#chat-back'), 'click', () => {
       state.currentChat = null;
       $('#chat-window').classList.add('hidden');
       $('#chat-empty').classList.remove('hidden');
@@ -3457,7 +3492,7 @@
       }
       renderChats();
     });
-    $('#chat-refresh')?.addEventListener('click', async () => {
+    bindOnce($('#chat-refresh'), 'click', async () => {
       if (!state.currentChat) return;
       const btn = $('#chat-refresh');
       btn.style.transform = 'rotate(360deg)';
@@ -3465,7 +3500,7 @@
       await loadMessages(); renderMessages(); scrollBottom();
       setTimeout(() => { btn.style.transform = ''; btn.style.transition = ''; }, 500);
     });
-    $('#chat-info')?.addEventListener('click', async () => {
+    bindOnce($('#chat-info'), 'click', async () => {
       if (!state.currentChat) return;
       if (state.currentChat.type !== 'group') {
         const f = state.friends.find(f => f.id === state.currentChat.id);
@@ -3476,8 +3511,15 @@
     });
 
     // composer
-    $('#chat-composer')?.addEventListener('submit', (e) => {
+    bindOnce($('#chat-composer'), 'submit', (e) => {
       e.preventDefault();
+      // The composer keeps the text in the box until the server confirms
+      // it, so a second submit while the first is still in flight would
+      // post the very same text again.  The send button is disabled for
+      // exactly that window — honour it here too, otherwise a double tap
+      // (or an Enter keypress) still slips a duplicate through.
+      const sendBtn = $('#send-btn');
+      if (sendBtn && sendBtn.disabled) return;
       if (state.pendingImage) {
         const img = state.pendingImage;
         state.pendingImage = null;
@@ -3496,7 +3538,7 @@
     // The send button is type=submit, but iOS Safari sometimes swallows the
     // implicit form submission when the keyboard's return key is used. Wire an
     // explicit click handler as a belt-and-braces fallback.
-    $('#send-btn')?.addEventListener('click', (e) => {
+    bindOnce($('#send-btn'), 'click', (e) => {
       if (e.defaultPrevented) return;
       e.preventDefault();
       $('#chat-composer')?.requestSubmit
@@ -3505,7 +3547,7 @@
     });
 
     // Enter sends, Shift+Enter inserts a newline.
-    $('#chat-input')?.addEventListener('keydown', (e) => {
+    bindOnce($('#chat-input'), 'keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
         e.preventDefault();
         $('#chat-composer')?.requestSubmit
@@ -3513,9 +3555,9 @@
           : $('#chat-composer')?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
       }
     });
-    $('#reply-preview-cancel')?.addEventListener('click', () => { state.pendingReply = null; $('#reply-preview').classList.add('hidden'); });
-    $('#img-preview-cancel')?.addEventListener('click', () => { state.pendingImage = null; $('#img-preview').classList.add('hidden'); });
-    $('#chat-input')?.addEventListener('paste', (e) => {
+    bindOnce($('#reply-preview-cancel'), 'click', () => { state.pendingReply = null; $('#reply-preview').classList.add('hidden'); });
+    bindOnce($('#img-preview-cancel'), 'click', () => { state.pendingImage = null; $('#img-preview').classList.add('hidden'); });
+    bindOnce($('#chat-input'), 'paste', (e) => {
       const items = e.clipboardData?.items;
       if (!items) return;
       for (const it of items) {
@@ -3525,12 +3567,12 @@
         }
       }
     });
-    $('#attach-btn')?.addEventListener('click', () => $('#img-input').click());
-    $('#img-input')?.addEventListener('change', (e) => { const f = e.target.files[0]; if (f) handleImageFile(f); e.target.value = ''; });
+    bindOnce($('#attach-btn'), 'click', () => $('#img-input').click());
+    bindOnce($('#img-input'), 'change', (e) => { const f = e.target.files[0]; if (f) handleImageFile(f); e.target.value = ''; });
 
     // emoji picker (simplified)
     const EMOJIS = ['😀','😁','😂','🤣','😃','😄','😅','😆','😉','😊','😋','😎','😍','😘','🥰','😗','😙','😚','🙂','🤗','🤩','🤔','😐','😑','😶','🙄','😏','😣','😥','😮','🤐','😯','😪','😫','😴','😌','😛','😜','😝','🤤','😒','😓','😔','😕','🙃','🤑','😲','☹️','🙁','😖','😞','😟','😤','😢','😭','😦','😧','😨','😩','🤯','😬','😰','😱','🥵','🥶','😳','🤪','😵','😡','😠','🤬','😷','🤒','🤕','🤢','🤮','🤧','😇','🥳','🥺','🤠','🤡','🤥','🤫','🤭','🧐','🤓','👍','👎','👌','✌️','🤞','🤟','🤘','👏','🙌','🙏','💪','❤️','🧡','💛','💚','💙','💜','🖤','🤍','💔','❣️','💕','💞','💓','💗','💖','💘','💝','💟','🔥','✨','🎉','🎊','💯','💢','💥','💫','💦','💨'];
-    $('#emoji-btn')?.addEventListener('click', (e) => {
+    bindOnce($('#emoji-btn'), 'click', (e) => {
       e.stopPropagation();
       const p = $('#emoji-picker');
       if (p.classList.contains('hidden')) {
@@ -3542,13 +3584,13 @@
         };
       } else { p.classList.add('hidden'); }
     });
-    document.addEventListener('click', (e) => { if (!e.target.closest('#emoji-picker') && !e.target.closest('#emoji-btn')) $('#emoji-picker')?.classList.add('hidden'); });
+    bindOnce(document, 'click', (e) => { if (!e.target.closest('#emoji-picker') && !e.target.closest('#emoji-btn')) $('#emoji-picker')?.classList.add('hidden'); }, undefined, 'emoji-close');
 
     // profile
-    $('#btn-profile')?.addEventListener('click', (e) => { e.currentTarget._handled = true; openProfileModal(state.user); });
+    bindOnce($('#btn-profile'), 'click', (e) => { e.currentTarget._handled = true; openProfileModal(state.user); });
 
     // logout
-    $('#btn-logout')?.addEventListener('click', (e) => { e.currentTarget._handled = true; logout(); });
+    bindOnce($('#btn-logout'), 'click', (e) => { e.currentTarget._handled = true; logout(); });
 
     // NOTE: the old `initRootConsole()` call was removed here. The root
     // console feature was deleted from the UI, but the call stayed behind
@@ -3564,24 +3606,24 @@
 
     // ULTIMATE FALLBACK: document-level click delegation by data-action.
     // If anything above somehow missed, this still works.
-    document.addEventListener('click', (e) => {
+    bindOnce(document, 'click', (e) => {
       const t = e.target.closest('[data-action]');
       if (!t) return;
       const act = t.dataset.action;
       if (act === 'open-admin') { /* deprecated */ e.preventDefault(); }
-    });
+    }, undefined, 'data-action');
 
     // plus menu (magnifier)
-    $('#btn-plus')?.addEventListener('click', (e) => { e.currentTarget._handled = true; openModal('modal-plus'); });
+    bindOnce($('#btn-plus'), 'click', (e) => { e.currentTarget._handled = true; openModal('modal-plus'); });
     // NOTE: handled by a single delegated listener (see ensurePlusActionsBound)
     // instead of per-element binding — enterApp() can run more than once and
     // duplicated handlers made these buttons fire twice / get swallowed.
 
     // bell
-    $('#btn-bell')?.addEventListener('click', (e) => { e.currentTarget._handled = true; renderBell(); openModal('modal-bell'); });
+    bindOnce($('#btn-bell'), 'click', (e) => { e.currentTarget._handled = true; renderBell(); openModal('modal-bell'); });
 
     // add friend form
-    $('#form-add-friend')?.addEventListener('submit', async (e) => {
+    bindOnce($('#form-add-friend'), 'submit', async (e) => {
       e.preventDefault();
       const username = $('#add-friend-username').value.trim();
       const msg = $('#add-friend-msg'); msg.classList.remove('ok'); msg.textContent = '';
@@ -3596,12 +3638,12 @@
     });
 
     // modal close
-    $$('[data-close]').forEach(el => el.addEventListener('click', (e) => { e.stopPropagation(); closeModal(el.dataset.close); }));
-    $$('.modal-mask').forEach(el => el.addEventListener('click', (e) => { if (e.target === el) closeModal(el.parentElement?.id || el.closest('.modal')?.id); }));
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { $$('.modal:not(.hidden)').forEach(m => closeModal(m.id)); $('#emoji-picker')?.classList.add('hidden'); } });
+    $$('[data-close]').forEach(el => bindOnce(el, 'click', (e) => { e.stopPropagation(); closeModal(el.dataset.close); }));
+    $$('.modal-mask').forEach(el => bindOnce(el, 'click', (e) => { if (e.target === el) closeModal(el.parentElement?.id || el.closest('.modal')?.id); }));
+    bindOnce(document, 'keydown', (e) => { if (e.key === 'Escape') { $$('.modal:not(.hidden)').forEach(m => closeModal(m.id)); $('#emoji-picker')?.classList.add('hidden'); } });
     // ULTIMATE FALLBACK: document-level delegation. If anything above
     // somehow missed (timing, duplicate listeners, etc.), this still works.
-    document.addEventListener('click', (e) => {
+    bindOnce(document, 'click', (e) => {
       const closeEl = e.target.closest('[data-close]');
       if (closeEl && closeEl.dataset.close) {
         e.stopPropagation();
@@ -3613,7 +3655,7 @@
         const modal = e.target.closest('.modal');
         if (modal) closeModal(modal.id);
       }
-    }, true /* capture so we run before any other handler can swallow it */);
+    }, true /* capture so we run before any other handler can swallow it */, 'modal-close');
   }
 
   // ---------- init ----------
