@@ -2384,7 +2384,7 @@
   // While waiting for the first token we show a "Thinking…" indicator
   // with three breathing dots.
   // ============================================================
-  const AI_TYPE_MS = 100;          // 0.1s per character
+  const AI_TYPE_MS = 10;           // 0.01s per character
   let _aiBusy = false;
 
   // ------------------------------------------------------------
@@ -2463,16 +2463,25 @@
     return new Promise((resolve) => {
       if (!el) return resolve();
       el.textContent = '';
+      if (!text) return resolve();
+      // One text node, appended to — `el.textContent += ch` re-parses the
+      // whole element on every character, which is O(n²) and visibly
+      // stutters once the answer gets long.
+      const node = document.createTextNode('');
+      el.appendChild(node);
+      const scroll = () => {
+        const log = aiLogEl();
+        if (log) log.scrollTop = log.scrollHeight;
+      };
       let i = 0;
       const step = () => {
         if (i >= text.length) return resolve();
-        // Add a few characters per tick so long chunks do not crawl, but
-        // keep the average rhythm at roughly `speed` ms per character.
-        const chunk = text.length > 400 ? 3 : 1;
-        el.textContent += text.slice(i, i + chunk);
-        i += chunk;
-        const log = aiLogEl();
-        if (log) log.scrollTop = log.scrollHeight;
+        node.appendData(text.charAt(i));
+        i++;
+        // Scrolling on every character forces a reflow each tick; every
+        // eighth one is smooth enough to look identical.
+        if ((i & 7) === 0) scroll();
+        if (i >= text.length) { scroll(); return resolve(); }
         setTimeout(step, speed);
       };
       step();
