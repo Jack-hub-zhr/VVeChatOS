@@ -2830,7 +2830,7 @@ body.dark .plus-result-btn:hover { background: var(--accent); color: #0d1a12; }
    NEW SIDEBAR — P1 layout, new glass language
    ------------------------------------------------------------
    A single column:
-     identity card → primary nav (聊天 / DeepSeek / 通讯录) →
+     identity card → primary nav (聊天 / Qwen / 通讯录) →
      search → 未读消息 block → 群聊 block
    ============================================================ */
 .side-me {
@@ -2969,7 +2969,7 @@ body.dark .side-nav-item.active .side-nav-ic { color: #0d1a12; }
 body.dark .tag-official { color: #fcd34d; background: rgba(245, 158, 11, 0.16); }
 
 /* ============================================================
-   DEEPSEEK — occupies the same big right-hand panel as the chat.
+   QWEN — occupies the same big right-hand panel as the chat.
    ============================================================ */
 .ai-view {
   display: flex;
@@ -3024,25 +3024,27 @@ body.dark .tag-official { color: #fcd34d; background: rgba(245, 158, 11, 0.16); 
   text-align: center;
   padding: 24px 12px;
 }
-/* The whale. Apple renders 🐋 as a blue whale, so the emoji IS the logo —
-   no hand-drawn SVG that reads as "a robot" or "a blob". */
-.whale-emoji {
-  font-size: 20px;
+/* The Qwen mark. A single 千 on the accent tile — a glyph renders the
+   same on every platform, unlike an emoji that changes with the OS. */
+.qwen-mark {
+  font-size: 19px;
   line-height: 1;
+  font-weight: 800;
+  color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
   width: 100%;
   height: 100%;
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.18));
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
 }
-.whale-emoji-lg { font-size: 24px; }
-.whale-emoji-xl { font-size: 38px; }
+.qwen-mark-lg { font-size: 23px; }
+.qwen-mark-xl { font-size: 36px; }
 
-/* The sidebar entry keeps the accent tile, the whale sits on top of it. */
-.side-nav-ic-whale { background: var(--accent-grad); color: #fff; }
-.side-nav-item.active .side-nav-ic-whale { color: #fff; }
-body.dark .side-nav-ic-whale { color: #fff; }
+/* The sidebar entry keeps the accent tile, the 千 sits on top of it. */
+.side-nav-ic-qwen { background: var(--accent-grad); color: #fff; }
+.side-nav-item.active .side-nav-ic-qwen { color: #fff; }
+body.dark .side-nav-ic-qwen { color: #fff; }
 
 .ai-welcome-mark {
   width: 68px; height: 68px;
@@ -3161,11 +3163,11 @@ body.dark .side-nav-ic-whale { color: #fff; }
 
 .ai-composer {
   display: flex;
-  align-items: flex-end;
+  flex-direction: column;
   gap: 8px;
   margin: 8px 14px calc(14px + env(safe-area-inset-bottom, 0px));
-  padding: 8px 8px 8px 14px;
-  border-radius: var(--r-pill);
+  padding: 10px 12px 10px 14px;
+  border-radius: 20px;
   background: var(--glass-bg-strong);
   border: 1px solid var(--glass-border-soft);
   backdrop-filter: blur(26px) saturate(180%);
@@ -3173,16 +3175,91 @@ body.dark .side-nav-ic-whale { color: #fff; }
   box-shadow: var(--glass-highlight), var(--glass-shadow);
 }
 .ai-composer textarea {
-  flex: 1;
+  width: 100%;
   min-width: 0;
   border: none; outline: none; background: transparent;
   color: var(--ink);
   font-family: inherit; font-size: 14px; line-height: 1.5;
   resize: none;
   max-height: 140px;
-  padding: 6px 0;
+  padding: 4px 0;
 }
 .ai-composer textarea::placeholder { color: var(--muted); }
+
+/* The toolbar under the input: 模型 / 思考档位 / 深度思考 / 搜索 on the
+   left, the send button on the right. It scrolls sideways on a narrow
+   phone instead of wrapping the input out of view. */
+.ai-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.ai-tools-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.ai-tools-group::-webkit-scrollbar { display: none; }
+
+.ai-select-wrap { flex-shrink: 0; }
+.ai-select {
+  appearance: none;
+  -webkit-appearance: none;
+  height: 30px;
+  max-width: 190px;
+  padding: 0 26px 0 11px;
+  border-radius: 999px;
+  border: 1px solid var(--glass-border-soft);
+  background-color: var(--glass-bg-soft);
+  color: var(--ink-2);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  text-overflow: ellipsis;
+  /* the little chevron */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='12' height='12' fill='none' stroke='%23888' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+}
+.ai-select:focus { outline: none; border-color: var(--accent); }
+.ai-select option { color: var(--ink); background: var(--bg); }
+
+.ai-tool-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 11px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  border: 1px solid var(--glass-border-soft);
+  background: var(--glass-bg-soft);
+  color: var(--ink-2);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s, border-color 0.15s, opacity 0.15s;
+}
+.ai-tool-btn:hover:not(:disabled) { background: var(--glass-bg-strong); color: var(--ink); }
+.ai-tool-btn:disabled { opacity: 0.42; cursor: default; }
+.ai-tool-btn.on {
+  color: #fff;
+  background: var(--accent-grad);
+  border-color: transparent;
+  box-shadow: 0 3px 10px rgba(76, 111, 255, 0.28);
+}
+.ai-tool-btn.on:disabled { opacity: 0.85; }
+body.dark .ai-tool-btn.on { color: #0d1a12; }
+
 .ai-send {
   width: 36px; height: 36px;
   flex-shrink: 0;
@@ -3277,7 +3354,7 @@ body.dark .ai-send { color: #0d1a12; }
 .emoji-pick-clear:hover { color: var(--ink); background: var(--glass-bg-soft); }
 
 /* ============================================================
-   DeepSeek setup dialog (admin pastes a relay key)
+   Qwen setup dialog (admin pastes a relay key)
    ============================================================ */
 .ai-provider-list { display: flex; flex-direction: column; gap: 12px; }
 .ai-provider {

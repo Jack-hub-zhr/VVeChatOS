@@ -2375,7 +2375,7 @@
   }
 
   // ============================================================
-  // DeepSeek panel
+  // Qwen panel
   // ------------------------------------------------------------
   // The user's message goes to the server relay, the relay streams back
   // the reasoning trace and the answer, and we type them out here:
@@ -2387,6 +2387,38 @@
   const AI_TYPE_MS = 100;          // 0.1s per character
   const AI_THINK_TYPE_MS = 16;    // the trace reads faster than the answer
   let _aiBusy = false;
+
+  // ------------------------------------------------------------
+  // Preferences: which model, 深度思考 on/off, 思考档位, 搜索 on/off.
+  // They survive a reload — a chat app that forgets your model every
+  // time you open it is annoying to use.
+  // ------------------------------------------------------------
+  const AI_PREF_KEY = 'vve:ai-prefs';
+  function aiPrefs() {
+    let p = {};
+    try { p = JSON.parse(localStorage.getItem(AI_PREF_KEY) || '{}') || {}; } catch (_) { p = {}; }
+    return {
+      model: typeof p.model === 'string' ? p.model : '',
+      thinking: p.thinking === true,
+      level: ['low', 'medium', 'high'].includes(p.level) ? p.level : 'medium',
+      search: p.search === true
+    };
+  }
+  function aiSetPrefs(patch) {
+    const next = Object.assign(aiPrefs(), patch || {});
+    try { localStorage.setItem(AI_PREF_KEY, JSON.stringify(next)); } catch (_) {}
+  }
+
+  // The catalogue the server reports. Each entry carries the model's
+  // capabilities, so the UI only offers what the model can really do.
+  let _aiModels = [];
+  function aiModelById(id) { return _aiModels.find((m) => m.id === id) || null; }
+  // The model that is selected right now (the DOM is the source of truth).
+  function aiCurrentModel() {
+    const sel = $('#ai-model');
+    const id = (sel && sel.value) || aiPrefs().model;
+    return aiModelById(id);
+  }
 
   function aiLogEl() { return $('#ai-log'); }
 
@@ -2415,8 +2447,8 @@
 
   // Type text into an element one character at a time.
   // The element is CLEARED first: the reasoning card has already been
-  // filled with the raw trace while it streamed in, and appending on top of
-  // that duplicated the whole paragraph.
+  // filled with the raw trace while it streamed in, and appending on top
+  // of that duplicated the whole paragraph.
   function aiType(el, text, speed) {
     return new Promise((resolve) => {
       if (!el) return resolve();
@@ -2444,36 +2476,131 @@
     el.className = 'ai-head-sub' + (cls ? ' ' + cls : '');
   }
 
+  // Fill the model dropdown. Every entry is one concrete Qwen model, so
+  // the name the user picks is exactly the model that answers.
+  function aiFillModels(models, defaultId) {
+    const sel = $('#ai-model');
+    if (!sel) return;
+    const prefs = aiPrefs();
+    const wanted = prefs.model && models.some((m) => m.id === prefs.model)
+      ? prefs.model
+      : (defaultId || (models.find((m) => m.ready) || {}).id || '');
+    sel.innerHTML = '';
+    // Group by provider so the dropdown reads like a menu, not a dump.
+    const groups = [];
+    for (const m of models) {
+      let g = groups.find((x) => x.label === m.providerLabel);
+      if (!g) { g = { label: m.providerLabel, items: [] }; groups.push(g); }
+      g.items.push(m);
+    }
+    for (const g of groups) {
+      const og = document.createElement('optgroup');
+      og.label = g.label;
+      for (const m of g.items) {
+        const o = document.createElement('option');
+        o.value = m.id;
+        o.textContent = m.label + (m.ready ? '' : '（需密钥）');
+        og.appendChild(o);
+      }
+      sel.appendChild(og);
+    }
+    if (wanted) sel.value = wanted;
+    // A stale preference (the model was removed) must not leave the
+    // dropdown empty — fall back to the first usable entry.
+    if (!sel.value) {
+      const firstReady = models.find((m) => m.ready) || models[0];
+      if (firstReady) sel.value = firstReady.id;
+    }
+    if (sel.value) aiSetPrefs({ model: sel.value });
+  }
+
+  // Match the toolbar to what the selected model can actually do:
+  //   深度思考 → on / off / "自带思考，不可关"
+  //   思考档位 → only for models that accept a thinking budget
+  //   搜索     → on / off
+  function aiSyncTools() {
+    const cur = aiCurrentModel();
+    const prefs = aiPrefs();
+
+    const thinkBtn = $('#ai-thinking');
+    if (thinkBtn) {
+      const mode = cur ? cur.thinking : 'none';
+      const can = mode === 'toggle' || mode === 'budget';
+      const always = mode === 'always';
+      thinkBtn.classList.toggle('hidden', !cur);
+      // 'always' keeps the button clickable so a tap can explain WHY it
+      // cannot be turned off, instead of being a dead control.
+      thinkBtn.disabled = !can && !always;
+      // The endpoint thinks no matter what, so the button reads as on.
+      const on = always ? true : (can ? prefs.thinking : false);
+      thinkBtn.classList.toggle('on', on);
+      thinkBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+      thinkBtn.title = !cur
+        ? '请先选择一个模型'
+        : always ? '该模型自带深度思考，无法关闭'
+        : mode === 'none' ? '该模型不支持深度思考'
+        : '开启后模型会先思考再回答';
+    }
+
+    const levelWrap = $('#ai-level-wrap');
+    if (levelWrap) {
+      // 档位 only matters when the model takes a thinking budget AND
+      // 深度思考 is actually switched on.
+      const show = !!(cur && cur.thinking === 'budget' && prefs.thinking);
+      levelWrap.classList.toggle('hidden', !show);
+    }
+    const levelSel = $('#ai-level');
+    if (levelSel && levelSel.value !== prefs.level) levelSel.value = prefs.level;
+
+    const searchBtn = $('#ai-search');
+    if (searchBtn) {
+      const can = !!(cur && cur.search && cur.search !== 'none');
+      searchBtn.classList.toggle('hidden', !cur);
+      searchBtn.disabled = !can;
+      searchBtn.classList.toggle('on', can && prefs.search);
+      searchBtn.setAttribute('aria-pressed', can && prefs.search ? 'true' : 'false');
+      searchBtn.title = can ? '开启后先联网查资料再回答' : '该模型暂不支持搜索';
+    }
+  }
+
   async function aiCheckStatus() {
     try {
       const r = await api('/ai/status');
-      const sources = r.sources || [];
-      // Prefer a source that actually serves DeepSeek; otherwise be honest
-      // about which model is really answering.
-      const ds = sources.find(x => x.deepseek && x.hasKey);
-      const anon = sources.find(x => !x.hasKey);
-      if (ds) {
-        aiSetStatus(`DeepSeek · ${ds.model}`, 'ok');
-      } else if (anon) {
-        aiSetStatus(`${anon.model} · 免费源`, 'ok');
-      } else if (sources.length) {
-        aiSetStatus(sources.map(x => x.name).join('、'), 'ok');
+      const models = r.models || [];
+      _aiModels = models;
+      state.aiSources = models;
+      state.aiModels = models;
+      state.aiProviders = r.providers || [];
+
+      aiFillModels(models, r.defaultModel);
+      aiSyncTools();
+
+      const cur = aiCurrentModel();
+      const readyCount = models.filter((m) => m.ready).length;
+      if (cur) {
+        aiSetStatus(
+          `${cur.label} · ${cur.providerLabel}${cur.ready ? '' : '（未配置密钥）'}`,
+          cur.ready ? 'ok' : 'warn'
+        );
+      } else if (readyCount) {
+        aiSetStatus(`${readyCount} 个模型可用`, 'ok');
       } else {
-        aiSetStatus('没有可用的中转源', 'warn');
+        aiSetStatus('没有可用的 Qwen 源', 'warn');
       }
-      // Offer the setup button when no real DeepSeek is wired up yet.
-      // Only the admin can actually save a key, so for everyone else the
+
+      // The setup button appears when a key would unlock more models.
+      // Only the admin can actually save one, so for everyone else the
       // button becomes a "ask the admin" hint instead of a dead end.
       const setup = $('#ai-setup-btn');
       if (setup) {
         const admin = isJack();
-        setup.classList.toggle('hidden', !!ds);
-        setup.textContent = admin ? '接入 DeepSeek 密钥' : '尚未接入 DeepSeek（请联系管理员）';
+        const missing = models.some((m) => !m.ready);
+        setup.classList.toggle('hidden', !missing);
+        setup.textContent = admin ? '接入免费 Qwen 密钥' : '尚未接入密钥（请联系管理员）';
         setup.disabled = !admin;
         setup.title = admin ? '粘贴一个免费中转的密钥，立即生效' : '只有管理员可以配置';
       }
-      state.aiSources = sources;
-      state.aiDeepseekReady = !!ds;
+      state.aiReady = readyCount > 0;
     } catch (e) {
       aiSetStatus('中转暂不可用', 'warn');
     }
@@ -2482,40 +2609,34 @@
   // Admin-only: paste a relay key in the UI. Stored server-side, so it takes
   // effect immediately with no redeploy.
   function aiOpenSetup() {
+    const providers = state.aiProviders || [];
+    const rows = providers.map((p) => `
+      <label class="ai-provider">
+        <span class="ai-provider-name">${escapeHtml(p.label)}${p.hasKey ? ' · 已配置' : ''}</span>
+        <span class="ai-provider-note">${escapeHtml(p.note || '')}</span>
+        <input type="text" id="ai-key-${escapeHtml(p.id)}" placeholder="${p.needKey ? '粘贴 API Key（留空＝不启用）' : '无需密钥'}" autocomplete="off" ${p.needKey ? '' : 'disabled'} />
+      </label>`).join('');
     const dlg = document.createElement('div');
     dlg.className = 'modal';
     dlg.id = 'modal-ai-setup';
     dlg.innerHTML = `
       <div class="modal-mask"></div>
-      <div class="modal-card modal-card-sm" style="aspect-ratio:auto; width:min(92vw, 420px);">
+      <div class="modal-card modal-card-sm" style="aspect-ratio:auto; width:min(92vw, 460px);">
         <div class="modal-head">
-          <h3>接入 DeepSeek</h3>
+          <h3>接入免费 Qwen 密钥</h3>
           <button class="icon-btn icon-btn-sm modal-close" data-close="modal-ai-setup">×</button>
         </div>
         <div class="modal-body">
           <p style="margin:0 0 12px;font-size:13px;color:var(--muted);line-height:1.6;">
-            DeepSeek 官方 API 没有免费额度。要用真正的 DeepSeek 模型，任选一家免费注册后把密钥贴进来：
+            免密钥的公共端点已经可以直接用。想换更快的模型、用上「思考档位」或「官方联网搜索」，
+            在下面任选一家免费注册后把密钥贴进来（留空＝不启用该家）：
           </p>
           <div class="ai-provider-list">
+            ${rows}
             <label class="ai-provider">
-              <span class="ai-provider-name">llm7.io</span>
-              <span class="ai-provider-note">注册后到 token.llm7.io 取 token，模型 deepseek-v4-flash-0731</span>
-              <input type="text" id="ai-key-llm7" placeholder="粘贴 llm7.io 的 token" autocomplete="off" />
-            </label>
-            <label class="ai-provider">
-              <span class="ai-provider-name">SiliconFlow</span>
-              <span class="ai-provider-note">国内速度快，模型 deepseek-ai/DeepSeek-V3</span>
-              <input type="text" id="ai-key-siliconflow" placeholder="粘贴 SiliconFlow 的 API Key" autocomplete="off" />
-            </label>
-            <label class="ai-provider">
-              <span class="ai-provider-name">BazaarLink</span>
-              <span class="ai-provider-note">模型 auto:free，可能路由到 DeepSeek V4 Flash</span>
-              <input type="text" id="ai-key-bazaarlink" placeholder="粘贴 BazaarLink 的 API Key" autocomplete="off" />
-            </label>
-            <label class="ai-provider">
-              <span class="ai-provider-name">DeepSeek 官方</span>
-              <span class="ai-provider-note">按 token 计费，最稳定</span>
-              <input type="text" id="ai-key-deepseek" placeholder="粘贴 DeepSeek 官方 API Key" autocomplete="off" />
+              <span class="ai-provider-name">Tavily 搜索（可选）</span>
+              <span class="ai-provider-note">不填也能搜索，只是结果质量差一些</span>
+              <input type="text" id="ai-key-tavily" placeholder="粘贴 Tavily API Key（留空＝不启用）" autocomplete="off" />
             </label>
           </div>
           <div class="modal-msg" id="ai-setup-msg"></div>
@@ -2533,7 +2654,8 @@
       const msg = dlg.querySelector('#ai-setup-msg');
       msg.textContent = '';
       let saved = 0;
-      for (const src of ['llm7', 'siliconflow', 'bazaarlink', 'deepseek']) {
+      const ids = providers.map((p) => p.id).concat(['tavily']);
+      for (const src of ids) {
         const input = dlg.querySelector('#ai-key-' + src);
         const val = input ? input.value.trim() : '';
         if (!val) continue;
@@ -2560,6 +2682,8 @@
     const sendBtn = $('#ai-send');
     if (sendBtn) sendBtn.disabled = true;
 
+    const prefs = aiPrefs();
+
     const userRow = aiAppendBlock('user');
     const userBubble = userRow && userRow.querySelector('.ai-bubble');
     if (userBubble) userBubble.textContent = msg;
@@ -2585,12 +2709,20 @@
     let thinkBody = null;
     let botRow = null;
     let botBubble = null;
+    let answeredBy = '';
 
     try {
       const resp = await fetch(`${API_BASE}/api/ai/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${state.token}` },
-        body: JSON.stringify({ message: msg, history: state.aiHistory || [] })
+        body: JSON.stringify({
+          message: msg,
+          history: state.aiHistory || [],
+          model: prefs.model,
+          thinking: prefs.thinking,
+          level: prefs.level,
+          search: prefs.search
+        })
       });
       if (!resp.ok) {
         let detail = '';
@@ -2611,7 +2743,13 @@
           if (!t) continue;
           let j;
           try { j = JSON.parse(t); } catch (_) { continue; }
-          if (j.type === 'reasoning') {
+          if (j.type === 'source') {
+            // The server tells us which model really answered — it may be
+            // a different one than the one that was picked.
+            answeredBy = `${j.label || j.model} · ${j.provider || j.source}`;
+            if (j.fallback) answeredBy += '（已切换）';
+            aiSetStatus(answeredBy, 'ok');
+          } else if (j.type === 'reasoning') {
             reasoning += j.text || '';
             if (!thinkRow) {
               thinkRow = aiAppendBlock('think');
@@ -2695,12 +2833,12 @@
     state.aiHistory.push({ role: 'assistant', content: answer.slice(0, 2000) });
     if (state.aiHistory.length > 8) state.aiHistory = state.aiHistory.slice(-8);
 
-    aiSetStatus('就绪', 'ok');
+    aiSetStatus(answeredBy || '就绪', 'ok');
     _aiBusy = false;
     if (sendBtn) sendBtn.disabled = false;
   }
 
-  // The DeepSeek panel lives in the SAME big right-hand panel as the chat.
+  // The Qwen panel lives in the SAME big right-hand panel as the chat.
   // Opening it hides the chat view and shows the AI view (and vice versa).
   function openAiView() {
     const ai = $('#ai-view');
@@ -2734,7 +2872,7 @@
       $('#chat-window')?.classList.add('hidden');
       $('#chat-empty')?.classList.remove('hidden');
     }
-    // On mobile, if no conversation was open when DeepSeek was entered,
+    // On mobile, if no conversation was open when Qwen was entered,
     // the back arrow must return to the SIDEBAR — not to the empty chat
     // screen. Leaving `chat-open` on kept the sidebar hidden and the user
     // landed on "选择一个会话开始聊天" instead of the conversation list.
@@ -2749,7 +2887,10 @@
     const form = $('#ai-form');
     const input = $('#ai-input');
     if (!form || !input) return;
-    if (form.__aiBound) return;
+    if (form.__aiBound) {
+      aiSyncTools();
+      return;
+    }
     form.__aiBound = true;
     form.addEventListener('submit', (e) => {
       e.preventDefault();
@@ -2771,6 +2912,53 @@
       input.style.height = Math.min(input.scrollHeight, 140) + 'px';
     });
     aiCheckStatus();
+
+    // --- model picker ---
+    const modelSel = $('#ai-model');
+    if (modelSel && !modelSel.__bound) {
+      modelSel.__bound = true;
+      modelSel.addEventListener('change', () => {
+        aiSetPrefs({ model: modelSel.value });
+        aiSyncTools();
+        const cur = aiCurrentModel();
+        if (cur) aiSetStatus(`${cur.label} · ${cur.providerLabel}${cur.ready ? '' : '（未配置密钥）'}`, cur.ready ? 'ok' : 'warn');
+      });
+    }
+
+    // --- 思考档位 ---
+    const levelSel = $('#ai-level');
+    if (levelSel && !levelSel.__bound) {
+      levelSel.__bound = true;
+      levelSel.value = aiPrefs().level;
+      levelSel.addEventListener('change', () => aiSetPrefs({ level: levelSel.value }));
+    }
+
+    // --- 深度思考 ---
+    const thinkBtn = $('#ai-thinking');
+    if (thinkBtn && !thinkBtn.__bound) {
+      thinkBtn.__bound = true;
+      thinkBtn.addEventListener('click', () => {
+        const cur = aiCurrentModel();
+        if (cur && cur.thinking === 'always') {
+          toast('该模型自带深度思考，无法关闭');
+          return;
+        }
+        const p = aiPrefs();
+        aiSetPrefs({ thinking: !p.thinking });
+        aiSyncTools();
+      });
+    }
+
+    // --- 搜索 ---
+    const searchBtn = $('#ai-search');
+    if (searchBtn && !searchBtn.__bound) {
+      searchBtn.__bound = true;
+      searchBtn.addEventListener('click', () => {
+        const p = aiPrefs();
+        aiSetPrefs({ search: !p.search });
+        aiSyncTools();
+      });
+    }
 
     const setupBtn = $('#ai-setup-btn');
     if (setupBtn && !setupBtn.__bound) {
@@ -3079,7 +3267,7 @@
     // language toggle button in main app topbar
     $$('#lang-btn-top').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); setLang(lang === 'zh' ? 'en' : 'zh'); }));
 
-    // Sidebar navigation: 聊天 / DeepSeek / 通讯录
+    // Sidebar navigation: 聊天 / Qwen / 通讯录
     $$('.side-nav-item').forEach(btn => btn.addEventListener('click', () => {
       $$('.side-nav-item').forEach(b => b.classList.toggle('active', b === btn));
       const target = btn.dataset.pane;

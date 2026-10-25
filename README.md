@@ -30,50 +30,59 @@ control/             管理控制台（/control）
 | `KEEPALIVE` | `0` | 设为 0 可关闭保活 |
 | `ALLOW_ORIGIN` | *(留空)* | 仅开发时放开跨域 |
 
-### DeepSeek 中转（免费源）
+### Qwen 中转（免费源）
 
-#### 先说清楚现状（2026-10 实测）
+#### 现在跑的是什么
 
-**DeepSeek 官方 API 没有免费额度** —— 官方定价页只有按 token 计费。
-所有提供 DeepSeek 的免费层（llm7.io / SiliconFlow / BazaarLink / ModelScope）
-都**必须注册 + 邮箱验证**，无法自动开通。
-
-但**完全不需要 key 的公共端点确实存在**，只是它们不提供 DeepSeek：
-llm7.io 的免注册层、Pollinations。它们当前在线的模型是
-`mistral-Nemo` / `codestral` / `minimax-m2.7` / `gpt-oss-20b`（Pollinations，带思维链）。
-
-所以 `/api/ai/chat` 是一个**多源自动回退**的中转站：
-
-| 优先级 | 源 | 需要密钥 | 提供 DeepSeek | 说明 |
-|---|---|---|---|---|
-| 1 | llm7.io | ✅ 免费 token | ✅ `deepseek-v4-flash-0731` | 注册后到 token.llm7.io 取 token |
-| 2 | SiliconFlow | ✅ 免费 key | ✅ `deepseek-ai/DeepSeek-V3` | 国内延迟低 |
-| 3 | BazaarLink | ✅ 免费 key | ⚠️ `auto:free` 可能路由到 | 每天 50 次，不绑卡 |
-| 4 | DeepSeek 官方 | ✅ 付费 key | ✅ | 最稳定 |
-| 5 | llm7.io 免注册层 | ❌ | ❌ | 兜底，永远可用 |
-| 6 | Pollinations | ❌ | ❌ | 最终兜底，带思维链 |
-
-**所以：装完就能用，一行配置都不需要。** 面板顶部会**如实显示当前回答问题的模型名**，
-不会拿别的模型冒充 DeepSeek。
-
-#### 想用真正的 DeepSeek？三步
-
-1. **注册拿 key**（任选一家，都免费、不绑卡）：
-   - **llm7.io** → 注册 → 打开 <https://token.llm7.io/> → 填邮箱 → 复制 token
-   - **SiliconFlow** → <https://cloud.siliconflow.cn> 注册 → 「API Keys」新建
-   - **BazaarLink** → <https://bazaarlink.ai> 注册 → 复制 API key
-2. 登录 VVeChat，点侧边栏 **DeepSeek** → 点 **「接入 DeepSeek 密钥」**
-3. 把 key 粘进去 → 保存 → **立即生效**（存在数据库里，不用改环境变量、不用重新部署）
-
+AI 面板接的**全部是通义千问（Qwen）模型**，走多家免费额度自动回退。
 浏览器端永远拿不到 key，所有请求都从服务端转发（`/api/ai/chat`，NDJSON 流式）。
 
+| 模型 | 源 | 需要密钥 | 思考 | 搜索 |
+|---|---|---|---|---|
+| `Qwen3.6 27B` | OVH 公共端点 | ❌ 匿名 | 自带 | 服务端检索 |
+| `Qwen3.5 9B` | OVH 公共端点 | ❌ 匿名 | 自带 | 服务端检索 |
+| `Qwen3.5 397B-A17B` | OVH 公共端点 | ❌ 匿名 | 自带 | 服务端检索 |
+| `Qwen3 8B` | SiliconFlow | ✅ 免费 key | 可开关 | 服务端检索 |
+| `Qwen2.5 72B` | SiliconFlow | ✅ 免费 key | — | 服务端检索 |
+| `Qwen3.5 27B` / `35B-A3B` | 魔搭 ModelScope | ✅ 免费 token | — | 服务端检索 |
+| `Qwen3 32B` | Groq | ✅ 免费 key | — | 服务端检索 |
+| `Qwen3 235B` | Cerebras | ✅ 免费 key | — | 服务端检索 |
+| `Qwen3 235B` / `Qwen3-Max` | 阿里百炼 | ✅ 免费 key | **分档** | **官方联网** |
+| `Qwen-Plus` / `Qwen-Turbo` / `Qwen-Flash` | 阿里百炼 | ✅ 免费 key | — | **官方联网** |
+
+**所以：装完就能用，一行配置都不需要** —— OVH 的公共端点匿名可答。
+面板顶部会**如实显示当前回答问题的模型名**，不会拿别的模型冒充。
+
+#### 面板能干什么
+
+- **模型**：下拉里每一项都是一个具体的 Qwen 模型，选哪个就回哪个
+- **思考档位**：只有接受 `thinking_budget` 的模型（百炼 Qwen3）会显示 低 / 中 / 高
+- **深度思考**：开关，决定模型要不要先想再答
+  - OVH 的模型**自带思考**且无法关闭（按钮常亮，点了会说明原因）
+  - SiliconFlow 的 Qwen3 支持真正的开关
+- **搜索**：开启后先联网查资料再回答
+  - 百炼走官方 `enable_search`
+  - 其余源由服务端检索（Bing / DuckDuckGo），可另配 Tavily 提升质量
+
+#### 想换更快的模型？三步
+
+1. **注册拿 key**（任选一家，都免费、不绑卡）：
+   - **SiliconFlow** → <https://cloud.siliconflow.cn> 注册 → 「API Keys」新建（`Qwen/Qwen3-8B` 永久免费）
+   - **魔搭 ModelScope** → <https://modelscope.cn> 注册 → 绑定阿里云并实名 → 访问令牌
+   - **Groq** → <https://console.groq.com/keys> 新建
+   - **Cerebras** → <https://cloud.cerebras.ai> 新建
+   - **阿里百炼** → <https://bailian.console.aliyun.com> 新建（新用户有免费额度，官方模型 + 联网搜索）
+2. 登录 VVeChat，点侧边栏 **Qwen** → 点 **「接入免费 Qwen 密钥」**
+3. 把 key 粘进去 → 保存 → **立即生效**（存在数据库里，不用改环境变量、不用重新部署）
+
 - 前端回答按 **每字符 0.1 秒** 逐字输出
-- 有 `reasoning_content` 时把思考过程单独放进「思考过程」卡片
-- 等待首个 token 时显示三个灰点波动 + `Thinking…` 呼吸动画
-- `GET /api/ai/status` 查询当前可用源（不泄露 key），`POST /api/ai/config` 保存（仅管理员）
+- 上游回传 `reasoning` / `reasoning_content` 时把思考过程单独放进「思考过程」卡片
+- 等待首个 token 时显示一行「正在思考…」
+- `GET /api/ai/status` 查询模型清单与可用状态（不泄露 key），`POST /api/ai/config` 保存（仅管理员）
 
 环境变量方式也支持（优先级高于界面配置）：
-`RELAY_LLM7_KEY` / `RELAY_SILICONFLOW_KEY` / `RELAY_BAZAAR_KEY` / `DEEPSEEK_API_KEY`。
+`RELAY_SILICONFLOW_KEY` / `RELAY_MODELSCOPE_KEY` / `RELAY_GROQ_KEY` /
+`RELAY_CEREBRAS_KEY` / `DASHSCOPE_API_KEY` / `TAVILY_API_KEY`。
 
 
 ### 持久磁盘（重要）

@@ -539,15 +539,17 @@ app.post('/api/admin/messages/wipe-group/:id', rateLimit('write'), authRequired,
   res.json({ ok: true, matched: ids.length, deleted });
 });
 // ============================================================
-// DeepSeek relay — a free-first, multi-source proxy.
+// Qwen relay — a free-first, multi-source proxy.
 //
-// The official DeepSeek API has NO free tier (verified 2026-10: the
-// pricing page lists per-token rates only). So this proxy tries, in
-// order:
-//   1. any operator-configured free relay (RELAY_FREE_URL / key)
-//   2. the public BazaarLink free tier (model "auto:free", no card)
-//   3. the official DeepSeek API if a key is configured
-// The user's browser never sees any key; everything goes through here.
+// Every model the AI panel offers is a Qwen model. The sources come
+// in two flavours:
+//   • no key at all — OVH's public endpoint answers anonymously, so
+//     the panel works the moment the app is deployed;
+//   • a free key — SiliconFlow / ModelScope / Groq / Cerebras /
+//     DashScope(百炼). The admin pastes a key in the UI; it is stored
+//     in the database and takes effect immediately, no redeploy.
+//
+// The browser never sees a key: every request goes through here.
 //
 // The response is streamed as NDJSON so the browser can show the
 // reasoning trace and the answer as they arrive.
@@ -566,92 +568,336 @@ function aiConfigSet(key, value) {
     .run(key, value === null || value === undefined ? '' : String(value));
 }
 
-// Build the ordered source list. DeepSeek models are tried FIRST (they are
-// what the panel promises), then the anonymous no-key fallbacks so the
-// feature always works even with zero configuration.
-function aiSources() {
-  const dbKey = (name) => aiConfigGet('ai_key_' + name);
-  const dbModel = (name, fallback) => (aiConfigGet('ai_model_' + name) || fallback);
-  const list = [];
+// --- provider registry -------------------------------------------------
+// needKey:false → the endpoint answers anonymously, so the panel works
+// out of the box. needKey:true → a (free) key is required; the admin
+// pastes it in the UI or sets one of the env vars.
+const QWEN_PROVIDERS = {
+  ovh: {
+    label: 'OVH 公共端点',
+    base: 'https://oai.endpoints.kepler.ai.cloud.ovh.net/v1',
+    path: '/chat/completions',
+    needKey: false,
+    env: [],
+    note: '匿名可用，无需密钥；同一 IP 每个模型 2 次/分钟'
+  },
+  siliconflow: {
+    label: 'SiliconFlow',
+    base: 'https://api.siliconflow.cn/v1',
+    path: '/chat/completions',
+    needKey: true,
+    env: ['RELAY_SILICONFLOW_KEY', 'SILICONFLOW_API_KEY'],
+    note: '注册送 14 元，Qwen3-8B 等模型永久免费'
+  },
+  modelscope: {
+    label: '魔搭 ModelScope',
+    base: 'https://api-inference.modelscope.cn/v1',
+    path: '/chat/completions',
+    needKey: true,
+    env: ['RELAY_MODELSCOPE_KEY', 'MODELSCOPE_API_KEY'],
+    note: '魔搭社区推理 API，注册即免费（需绑定阿里云并实名）'
+  },
+  groq: {
+    label: 'Groq',
+    base: 'https://api.groq.com/openai/v1',
+    path: '/chat/completions',
+    needKey: true,
+    env: ['RELAY_GROQ_KEY', 'GROQ_API_KEY'],
+    note: 'LPU 推理极快，免费额度 14400 次/天'
+  },
+  cerebras: {
+    label: 'Cerebras',
+    base: 'https://api.cerebras.ai/v1',
+    path: '/chat/completions',
+    needKey: true,
+    env: ['RELAY_CEREBRAS_KEY', 'CEREBRAS_API_KEY'],
+    note: '约 2600 tok/s，免费额度 100 万 token/天'
+  },
+  dashscope: {
+    label: '阿里百炼',
+    base: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    path: '/chat/completions',
+    needKey: true,
+    env: ['DASHSCOPE_API_KEY', 'RELAY_DASHSCOPE_KEY'],
+    note: '通义千问官方，新用户有免费额度；支持联网搜索与思考档位'
+  }
+};
 
-  // --- DeepSeek-capable sources, highest priority ---
-  // 1. An operator-configured generic relay.
-  if (process.env.RELAY_FREE_URL) {
-    list.push({
-      name: 'free-relay',
-      base: process.env.RELAY_FREE_URL.replace(/\/$/, ''),
-      path: '/chat/completions',
-      key: process.env.RELAY_FREE_KEY || '',
-      model: process.env.RELAY_FREE_MODEL || 'auto:free',
-      free: true, deepseek: false
-    });
-  }
-  // 2. llm7.io with a registered (free) token → DeepSeek V4.
-  const llm7Key = process.env.RELAY_LLM7_KEY || dbKey('llm7');
-  if (llm7Key) {
-    list.push({
-      name: 'llm7',
-      base: 'https://api.llm7.io/v1',
-      path: '/chat/completions',
-      key: llm7Key,
-      model: dbModel('llm7', 'deepseek-v4-flash-0731'),
-      free: true, deepseek: true
-    });
-  }
-  // 3. BazaarLink free tier (auto:free can route to DeepSeek V4 Flash).
-  const bazaarKey = process.env.RELAY_BAZAAR_KEY || dbKey('bazaarlink');
-  if (bazaarKey) {
-    list.push({
-      name: 'bazaarlink',
-      base: 'https://api.bazaarlink.ai/v1',
-      path: '/chat/completions',
-      key: bazaarKey,
-      model: dbModel('bazaarlink', 'auto:free'),
-      free: true, deepseek: false
-    });
-  }
-  // 4. SiliconFlow — generous free tier, DeepSeek V3/R1, fast in Asia.
-  const sfKey = process.env.RELAY_SILICONFLOW_KEY || dbKey('siliconflow');
-  if (sfKey) {
-    list.push({
-      name: 'siliconflow',
-      base: 'https://api.siliconflow.cn/v1',
-      path: '/chat/completions',
-      key: sfKey,
-      model: dbModel('siliconflow', 'deepseek-ai/DeepSeek-V3'),
-      free: true, deepseek: true
-    });
-  }
-  // 5. Official DeepSeek (billed, only if a key exists).
-  const dsKey = process.env.DEEPSEEK_API_KEY || dbKey('deepseek');
-  if (dsKey) {
-    list.push({
-      name: 'deepseek',
-      base: 'https://api.deepseek.com/v1',
-      path: '/chat/completions',
-      key: dsKey,
-      model: dbModel('deepseek', 'deepseek-v4-flash'),
-      free: false, deepseek: true
-    });
-  }
+// --- model catalogue ---------------------------------------------------
+// Every entry points at ONE concrete upstream model, so the label the
+// user picks is exactly the model that answers.
+//   thinking: 'none'   → no thinking control
+//            'always' → the endpoint always thinks (cannot be turned off)
+//            'toggle' → enable_thinking: true/false
+//            'budget' → enable_thinking + thinking_budget (档位)
+//   search:   'client' → the server searches and feeds the results in
+//            'provider'→ the provider searches (enable_search)
+const QWEN_MODELS = [
+  // --- 免密钥，开箱即用 ---
+  { id: 'ovh-qwen3-6-27b', provider: 'ovh', model: 'Qwen3.6-27B', label: 'Qwen3.6 27B', tag: '免密钥', desc: '开箱即用，27B 通用模型', thinking: 'always', search: 'client' },
+  { id: 'ovh-qwen3-5-9b', provider: 'ovh', model: 'Qwen3.5-9B', label: 'Qwen3.5 9B', tag: '免密钥', desc: '最快的一档，延迟最低', thinking: 'always', search: 'client' },
+  { id: 'ovh-qwen3-5-397b', provider: 'ovh', model: 'Qwen3.5-397B-A17B', label: 'Qwen3.5 397B-A17B', tag: '免密钥', desc: 'MoE 大模型，匿名即可触达', thinking: 'always', search: 'client' },
+  // --- SiliconFlow ---
+  { id: 'sf-qwen3-8b', provider: 'siliconflow', model: 'Qwen/Qwen3-8B', label: 'Qwen3 8B', tag: 'SiliconFlow', desc: '永久免费，可开关深度思考', thinking: 'toggle', search: 'client' },
+  { id: 'sf-qwen2-5-72b', provider: 'siliconflow', model: 'Qwen/Qwen2.5-72B-Instruct', label: 'Qwen2.5 72B', tag: 'SiliconFlow', desc: '上一代大参数通用模型', thinking: 'none', search: 'client' },
+  // --- 魔搭 ---
+  { id: 'ms-qwen3-5-27b', provider: 'modelscope', model: 'Qwen/Qwen3.5-27B', label: 'Qwen3.5 27B', tag: '魔搭', desc: '魔搭社区免费推理', thinking: 'none', search: 'client' },
+  { id: 'ms-qwen3-5-35b', provider: 'modelscope', model: 'Qwen/Qwen3.5-35B-A3B', label: 'Qwen3.5 35B-A3B', tag: '魔搭', desc: '魔搭社区免费推理', thinking: 'none', search: 'client' },
+  // --- Groq ---
+  { id: 'groq-qwen3-32b', provider: 'groq', model: 'qwen3-32b', label: 'Qwen3 32B', tag: 'Groq', desc: 'LPU 极速输出', thinking: 'none', search: 'client' },
+  // --- Cerebras ---
+  { id: 'cb-qwen3-235b', provider: 'cerebras', model: 'qwen-3-235b-a22b-instruct-2507', label: 'Qwen3 235B', tag: 'Cerebras', desc: '约 2600 tok/s，免费额度高', thinking: 'none', search: 'client' },
+  // --- 百炼官方 ---
+  { id: 'ds-qwen3-235b', provider: 'dashscope', model: 'qwen3-235b-a22b', label: 'Qwen3 235B', tag: '百炼官方', desc: '官方旗舰，支持思考档位 + 联网搜索', thinking: 'budget', search: 'provider' },
+  { id: 'ds-qwen3-max', provider: 'dashscope', model: 'qwen3-max', label: 'Qwen3-Max', tag: '百炼官方', desc: '官方最强，支持思考档位 + 联网搜索', thinking: 'budget', search: 'provider' },
+  { id: 'ds-qwen-plus', provider: 'dashscope', model: 'qwen-plus', label: 'Qwen-Plus', tag: '百炼官方', desc: '官方均衡版，支持联网搜索', thinking: 'none', search: 'provider' },
+  { id: 'ds-qwen-turbo', provider: 'dashscope', model: 'qwen-turbo', label: 'Qwen-Turbo', tag: '百炼官方', desc: '官方极速版，支持联网搜索', thinking: 'none', search: 'provider' },
+  { id: 'ds-qwen-flash', provider: 'dashscope', model: 'qwen-flash', label: 'Qwen-Flash', tag: '百炼官方', desc: '官方轻量版，最省额度', thinking: 'none', search: 'provider' }
+];
 
-  // --- Zero-configuration fallbacks: always available ---
-  // llm7.io serves a no-signup tier (about 1 req/s). Its DeepSeek models are
-  // gated, but these are open — the panel labels the actual model so nobody
-  // is misled about what answered.
-  for (const m of ['mistral-Nemo-Instruct-2407', 'codestral-latest', 'minimax-m2.7']) {
-    list.push({
-      name: 'llm7-free', base: 'https://api.llm7.io/v1', path: '/chat/completions', key: '',
-      model: m, free: true, deepseek: false
-    });
+// 思考档位 → thinking_budget（token 数）
+const THINK_BUDGETS = { low: 1024, medium: 4096, high: 16384 };
+
+// The key for a provider: env var first, then the database.
+function aiProviderKey(pid) {
+  const p = QWEN_PROVIDERS[pid];
+  if (!p) return '';
+  for (const envName of (p.env || [])) {
+    const v = process.env[envName];
+    if (v && String(v).trim()) return String(v).trim();
   }
-  // Pollinations — no key, no signup, community-run.
-  list.push({
-    name: 'pollinations', base: 'https://text.pollinations.ai', path: '/openai', key: '',
-    model: 'openai-fast', free: true, deepseek: false
+  return String(aiConfigGet('ai_key_' + pid) || '').trim();
+}
+
+// A provider is usable when it needs no key, or when a key is present.
+function aiProviderReady(pid) {
+  const p = QWEN_PROVIDERS[pid];
+  if (!p) return false;
+  return !p.needKey || !!aiProviderKey(pid);
+}
+
+// The catalogue as the browser sees it.
+function aiModelCatalog() {
+  return QWEN_MODELS.map((m) => {
+    const p = QWEN_PROVIDERS[m.provider];
+    return {
+      id: m.id,
+      label: m.label,
+      model: m.model,
+      tag: m.tag,
+      desc: m.desc,
+      provider: m.provider,
+      providerLabel: p ? p.label : m.provider,
+      thinking: m.thinking,
+      search: m.search,
+      ready: aiProviderReady(m.provider)
+    };
   });
+}
 
-  return list;
+// Build the upstream body for one catalogue entry.
+function buildQwenBody(entry, opts) {
+  const body = {
+    model: entry.model,
+    messages: opts.messages,
+    stream: true,
+    temperature: 0.7
+  };
+  const wantThink = !!opts.thinking;
+  const budget = THINK_BUDGETS[opts.level] || THINK_BUDGETS.medium;
+
+  if (entry.thinking === 'budget') {
+    // DashScope hybrid models: think or not, and how long to think.
+    body.enable_thinking = wantThink;
+    if (wantThink) body.thinking_budget = budget;
+    // max_tokens must leave room for the answer on top of the thinking.
+    body.max_tokens = wantThink ? Math.max(4096, budget + 2048) : 2048;
+  } else if (entry.thinking === 'toggle') {
+    body.enable_thinking = wantThink;
+    body.max_tokens = 2048;
+  } else if (entry.thinking === 'always') {
+    // The endpoint always thinks; the trace is streamed back to the UI.
+    body.max_tokens = 4096;
+  } else {
+    body.max_tokens = 2048;
+  }
+
+  // Provider-side search (百炼 enable_search).
+  if (entry.search === 'provider' && opts.search) body.enable_search = true;
+
+  return body;
+}
+
+// Strip tags from an HTML snippet.
+function stripHtml(s) {
+  return String(s || '')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+
+// Does a result actually look like it is about the query? Chinese search
+// engines sometimes answer a long Chinese question with dictionary
+// entries for a single character ("通_百度百科" for a question about
+// 通义千问), so a result must share a real term with the query — a
+// two-character CJK fragment or a Latin word — to be kept.
+function searchTerms(query) {
+  const terms = [];
+  const q = String(query || '');
+  // CJK runs → 2-grams (通义千问 → 通义 / 义千 / 千问)
+  for (const run of (q.match(/[\u4e00-\u9fff]+/g) || [])) {
+    if (run.length === 1) { terms.push(run); continue; }
+    for (let i = 0; i < run.length - 1; i++) terms.push(run.slice(i, i + 2));
+  }
+  // Latin / digit words
+  for (const w of (q.toLowerCase().match(/[a-z0-9][a-z0-9._+-]*/g) || [])) {
+    if (w.length >= 2) terms.push(w);
+  }
+  return terms;
+}
+
+function resultMatches(result, terms) {
+  if (!terms.length) return true;
+  const hay = ((result && result.title) || '').toLowerCase() + ' ' +
+              ((result && result.snippet) || '').toLowerCase() + ' ' +
+              ((result && result.url) || '').toLowerCase();
+  return terms.some((t) => hay.includes(String(t).toLowerCase()));
+}
+
+const SEARCH_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+// One engine must never hold the whole request hostage.
+const SEARCH_TIMEOUT_MS = 7000;
+
+// Web search for the 搜索 button. No key is required: the engines below
+// are scraped from the server. If the admin pastes a Tavily key the
+// result quality is noticeably better, so that one is tried first.
+//
+// Every engine is wrapped in a timeout: a blocked or slow engine must
+// not turn a chat reply into a half-minute wait.
+async function webSearch(query, limit) {
+  const out = [];
+  const q = String(query || '').trim();
+  if (!q) return out;
+  const max = Math.max(1, Math.min(Number(limit) || 5, 8));
+  const terms = searchTerms(q);
+
+  const collect = (items) => {
+    let kept = 0;
+    for (const it of items) {
+      if (out.length >= max) break;
+      if (!resultMatches(it, terms)) continue;
+      out.push(it);
+      kept++;
+    }
+    return kept;
+  };
+
+  const fetchText = async (url, headers) => {
+    try {
+      const r = await fetch(url, { headers: headers || {}, signal: AbortSignal.timeout(SEARCH_TIMEOUT_MS) });
+      if (!r.ok) return '';
+      return await r.text();
+    } catch (_) { return ''; }
+  };
+
+  // 1) Tavily — optional, best quality.
+  const tavilyKey = String(process.env.TAVILY_API_KEY || aiConfigGet('ai_key_tavily') || '').trim();
+  if (tavilyKey) {
+    try {
+      const r = await fetch('https://api.tavily.com/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ api_key: tavilyKey, query: q, max_results: max }),
+        signal: AbortSignal.timeout(SEARCH_TIMEOUT_MS)
+      });
+      if (r.ok) {
+        const j = await r.json();
+        const items = (j.results || []).map((it) => ({
+          title: it.title || '', url: it.url || '', snippet: String(it.content || '').slice(0, 400)
+        }));
+        if (collect(items)) return out;
+      }
+    } catch (_) { /* fall through to the keyless engines */ }
+  }
+
+  // 2) DuckDuckGo HTML — no key, and it handles Chinese well.
+  {
+    const html = await fetchText('https://html.duckduckgo.com/html/?q=' + encodeURIComponent(q), { 'User-Agent': SEARCH_UA });
+    if (html) {
+      const items = [];
+      const re = /<a[^>]+class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
+      let m;
+      while ((m = re.exec(html)) && items.length < max) {
+        let url = m[1];
+        const um = url.match(/[?&]uddg=([^&]+)/);
+        if (um) { try { url = decodeURIComponent(um[1]); } catch (_) {} }
+        items.push({
+          title: stripHtml(m[2]).slice(0, 160),
+          url,
+          snippet: stripHtml(m[3]).slice(0, 400)
+        });
+      }
+      if (collect(items)) return out;
+    }
+  }
+
+  // 3) Bing HTML — no key.
+  {
+    const html = await fetchText(
+      'https://www.bing.com/search?q=' + encodeURIComponent(q) + '&setlang=zh-hans',
+      { 'User-Agent': SEARCH_UA, 'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8' }
+    );
+    if (html) {
+      const items = [];
+      for (const b of html.split('<li class="b_algo"').slice(1)) {
+        const m = b.match(/<h2>[\s\S]*?<a[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i);
+        if (!m) continue;
+        const sn = b.match(/<p[^>]*>([\s\S]*?)<\/p>/i);
+        items.push({
+          title: stripHtml(m[2]).slice(0, 160),
+          url: m[1],
+          snippet: sn ? stripHtml(sn[1]).slice(0, 400) : ''
+        });
+        if (items.length >= max) break;
+      }
+      if (collect(items)) return out;
+    }
+  }
+
+  // 4) DuckDuckGo instant answer — no key, structured JSON.
+  {
+    const html = await fetchText(
+      'https://api.duckduckgo.com/?q=' + encodeURIComponent(q) + '&format=json&no_html=1',
+      { 'User-Agent': SEARCH_UA }
+    );
+    if (html) {
+      try {
+        const j = JSON.parse(html);
+        const items = [];
+        if (j && j.AbstractText) {
+          items.push({ title: String(j.Heading || q).slice(0, 160), url: j.AbstractURL || '', snippet: String(j.AbstractText).slice(0, 400) });
+        }
+        for (const t of (j.RelatedTopics || [])) {
+          if (items.length >= max) break;
+          if (t && t.Text && t.FirstURL) {
+            items.push({ title: String(t.Text).split(' - ')[0].slice(0, 160), url: t.FirstURL, snippet: String(t.Text).slice(0, 400) });
+          }
+        }
+        if (collect(items)) return out;
+      } catch (_) { /* not JSON — ignore */ }
+    }
+  }
+
+  return out;
 }
 
 // Turn a noisy upstream error into one readable line.
@@ -665,9 +911,11 @@ function summarizeUpstreamError(text) {
   msg = msg.replace(/\s+/g, ' ').trim();
   if (/Daily token quota exceeded/i.test(msg)) msg = '免费源的每日额度已用完，请稍后再试或接入自己的密钥';
   else if (/previous request is still running|RATE_LIMITED/i.test(msg)) msg = '请求过于频繁，请稍后再试';
+  else if (/rate limit|too many requests|429/i.test(msg)) msg = '请求过于频繁，请稍后再试';
   else if (/concurrent/i.test(msg)) msg = '并发过高，请稍后再试';
   else if (/insufficient_quota|402/i.test(msg)) msg = '余额不足';
   else if (/401|invalid_api_key|Missing API key/i.test(msg)) msg = '密钥无效';
+  else if (/model_not_found|model_unavailable|not exist/i.test(msg)) msg = '该模型当前不可用';
   return msg.length > 90 ? msg.slice(0, 90) + '…' : msg;
 }
 
@@ -708,9 +956,10 @@ function relayStream(res, upstreamBody, source) {
         const ch = j.choices && j.choices[0];
         if (!ch) continue;
         const d = ch.delta || {};
-        // DeepSeek's reasoning models expose the chain-of-thought in
-        // `reasoning_content`; other providers use `reasoning`.
-        const think = d.reasoning_content || d.reasoning || null;
+        // Qwen's thinking models expose the chain-of-thought in
+        // `reasoning`; some OpenAI-compatible gateways use
+        // `reasoning_content` instead. Accept both.
+        const think = d.reasoning || d.reasoning_content || null;
         if (think) write({ type: 'reasoning', text: String(think) });
         if (d.content) write({ type: 'delta', text: String(d.content) });
       }
@@ -748,13 +997,29 @@ function relayStream(res, upstreamBody, source) {
 }
 
 app.post('/api/ai/chat', rateLimit('write'), authRequired, async (req, res) => {
-  const { message, history } = req.body || {};
+  const { message, history, model, thinking, level, search } = req.body || {};
   const userMsg = String(message || '').trim();
   if (!userMsg) return res.status(400).json({ error: '消息不能为空' });
 
-  const SOURCES = aiSources();
-  if (!SOURCES.length) {
-    return res.status(503).json({ error: '没有可用的中转源' });
+  const wantThink = thinking === true || thinking === 'true' || thinking === 'on';
+  const wantSearch = search === true || search === 'true' || search === 'on';
+  const thinkLevel = ['low', 'medium', 'high'].includes(String(level)) ? String(level) : 'medium';
+
+  // The chain: the model the user picked first, then every other model
+  // whose provider is ready. If the picked model has no key yet (or its
+  // endpoint is down) the request still gets an answer, and the client
+  // is told which model actually replied.
+  const catalog = aiModelCatalog();
+  const wanted = catalog.find((m) => m.id === String(model || ''));
+  const chain = [];
+  if (wanted && wanted.ready) chain.push(wanted);
+  for (const m of catalog) {
+    if (wanted && m.id === wanted.id) continue;
+    if (!m.ready) continue;
+    chain.push(m);
+  }
+  if (!chain.length) {
+    return res.status(503).json({ error: '没有可用的 Qwen 源，请在设置里接入一个免费密钥' });
   }
 
   res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
@@ -772,28 +1037,53 @@ app.post('/api/ai/chat', rateLimit('write'), authRequired, async (req, res) => {
   }
   msgs.push({ role: 'user', content: userMsg.slice(0, 4000) });
 
+  // The system prompt. When 搜索 is on, the live results are appended to
+  // it so the model can actually ground its answer.
+  const BASE_SYSTEM = '你是 VVeChat 内置的通义千问（Qwen）助手。请用简体中文回答，简洁、直接、有条理；不确定的地方要明说。';
+  let searchCtx = null;
+  const getSearchCtx = async () => {
+    if (searchCtx !== null) return searchCtx;
+    const q = userMsg.slice(0, 200);
+    const results = await webSearch(q, 5);
+    if (!results.length) {
+      searchCtx = '\n\n【联网搜索】本次搜索没有取到结果，请基于你已有的知识回答，并提醒用户信息可能不是最新的。';
+      return searchCtx;
+    }
+    const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ');
+    searchCtx = '\n\n【联网搜索结果】以下是关于「' + q + '」的实时搜索结果（' + stamp + ' UTC）。' +
+      '请优先依据这些内容回答，并在结尾用「参考来源」列出用到的标题 + 链接。' +
+      '如果这些结果与问题无关，请直接说明没有查到相关信息，不要硬套：\n' +
+      results.map((r, i) => (i + 1) + '. ' + r.title + '\n   ' + r.url + '\n   ' + r.snippet).join('\n');
+    return searchCtx;
+  };
+
   const errors = [];
-  for (const source of SOURCES) {
-    // A source with no key is still worth trying: llm7.io and Pollinations
-    // both serve a no-signup tier. Sending a bogus Bearer header to them
-    // would be rejected, so only add the header when we actually have a key.
-    //
-    // These public tiers are shared and heavily rate-limited, so every
+  for (let i = 0; i < chain.length; i++) {
+    const entry = chain[i];
+    const provider = QWEN_PROVIDERS[entry.provider];
+    const key = aiProviderKey(entry.provider);
+    const source = { name: entry.provider, model: entry.model };
+
+    // 百炼 cannot search natively while it is thinking, so in that case
+    // the search is done here instead.
+    const nativeSearch = entry.search === 'provider' && wantSearch && !(entry.thinking === 'budget' && wantThink);
+
+    const messages = [{ role: 'system', content: BASE_SYSTEM }];
+    if (wantSearch && !nativeSearch) {
+      try { messages[0].content += await getSearchCtx(); } catch (_) {}
+    }
+    for (const m of msgs) messages.push(m);
+
+    // The public tiers are shared and heavily rate-limited, so every
     // source gets a couple of attempts with a growing backoff. The
-    // upstream's own "retry after N seconds" hint is honoured when it
-    // sends one.
+    // upstream's own "retry after N seconds" hint is honoured.
     const MAX_ATTEMPTS = 3;
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       try {
         const headers = { 'Content-Type': 'application/json' };
-        if (source.key) headers['Authorization'] = `Bearer ${source.key}`;
-        const body = {
-          model: source.model,
-          messages: msgs,
-          stream: true,
-          temperature: 0.7
-        };
-        const url = `${source.base}${source.path || '/chat/completions'}`;
+        if (key) headers['Authorization'] = `Bearer ${key}`;
+        const body = buildQwenBody(entry, { messages, thinking: wantThink, level: thinkLevel, search: nativeSearch });
+        const url = `${provider.base}${provider.path || '/chat/completions'}`;
         const upstream = await fetch(url, {
           method: 'POST', headers, body: JSON.stringify(body)
         });
@@ -801,7 +1091,7 @@ app.post('/api/ai/chat', rateLimit('write'), authRequired, async (req, res) => {
           const txt = await upstream.text().catch(() => '');
           const retryAfter = Number(upstream.headers.get('retry-after')) || 0;
           const quotaHit = /429|quota|RATE_LIMIT|rate limit/i.test(upstream.status + txt);
-          errors.push(`${source.name}: HTTP ${upstream.status} ${summarizeUpstreamError(txt)}`);
+          errors.push(`${entry.label}: HTTP ${upstream.status} ${summarizeUpstreamError(txt)}`);
           if (!quotaHit || attempt === MAX_ATTEMPTS) break;
           // Wait before the next attempt. Respect the upstream hint, but
           // cap it so a request never hangs for minutes.
@@ -809,12 +1099,22 @@ app.post('/api/ai/chat', rateLimit('write'), authRequired, async (req, res) => {
           await new Promise(r => setTimeout(r, wait));
           continue;
         }
-        // Tell the client which source answered, then stream the payload.
-        res.write(JSON.stringify({ type: 'source', source: source.name, model: source.model, free: !!source.free }) + '\n');
+        // Tell the client which model answered, then stream the payload.
+        // `fallback` is true whenever the model that answered is NOT the one
+        // the user picked — the UI says so, instead of silently swapping.
+        res.write(JSON.stringify({
+          type: 'source',
+          source: entry.provider,
+          provider: entry.providerLabel,
+          model: entry.model,
+          label: entry.label,
+          free: true,
+          fallback: !!wanted && entry.id !== wanted.id
+        }) + '\n');
         await relayStream(res, upstream.body, source);
         return;
       } catch (e) {
-        errors.push(`${source.name}: ${e.message || e}`);
+        errors.push(`${entry.label}: ${e.message || e}`);
         if (attempt === MAX_ATTEMPTS) break;
         await new Promise(r => setTimeout(r, 1000 * attempt));
       }
@@ -829,29 +1129,37 @@ app.post('/api/ai/chat', rateLimit('write'), authRequired, async (req, res) => {
     const reason = summarizeUpstreamError(errors.join(' | '));
     res.write(JSON.stringify({
       type: 'error',
-      message: '所有中转源都失败了：' + reason,
+      message: '所有 Qwen 中转源都失败了：' + reason,
       detail: errors.slice(0, 6)
     }) + '\n');
     res.end();
   } catch (_) {}
 });
 
-// Report which relays are configured (no keys leaked).
+// Report the catalogue and which providers are configured (no keys leaked).
 app.get('/api/ai/status', authRequired, (req, res) => {
-  const sources = aiSources();
+  const models = aiModelCatalog();
+  const ready = models.filter((m) => m.ready);
   res.json({
-    ok: sources.length > 0,
-    // The first source that can actually answer with a DeepSeek model.
-    deepseekReady: sources.some(s => s.deepseek),
-    sources: sources.map(s => ({ name: s.name, model: s.model, free: !!s.free, deepseek: !!s.deepseek, hasKey: !!s.key }))
+    ok: ready.length > 0,
+    defaultModel: (models.find((m) => m.ready && m.id === 'ovh-qwen3-6-27b') || ready[0] || {}).id,
+    models,
+    providers: Object.keys(QWEN_PROVIDERS).map((pid) => ({
+      id: pid,
+      label: QWEN_PROVIDERS[pid].label,
+      note: QWEN_PROVIDERS[pid].note,
+      needKey: QWEN_PROVIDERS[pid].needKey,
+      ready: aiProviderReady(pid),
+      hasKey: !!aiProviderKey(pid)
+    }))
   });
 });
 
 // Admin-only: plug in a relay key from the UI. Stored in the database, so
 // no redeploy and no environment-variable editing is needed.
 app.post('/api/ai/config', rateLimit('write'), authRequired, requireAdmin, (req, res) => {
-  const { source, key, model } = req.body || {};
-  const allowed = ['llm7', 'bazaarlink', 'siliconflow', 'deepseek'];
+  const { source, key } = req.body || {};
+  const allowed = Object.keys(QWEN_PROVIDERS).concat(['tavily']);
   if (!allowed.includes(source)) return res.status(400).json({ error: '未知的源' });
   if (key === null || key === '') {
     aiConfigSet('ai_key_' + source, '');
@@ -860,10 +1168,7 @@ app.post('/api/ai/config', rateLimit('write'), authRequired, requireAdmin, (req,
     if (k.length < 8 || k.length > 300) return res.status(400).json({ error: '密钥格式不正确' });
     aiConfigSet('ai_key_' + source, k);
   }
-  if (model !== undefined && model !== null && String(model).trim()) {
-    aiConfigSet('ai_model_' + source, String(model).trim().slice(0, 80));
-  }
-  res.json({ ok: true, sources: aiSources().map(s => ({ name: s.name, model: s.model, free: !!s.free, deepseek: !!s.deepseek, hasKey: !!s.key })) });
+  res.json({ ok: true, models: aiModelCatalog() });
 });
 
 // Remove a member from a group. Allowed for the group owner and for Jack.
