@@ -2778,6 +2778,27 @@
             answeredBy = `${j.label || j.model} · ${j.provider || j.source}`;
             if (j.fallback) answeredBy += '（已切换）';
             aiSetStatus(answeredBy, 'ok');
+          } else if (j.type === 'reset') {
+            // The server gave up on this model. Drop the dead-end trace so
+            // the next model's answer starts on a clean slate.
+            const deadThink = $('.ai-row.think');
+            if (deadThink) deadThink.remove();
+            const deadBot = $('.ai-bubble.bot');
+            if (deadBot) {
+              const deadRow = deadBot.closest('.ai-row');
+              if (deadRow) deadRow.remove();
+            }
+            if (!waiting.parentElement) {
+              waiting.textContent = '正在换用其他模型…';
+              (aiLogEl() || document.body).appendChild(waiting);
+            }
+            thinkRow = null;
+            thinkBody = null;
+            botRow = null;
+            botBubble = null;
+            reasoning = '';
+            reasoningStarted = false;
+            answer = '';
           } else if (j.type === 'search') {
             // The server tells us what the search actually produced, so the
             // answer never looks like it came from nowhere.

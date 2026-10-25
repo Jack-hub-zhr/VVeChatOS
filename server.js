@@ -660,6 +660,8 @@ const UPSTREAM_FIRST_TOKEN_MS = 40000;   // 第一个 token 的最长等待
 const UPSTREAM_TOTAL_MS = 120000;        // 整个上游请求的最长时间
 // 一个源最多试几次：配额类的 429 值得重试，沉默的源试一次就换人。
 const MAX_TIMEOUT_ATTEMPTS = 2;
+// 思考链超过这个长度还没正文，就当这个模型想不出答案了。
+const REASON_LIMIT = 12000;
 
 // 思考档位 → thinking_budget（token 数）
 const THINK_BUDGETS = { low: 1024, medium: 4096, high: 16384 };
@@ -1040,7 +1042,11 @@ function relayStream(res, upstreamBody, source, opts) {
         // `reasoning`; some OpenAI-compatible gateways use
         // `reasoning_content` instead. Accept both.
         const think = d.reasoning || d.reasoning_content || null;
-        if (think) { onFirstChunk(); write({ type: 'reasoning', text: String(think) }); }
+        if (think) {
+          onFirstChunk();
+          if (o.onReasoning) { try { o.onReasoning(String(think)); } catch (_) {} }
+          write({ type: 'reasoning', text: String(think) });
+        }
         if (d.content) {
           onFirstChunk();
           if (o.onDelta) { try { o.onDelta(String(d.content)); } catch (_) {} }
@@ -1209,10 +1215,21 @@ app.post('/api/ai/chat', rateLimit('write'), authRequired, async (req, res) => {
         // `fallback` is true whenever the model that answered is NOT the one
         // the user picked — the UI says so, instead of silently swapping.
         let gotContent = false;
+        let reasonLen = 0;
+        let gaveUp = false;
         const result = await relayStream(res, upstream.body, source, {
+          onReasoning: (t) => {
+            reasonLen += t.length;
+            // Some models think forever and never answer. Once the trace
+            // is this long with no answer in sight, give up on them.
+            if (!gotContent && reasonLen > REASON_LIMIT) {
+              gaveUp = true;
+              try { ac.abort(); } catch (_) {}
+            }
+          },
           abort: () => { try { ac.abort(); } catch (_) {} },
           firstTokenMs: UPSTREAM_FIRST_TOKEN_MS,
-          onDelta: () => { gotContent = true; },
+          onDelta: (t) => { if (String(t || '').trim()) gotContent = true; },
           onFirst: () => {
             wrote = true;
             res.write(JSON.stringify({
@@ -1242,7 +1259,16 @@ app.post('/api/ai/chat', rateLimit('write'), authRequired, async (req, res) => {
         // the client yet, so the next source in the chain gets a turn.
         const err = (result && result.error) || 'stream_failed';
         errors.push(`${entry.label}: ${err}`);
-        if (wrote) { try { res.end(); } catch (_) {} return; }
+        if (gaveUp) {
+          // We gave up on this model on purpose. Tell the client to drop
+          // the dead-end trace, then move on — the user must still get an
+          // answer from the next source.
+          try { res.write(JSON.stringify({ type: 'reset' }) + '\n'); } catch (_) {}
+          wrote = false;
+        } else if (wrote) {
+          try { res.end(); } catch (_) {}
+          return;
+        }
         // A silent upstream is not worth three rounds of waiting.
         if (err === 'first_token_timeout' && attempt >= MAX_TIMEOUT_ATTEMPTS) break;
         if (attempt === MAX_ATTEMPTS) break;
