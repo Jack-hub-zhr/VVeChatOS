@@ -655,6 +655,10 @@ const QWEN_MODELS = [
   { id: 'ds-qwen-flash', provider: 'dashscope', model: 'qwen-flash', label: 'Qwen-Flash', tag: '百炼官方', desc: '官方轻量版，最省额度', thinking: 'none', search: 'provider' }
 ];
 
+// 上游超时：免费端点偶尔连上了却不出声，必须自己先放弃。
+const UPSTREAM_FIRST_TOKEN_MS = 50000;   // 第一个 token 的最长等待
+const UPSTREAM_TOTAL_MS = 150000;        // 整个上游请求的最长时间
+
 // 思考档位 → thinking_budget（token 数）
 const THINK_BUDGETS = { low: 1024, medium: 4096, high: 16384 };
 
@@ -926,15 +930,41 @@ function summarizeUpstreamError(text) {
 // Node Readable — it has no .on('data'), only .getReader(). Reading it the
 // Node way threw "upstreamBody.on is not a function" and every relay
 // source failed. Support both shapes so the code also works on Node 20+.
-function relayStream(res, upstreamBody, source) {
+function relayStream(res, upstreamBody, source, opts) {
+  const o = opts || {};
   return new Promise((resolve) => {
     let done = false;
+    // Watchdog: a free upstream can accept the connection and then never
+    // say a word. If the FIRST chunk does not arrive in time, kill it and
+    // let the caller move on to the next source — otherwise one stalled
+    // endpoint holds the whole reply hostage.
+    let firstTimer = setTimeout(() => {
+      // Abort the upstream; the reader below will throw and the route
+      // moves on to the next source. The response is NOT ended here —
+      // the caller may still have other sources to try.
+      try { if (o.abort) o.abort(); } catch (_) {}
+      finish('first_token_timeout');
+    }, o.firstTokenMs || 50000);
+    let firstAnnounced = false;
+    const onFirstChunk = () => {
+      if (firstTimer) { clearTimeout(firstTimer); firstTimer = null; }
+      // onFirst must fire ONCE, not on every chunk.
+      if (firstAnnounced) return;
+      firstAnnounced = true;
+      if (o.onFirst) { try { o.onFirst(); } catch (_) {} }
+    };
+    // On success the response is closed here. On failure it is left open
+    // so the caller can fall back to another source; the caller closes it
+    // once every source has been tried.
     const finish = (err) => {
       if (done) return;
       done = true;
-      try { res.write(JSON.stringify({ type: 'done', source: source.name, error: err || null }) + '\n'); } catch (_) {}
-      try { res.end(); } catch (_) {}
-      resolve();
+      if (firstTimer) { clearTimeout(firstTimer); firstTimer = null; }
+      if (!err) {
+        try { res.write(JSON.stringify({ type: 'done', source: source.name, error: null }) + '\n'); } catch (_) {}
+        try { res.end(); } catch (_) {}
+      }
+      resolve(err ? { ok: false, error: err } : { ok: true, error: null });
     };
     const write = (obj) => {
       try { res.write(JSON.stringify(obj) + '\n'); } catch (_) { finish('write_failed'); }
@@ -960,8 +990,8 @@ function relayStream(res, upstreamBody, source) {
         // `reasoning`; some OpenAI-compatible gateways use
         // `reasoning_content` instead. Accept both.
         const think = d.reasoning || d.reasoning_content || null;
-        if (think) write({ type: 'reasoning', text: String(think) });
-        if (d.content) write({ type: 'delta', text: String(d.content) });
+        if (think) { onFirstChunk(); write({ type: 'reasoning', text: String(think) }); }
+        if (d.content) { onFirstChunk(); write({ type: 'delta', text: String(d.content) }); }
       }
     };
 
@@ -1079,15 +1109,23 @@ app.post('/api/ai/chat', rateLimit('write'), authRequired, async (req, res) => {
     // upstream's own "retry after N seconds" hint is honoured.
     const MAX_ATTEMPTS = 3;
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      let wrote = false;
+      let ac = null;
+      let hardKill = null;
       try {
         const headers = { 'Content-Type': 'application/json' };
         if (key) headers['Authorization'] = `Bearer ${key}`;
         const body = buildQwenBody(entry, { messages, thinking: wantThink, level: thinkLevel, search: nativeSearch });
         const url = `${provider.base}${provider.path || '/chat/completions'}`;
+        // A free endpoint can accept the connection and then go quiet.
+        // The abort signal makes sure such a request cannot hang forever.
+        ac = new AbortController();
+        hardKill = setTimeout(() => { try { ac.abort(); } catch (_) {} }, UPSTREAM_TOTAL_MS);
         const upstream = await fetch(url, {
-          method: 'POST', headers, body: JSON.stringify(body)
+          method: 'POST', headers, body: JSON.stringify(body), signal: ac.signal
         });
         if (!upstream.ok) {
+          clearTimeout(hardKill);
           const txt = await upstream.text().catch(() => '');
           const retryAfter = Number(upstream.headers.get('retry-after')) || 0;
           const quotaHit = /429|quota|RATE_LIMIT|rate limit/i.test(upstream.status + txt);
@@ -1100,21 +1138,43 @@ app.post('/api/ai/chat', rateLimit('write'), authRequired, async (req, res) => {
           continue;
         }
         // Tell the client which model answered, then stream the payload.
+        // The event is sent with the FIRST chunk, not before the request:
+        // if the upstream stalls, no model is announced and the next
+        // source in the chain gets its turn.
         // `fallback` is true whenever the model that answered is NOT the one
         // the user picked — the UI says so, instead of silently swapping.
-        res.write(JSON.stringify({
-          type: 'source',
-          source: entry.provider,
-          provider: entry.providerLabel,
-          model: entry.model,
-          label: entry.label,
-          free: true,
-          fallback: !!wanted && entry.id !== wanted.id
-        }) + '\n');
-        await relayStream(res, upstream.body, source);
-        return;
+        const result = await relayStream(res, upstream.body, source, {
+          abort: () => { try { ac.abort(); } catch (_) {} },
+          firstTokenMs: UPSTREAM_FIRST_TOKEN_MS,
+          onFirst: () => {
+            wrote = true;
+            res.write(JSON.stringify({
+              type: 'source',
+              source: entry.provider,
+              provider: entry.providerLabel,
+              model: entry.model,
+              label: entry.label,
+              free: true,
+              fallback: !!wanted && entry.id !== wanted.id
+            }) + '\n');
+          }
+        });
+        clearTimeout(hardKill);
+        if (result && result.ok) return;
+        // The source stalled or died mid-stream. Nothing was written to
+        // the client yet, so the next source in the chain gets a turn.
+        errors.push(`${entry.label}: ${(result && result.error) || 'stream_failed'}`);
+        if (wrote) { try { res.end(); } catch (_) {} return; }
+        if (attempt === MAX_ATTEMPTS) break;
+        await new Promise(r => setTimeout(r, 1000 * attempt));
+        continue;
       } catch (e) {
+        if (hardKill) clearTimeout(hardKill);
         errors.push(`${entry.label}: ${e.message || e}`);
+        // Something was already streamed to the client — the answer is
+        // incomplete but real, so end it here instead of switching models
+        // mid-sentence.
+        if (wrote) { try { res.end(); } catch (_) {} return; }
         if (attempt === MAX_ATTEMPTS) break;
         await new Promise(r => setTimeout(r, 1000 * attempt));
       }
