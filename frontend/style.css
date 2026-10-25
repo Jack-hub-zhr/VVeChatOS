@@ -2517,11 +2517,15 @@ body.dark .msg-dots:hover { background: rgba(255, 255, 255, 0.10); }
   /* --- Level 2: the vertical sheet --- */
   .mobile-menu-sheet {
     display: flex !important;
-    /* Anchored to .topbar-right (position:relative) so the sheet always
-       hangs directly under the FAB, whatever the safe-area insets are. */
-    position: absolute;
-    top: calc(100% + 8px);
-    right: 0;
+    /* The sheet lives at BODY level now, not inside .topbar-right.
+       .topbar has z-index:5, which creates a stacking context — a child
+       with z-index:1150 inside it still loses to a body-level element
+       at z-index:1140 (the scrim). The scrim was therefore painted OVER
+       the sheet and swallowed every tap. Body-level + fixed positioning
+       makes the z-index values mean what they say. */
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + 58px);
+    right: 10px;
     flex-direction: column;
     align-items: stretch;
     gap: 8px;
@@ -2529,11 +2533,10 @@ body.dark .msg-dots:hover { background: rgba(255, 255, 255, 0.10); }
     width: 58px;
     height: 58px;
     border-radius: 999px;       /* circle -> rounded rect on open */
-    /* Solid enough to read as a floating panel rather than a smudge over
-       the chat — at 0.62 the labels vanished against the wallpaper. */
-    background: rgba(255, 255, 255, 0.88);
-    backdrop-filter: blur(28px) saturate(200%);
-    -webkit-backdrop-filter: blur(28px) saturate(200%);
+    /* Solid panel. A backdrop-filter HERE would nest inside the icon
+       buttons' own backdrop-filter, which iOS Safari renders as a smeared
+       mess — the panel looked blurred and the buttons were unusable. */
+    background: rgba(255, 255, 255, 0.94);
     border: 1px solid rgba(255, 255, 255, 0.60);
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.80),
@@ -2550,7 +2553,7 @@ body.dark .msg-dots:hover { background: rgba(255, 255, 255, 0.10); }
       border-radius 0.34s cubic-bezier(0.22, 1, 0.36, 1),
       opacity 0.20s ease,
       transform 0.34s cubic-bezier(0.22, 1, 0.36, 1);
-    z-index: 1150;
+    z-index: 1500;
   }
   body.dark .mobile-menu-sheet {
     background: rgba(24, 29, 40, 0.92);
@@ -2593,6 +2596,19 @@ body.dark .msg-dots:hover { background: rgba(255, 255, 255, 0.10); }
   .mobile-menu-sheet > .icon-btn { color: var(--ink); }
   .mobile-menu-sheet > .icon-btn svg { color: var(--ink-2); }
   .mobile-menu-sheet > .theme-toggle { color: var(--ink); }
+  /* The panel is a solid 94% surface now, so the buttons do not need their
+     own backdrop-filter. Keeping it would nest two blurs, which iOS Safari
+     renders as a smear and which also breaks hit-testing on the icons. */
+  .mobile-menu-sheet > .icon-btn,
+  .mobile-menu-sheet > .theme-toggle {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: rgba(255, 255, 255, 0.55);
+  }
+  body.dark .mobile-menu-sheet > .icon-btn,
+  body.dark .mobile-menu-sheet > .theme-toggle {
+    background: rgba(255, 255, 255, 0.08);
+  }
   .mobile-menu-sheet.open > * {
     opacity: 1;
     transform: translateX(0);
@@ -3419,10 +3435,11 @@ body.dark .ai-send { color: #0d1a12; }
 .mobile-menu-scrim {
   position: fixed;
   inset: 0;
-  z-index: 1140;
-  background: rgba(18, 26, 40, 0.16);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
+  z-index: 1400;
+  /* NO backdrop-filter here: it blurred the ENTIRE viewport, which is what
+     made the whole page look smeared while the menu was open. A plain
+     translucent wash separates the layers without touching legibility. */
+  background: rgba(18, 26, 40, 0.22);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.28s ease;

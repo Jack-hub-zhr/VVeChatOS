@@ -2268,6 +2268,13 @@
     if (!sheet || !right) return;
     const mobile = isMobileLayout();
     if (mobile && !_mobileMenuMoved) {
+      // The sheet must live at BODY level, not inside .topbar-right.
+      // .topbar carries z-index:5, which creates a stacking context, so a
+      // child with z-index:1500 still sits BELOW a body-level scrim at
+      // z-index:1400 — the scrim covered the sheet and ate every tap.
+      if (sheet.parentElement !== document.body) {
+        document.body.appendChild(sheet);
+      }
       for (const id of MOBILE_MENU_KEYS) {
         const el = document.getElementById(id);
         if (!el) continue;
@@ -2279,6 +2286,8 @@
       labelMobileMenuItems(sheet);
       closeMobileMenu(true);
     } else if (!mobile && _mobileMenuMoved) {
+      // Put the sheet back where it came from.
+      if (sheet.parentElement !== right) right.appendChild(sheet);
       for (const id of MOBILE_MENU_KEYS) {
         const el = document.getElementById(id);
         if (!el) continue;
