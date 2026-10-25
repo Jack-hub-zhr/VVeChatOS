@@ -3125,23 +3125,46 @@ body.dark .ai-welcome-title { color: var(--ink); }
    "thinking" indicator. */
 .ai-waiting {
   align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   padding: 2px 2px 0;
   font-size: 12.5px;
   color: var(--muted);
   opacity: 0.75;
 }
+/* The waiting line carries the same three dots — invisible until the
+   mouse comes near. */
+.ai-waiting .ai-dots { opacity: 0; transition: opacity 0.22s ease; }
+.ai-waiting:hover .ai-dots { opacity: 1; }
+.ai-waiting:hover .ai-dots i { animation: aiDotWave 1.25s ease-in-out infinite; }
 
-/* Three breathing dots (used only in the reasoning card header). */
+/* Three breathing dots (used only in the reasoning card header).
+   They stay in the DOM the whole time — they are simply invisible until
+   the mouse comes near the card, so they never distract from the answer
+   but are there when you want to look at them. */
 .ai-dots, .ai-think-dots { display: inline-flex; align-items: center; gap: 4px; }
 .ai-dots i, .ai-think-dots i {
   width: 6px; height: 6px;
   border-radius: 999px;
   background: var(--muted);
   display: block;
-  animation: aiDotWave 1.25s ease-in-out infinite;
+  /* Idle: still and out of sight. */
+  animation: none;
+  opacity: 0.5;
 }
 .ai-dots i:nth-child(2), .ai-think-dots i:nth-child(2) { animation-delay: 0.16s; }
 .ai-dots i:nth-child(3), .ai-think-dots i:nth-child(3) { animation-delay: 0.32s; }
+
+/* Mouse near → the dots show up (and start breathing again while the
+   model is still thinking). */
+.ai-row.think .ai-think-dots { opacity: 0; transition: opacity 0.22s ease; }
+.ai-row.think:hover .ai-think-dots { opacity: 1; }
+.ai-row.think:hover .ai-think-dots i {
+  animation: aiDotWave 1.25s ease-in-out infinite;
+}
+/* Once the thinking is over they stay calm even on hover. */
+.ai-row.think.think-done:hover .ai-think-dots i { animation: none; opacity: 0.55; }
 @keyframes aiDotWave {
   0%, 60%, 100% { transform: translateY(0); opacity: 0.35; }
   30% { transform: translateY(-4px); opacity: 1; }
@@ -3269,7 +3292,7 @@ body.dark .ai-tool-btn.on { color: #0d1a12; }
    once the answer starts they would just be noise, so they freeze. */
 .ai-row.think.think-done .ai-think-dots i {
   animation: none !important;
-  opacity: 0.3;
+  opacity: 0.55;
 }
 
 /* "已联网搜索 · N 条来源" — proof that the answer was grounded. */

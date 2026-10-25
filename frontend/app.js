@@ -2737,7 +2737,12 @@
     // of text — no dots, no bubble.
     const waiting = document.createElement('div');
     waiting.className = 'ai-waiting';
-    waiting.textContent = prefs.search ? '正在联网搜索…' : '正在思考…';
+    // Same three dots as the thinking card: they live in the DOM the whole
+    // time and only show when the mouse comes near.
+    waiting.innerHTML = '<span class="ai-dots"><i></i><i></i><i></i></span>';
+    waiting.appendChild(document.createTextNode(
+      prefs.search ? '正在联网搜索…' : '正在思考…'
+    ));
     (aiLogEl() || document.body).appendChild(waiting);
 
     let answer = '';
