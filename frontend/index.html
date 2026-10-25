@@ -182,17 +182,6 @@
               </span>
               <span class="side-nav-label">Qwen</span>
             </button>
-            <button class="side-nav-item" data-pane="contacts" role="tab" title="通讯录">
-              <span class="side-nav-ic">
-                <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-                  <circle cx="9" cy="7" r="4"/>
-                  <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-                  <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-                </svg>
-              </span>
-              <span class="side-nav-label">通讯录</span>
-            </button>
           </nav>
 
           <div class="search">
@@ -202,7 +191,7 @@
             <input id="search-input" type="text" placeholder="搜索好友 / 群聊 / 用户" />
           </div>
 
-          <!-- ============ 聊天：未读消息 + 群聊 ============ -->
+          <!-- ============ 聊天：未读消息 + 会话（群聊与好友同列） ============ -->
           <div id="pane-chats" class="pane active">
             <div class="side-section">
               <span class="side-section-title">未读消息</span>
@@ -212,21 +201,10 @@
             <div class="side-empty hidden" id="unread-empty">没有未读消息</div>
 
             <div class="side-section">
-              <span class="side-section-title">群聊</span>
+              <span class="side-section-title">会话</span>
             </div>
             <ul id="chats-list" class="list"></ul>
-            <div class="side-empty hidden" id="chats-empty">还没有加入任何群聊</div>
-          </div>
-
-          <!-- ============ 通讯录 ============ -->
-          <div id="pane-contacts" class="pane">
-            <div class="side-section">
-              <span class="side-section-title">好友</span>
-            </div>
-            <ul id="friends-list" class="list"></ul>
-            <div class="side-empty hidden" id="contacts-empty">
-              还没有好友，点右上角放大镜添加
-            </div>
+            <div class="side-empty hidden" id="chats-empty">还没有群聊或好友</div>
           </div>
 
         </aside>

@@ -583,7 +583,7 @@
   }
 
   // ---------- rendering ----------
-  function renderAll() { renderChats(); renderContacts(); renderBell(); renderTopbarAvatar(); renderSideMe(); }
+  function renderAll() { renderChats(); renderBell(); renderTopbarAvatar(); renderSideMe(); }
 
   // The identity card at the top of the sidebar.
   function renderSideMe() {
@@ -670,7 +670,11 @@
     const isOfficial = !!c.is_official;
     const online = c.type==='user' && isOnline(c.id);
     const ac = isGroup ? `avatar group ${isOfficial?'official':''}` : 'avatar';
-    const preview = c.last_message ? c.last_message : (isGroup?(isOfficial?t('official_sub'):t('group_sub')):t('new_msg'));
+    const preview = c.last_message
+      ? c.last_message
+      : (isGroup
+          ? (isOfficial ? t('official_sub') : t('group_sub'))
+          : (c.is_new_friend ? (t('friend') || '好友') : t('new_msg')));
     const officialTag = isOfficial ? `<span class="tag-official">官方</span>` : '';
     const avatarBg = isGroup ? '' : avatarStyle(c);
     const dot = (isGroup || isOfficial) ? '' : `<span class="online-dot"></span>`;
@@ -717,15 +721,25 @@
     for (const c of unread) list.appendChild(buildConvRow(c, { unread: true }));
   }
 
-  // The 群聊 block: every group the user belongs to, official first.
+  // The 会话 block: one list holding BOTH the group chats and the
+  // private chats with friends. The separate 通讯录 pane is gone — this
+  // is now the only place to reach your people.
   function renderChats() {
     const list = $('#chats-list'); const empty = $('#chats-empty');
     if (!list) return;
     list.innerHTML = '';
-    const groups = state.conversations.filter(c => c.type === 'group')
-      .sort((a,b) => (b.is_official||0)-(a.is_official||0) || (b.last_at||0)-(a.last_at||0));
-    if (empty) empty.classList.toggle('hidden', groups.length > 0);
-    for (const c of groups) list.appendChild(buildConvRow(c));
+    const groups = state.conversations.filter(c => c.type === 'group');
+    const privates = state.conversations.filter(c => c.type === 'user');
+    // Friends you have never talked to still belong in the list —
+    // otherwise removing the contacts pane would make them unreachable.
+    const seen = new Set(privates.map(c => String(c.id)));
+    const fresh = state.friends
+      .filter(f => !seen.has(String(f.id)))
+      .map(f => Object.assign({ type: 'user', unread: 0, last_at: 0, last_message: '', is_new_friend: true }, f));
+    const all = [...groups, ...privates, ...fresh]
+      .sort((a, b) => (b.is_official || 0) - (a.is_official || 0) || (b.last_at || 0) - (a.last_at || 0));
+    if (empty) empty.classList.toggle('hidden', all.length > 0);
+    for (const c of all) list.appendChild(buildConvRow(c));
     renderUnread();
   }
 
@@ -757,7 +771,11 @@
       const isOfficial = !!c.is_official;
       const online = c.type==='user' && isOnline(c.id);
       const ac = isGroup ? `avatar group ${isOfficial?'official':''}` : 'avatar';
-      const preview = c.last_message ? c.last_message : (isGroup?(isOfficial?t('official_sub'):t('group_sub')):t('new_msg'));
+      const preview = c.last_message
+      ? c.last_message
+      : (isGroup
+          ? (isOfficial ? t('official_sub') : t('group_sub'))
+          : (c.is_new_friend ? (t('friend') || '好友') : t('new_msg')));
       const officialTag = isOfficial ? `<span style="font-size:10px;background:rgba(245,158,11,0.14);color:#b45309;padding:2px 7px;border-radius:6px;border:1px solid rgba(245,158,11,0.30);font-weight:600;">${t('group_sub')==='群聊'?'官方':'Off'}</span>` : '';
       const avatarBg = isGroup ? '' : avatarStyle(c);
       const dot = (isGroup || isOfficial) ? '' : `<span class="online-dot"></span>`;
@@ -771,29 +789,6 @@
         <div class="time">${fmtTime(c.last_at)}</div>${unreadHtml}`;
       li.addEventListener('click', () => openChat(c.type, c.id, c.username, isOfficial));
       list.appendChild(li);
-    }
-  }
-
-  function renderContacts() {
-    // NOTE: the group list used to be rendered here into #groups-list.
-    // Groups now live in the 群聊 block of the 聊天 pane, and the element
-    // no longer exists — referencing it here crashed renderContacts().
-    const frList = $('#friends-list');
-    if (!frList) return;
-    frList.innerHTML = '';
-    if (!state.friends.length) {
-      frList.innerHTML = `<li class="empty-hint"><p>${t('no_friends_yet') || '还没有好友'}</p><small>${t('tap_magnifier_to_search') || '点击右上角放大镜搜索'}</small></li>`;
-    }
-    for (const f of state.friends) {
-      const li = document.createElement('li'); li.className = 'list-item';
-      const online = isOnline(f.id);
-      const bg = avatarStyle(f);
-      const statusTag = online ? `<span style="font-size:10px;background:rgba(52,199,89,0.14);color:#15803d;padding:2px 7px;border-radius:6px;border:1px solid rgba(52,199,89,0.30);font-weight:600;">${t('online')}</span>` : '';
-      li.innerHTML = `<div class="avatar ${online?'online':''}"${bg ? ` style="${bg}"` : ''} data-peer="${f.id}">${avatarInner(f)}<span class="online-dot"></span></div>
-        <div class="meta"><div class="name">${escapeHtml(f.username)} ${statusTag}</div>
-        <div class="preview">${escapeHtml(f.bio || (online?t('online'):t('friend')))}</div></div>`;
-      li.addEventListener('click', () => openProfileModal(f));
-      frList.appendChild(li);
     }
   }
 
@@ -1946,7 +1941,7 @@
         renderSideMe();
         // The emoji shows up in every message row and in the friend list,
         // so those need repainting too.
-        renderContacts();
+        renderChats();
         renderMessages();
         msg.classList.add('ok'); msg.textContent = t('profile_saved');
         setTimeout(() => { closeModal('modal-profile'); openProfileModal(state.user); }, 600);
@@ -2072,14 +2067,14 @@
   }
   function onUserPresence({ user_id, online }) {
     if (online) state.online.add(user_id); else state.online.delete(user_id);
-    renderChats(); renderContacts();
+    renderChats();
     if (state.currentChat && state.currentChat.type==='user' && state.currentChat.id===user_id) renderChatHeader();
   }
   function onUserUpdated(u) {
     const f = state.friends.find(f => f.id === u.id);
     if (f) Object.assign(f, u);
     if (state.user && state.user.id === u.id) Object.assign(state.user, u);
-    renderContacts();
+    renderChats();
   }
   function onFriendRequest(req) {
     state.requests.unshift({id:req.id, from_id:req.from.id, from_username:req.from.username, from_avatar:req.from.avatar, created_at:req.created_at});
@@ -2097,13 +2092,13 @@
   function onFriendAdded(u) {
     if (!state.friends.some(f => f.id===u.id)) {
       state.friends.push({id:u.id, username:u.username, avatar:u.avatar, bio:u.bio, avatar_color:u.avatar_color});
-      renderContacts(); refreshConversations(); toast(t('toast_new_friend', u.username));
+      renderChats(); refreshConversations(); toast(t('toast_new_friend', u.username));
     }
   }
   function onGroupAdded(g) {
     if (!state.groups.some(x => x.id===g.groupId)) {
       state.groups.push({id:g.groupId, name:g.name, is_official:0, owner_id:null});
-      renderContacts(); refreshConversations(); toast(t('toast_new_group', g.name));
+      renderChats(); refreshConversations(); toast(t('toast_new_group', g.name));
     }
   }
   function onTypingStart({ conv_type, conv_id, user_id, username }) {
@@ -3355,12 +3350,11 @@
     // language toggle button in main app topbar
     $$('#lang-btn-top').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); setLang(lang === 'zh' ? 'en' : 'zh'); }));
 
-    // Sidebar navigation: 聊天 / Qwen / 通讯录
+    // Sidebar navigation: 聊天 / Qwen
     $$('.side-nav-item').forEach(btn => btn.addEventListener('click', () => {
       $$('.side-nav-item').forEach(b => b.classList.toggle('active', b === btn));
       const target = btn.dataset.pane;
       $$('.pane').forEach(p => p.classList.toggle('active', p.id === `pane-${target}`));
-      if (target === 'contacts') renderContacts();
       if (target === 'ai') openAiView();
       else closeAiView();
     }));
