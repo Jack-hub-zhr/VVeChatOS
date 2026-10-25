@@ -2993,8 +2993,8 @@ body.dark .tag-official { color: #fcd34d; background: rgba(245, 158, 11, 0.16); 
   flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
   border-radius: 14px;
-  background: var(--accent-grad);
-  box-shadow: 0 4px 14px rgba(76, 111, 255, 0.32);
+  /* No tile of its own — just the glowing ring, like the sidebar entry. */
+  background: transparent;
 }
 .ai-head-text { min-width: 0; }
 .ai-head-title {
@@ -3024,36 +3024,35 @@ body.dark .tag-official { color: #fcd34d; background: rgba(245, 158, 11, 0.16); 
   text-align: center;
   padding: 24px 12px;
 }
-/* The Qwen mark. A single 千 on the accent tile — a glyph renders the
-   same on every platform, unlike an emoji that changes with the OS. */
-.qwen-mark {
-  font-size: 19px;
-  line-height: 1;
-  font-weight: 800;
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+/* The Qwen mark: a black ring with a white glow around it. The ring
+   colour is a variable so it can go white on the blue active tile —
+   a black ring on blue is unreadable. */
+.qwen-ring {
+  display: block;
+  --qwen-ring: #0f172a;
+  filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.55));
 }
-.qwen-mark-lg { font-size: 23px; }
-.qwen-mark-xl { font-size: 36px; }
+.qwen-ring-lg { --qwen-ring: #0f172a; }
+/* On a dark background a black ring would vanish — flip it to light. */
+body.dark .qwen-ring { --qwen-ring: #e2e8f0; }
 
-/* The sidebar entry keeps the accent tile, the 千 sits on top of it. */
-.side-nav-ic-qwen { background: var(--accent-grad); color: #fff; }
-.side-nav-item.active .side-nav-ic-qwen { color: #fff; }
-body.dark .side-nav-ic-qwen { color: #fff; }
-
-.ai-welcome-mark {
-  width: 68px; height: 68px;
-  margin: 0 auto 14px;
-  display: flex; align-items: center; justify-content: center;
-  border-radius: 24px;
+/* The sidebar entry looks like the other entries: no tile of its own
+   until it is selected. */
+.side-nav-ic-qwen { background: transparent; }
+.side-nav-item.active .side-nav-ic-qwen {
   background: var(--accent-grad);
-  box-shadow: 0 8px 24px rgba(76, 111, 255, 0.34);
+  box-shadow: 0 3px 10px rgba(76, 111, 255, 0.30);
 }
+.side-nav-item.active .qwen-ring { --qwen-ring: #ffffff; }
+
+.ai-welcome-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #0b1220;
+}
+body.dark .ai-welcome-title { color: var(--ink); }
 .ai-setup-btn {
   margin-top: 16px;
   height: 36px;
@@ -3068,8 +3067,6 @@ body.dark .side-nav-ic-qwen { color: #fff; }
   cursor: pointer;
 }
 .ai-setup-btn:hover { background: var(--glass-bg-strong); color: var(--ink); }
-.ai-welcome-title { margin: 0; font-size: 15px; font-weight: 700; color: var(--ink); }
-.ai-welcome-sub { margin: 5px 0 0; font-size: 12.5px; color: var(--muted); line-height: 1.55; }
 
 .ai-row { display: flex; flex-direction: column; }
 .ai-bubble {

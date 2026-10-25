@@ -2481,14 +2481,20 @@
   function aiFillModels(models, defaultId) {
     const sel = $('#ai-model');
     if (!sel) return;
+    // The picker only offers the OVH public endpoint: it needs no key, so
+    // every user gets a working model without any setup.
+    const pool = models.filter((m) => m.provider === 'ovh');
+    const list = pool.length ? pool : models;
     const prefs = aiPrefs();
-    const wanted = prefs.model && models.some((m) => m.id === prefs.model)
+    const wanted = prefs.model && list.some((m) => m.id === prefs.model)
       ? prefs.model
-      : (defaultId || (models.find((m) => m.ready) || {}).id || '');
+      : (defaultId && list.some((m) => m.id === defaultId)
+          ? defaultId
+          : (list.find((m) => m.ready) || list[0] || {}).id || '');
     sel.innerHTML = '';
     // Group by provider so the dropdown reads like a menu, not a dump.
     const groups = [];
-    for (const m of models) {
+    for (const m of list) {
       let g = groups.find((x) => x.label === m.providerLabel);
       if (!g) { g = { label: m.providerLabel, items: [] }; groups.push(g); }
       g.items.push(m);
@@ -2508,7 +2514,7 @@
     // A stale preference (the model was removed) must not leave the
     // dropdown empty — fall back to the first usable entry.
     if (!sel.value) {
-      const firstReady = models.find((m) => m.ready) || models[0];
+      const firstReady = list.find((m) => m.ready) || list[0];
       if (firstReady) sel.value = firstReady.id;
     }
     if (sel.value) aiSetPrefs({ model: sel.value });

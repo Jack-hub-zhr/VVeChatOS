@@ -53,27 +53,40 @@ AI 面板接的**全部是通义千问（Qwen）模型**，走多家免费额度
 **所以：装完就能用，一行配置都不需要** —— OVH 的公共端点匿名可答。
 面板顶部会**如实显示当前回答问题的模型名**，不会拿别的模型冒充。
 
-#### 面板能干什么
+#### 面板里有什么
 
-- **模型**：下拉里每一项都是一个具体的 Qwen 模型，选哪个就回哪个
-- **思考档位**：只有接受 `thinking_budget` 的模型（百炼 Qwen3）会显示 低 / 中 / 高
-- **深度思考**：开关，决定模型要不要先想再答
-  - OVH 的模型**自带思考**且无法关闭（按钮常亮，点了会说明原因）
-  - SiliconFlow 的 Qwen3 支持真正的开关
-- **搜索**：开启后先联网查资料再回答
-  - 百炼走官方 `enable_search`
-  - 其余源由服务端检索（Bing / DuckDuckGo），可另配 Tavily 提升质量
+模型下拉只列 **OVH 公共端点**的三个 Qwen 模型（免密钥，开箱即用）：
 
-#### 想换更快的模型？三步
+| 模型 | 说明 |
+|---|---|
+| `Qwen3.6 27B` | 默认，通用均衡 |
+| `Qwen3.5 9B` | 最快的一档 |
+| `Qwen3.5 397B-A17B` | MoE 大模型 |
 
-1. **注册拿 key**（任选一家，都免费、不绑卡）：
-   - **SiliconFlow** → <https://cloud.siliconflow.cn> 注册 → 「API Keys」新建（`Qwen/Qwen3-8B` 永久免费）
-   - **魔搭 ModelScope** → <https://modelscope.cn> 注册 → 绑定阿里云并实名 → 访问令牌
-   - **Groq** → <https://console.groq.com/keys> 新建
-   - **Cerebras** → <https://cloud.cerebras.ai> 新建
-   - **阿里百炼** → <https://bailian.console.aliyun.com> 新建（新用户有免费额度，官方模型 + 联网搜索）
-2. 登录 VVeChat，点侧边栏 **Qwen** → 点 **「接入免费 Qwen 密钥」**
-3. 把 key 粘进去 → 保存 → **立即生效**（存在数据库里，不用改环境变量、不用重新部署）
+工具栏三个开关：
+
+- **深度思考**：OVH 的模型自带思考、无法关闭，按钮常亮并说明原因
+- **思考档位**：低 / 中 / 高 —— 只对接受 `thinking_budget` 的模型（百炼 Qwen3）有效
+- **搜索**：先联网查资料再回答。百炼走官方 `enable_search`，其余由服务端检索（DDG / Bing 多引擎回退，可另配 Tavily 提升质量）
+
+#### 想换更快的模型？
+
+界面里不再提供密钥输入框，**用环境变量配置**（Render → Service → Environment）：
+
+| Key | 说明 |
+|---|---|
+| `RELAY_SILICONFLOW_KEY` | SiliconFlow，`Qwen/Qwen3-8B` 永久免费 |
+| `RELAY_MODELSCOPE_KEY` | 魔搭 ModelScope 免费推理 |
+| `RELAY_GROQ_KEY` | Groq，`qwen3-32b` 极快 |
+| `RELAY_CEREBRAS_KEY` | Cerebras，约 2600 tok/s |
+| `DASHSCOPE_API_KEY` | 阿里百炼官方（联网搜索 + 思考档位） |
+| `TAVILY_API_KEY` | 搜索质量增强（可选） |
+
+拿到 key 的地方：<https://cloud.siliconflow.cn>、<https://modelscope.cn>、
+<https://console.groq.com/keys>、<https://cloud.cerebras.ai>、<https://bailian.console.aliyun.com>
+
+密钥也可以由管理员直接调 `POST /api/ai/config`（`{"source":"siliconflow","key":"..."}`）写进数据库，
+同样**立即生效，不用重新部署**。
 
 - 前端回答按 **每字符 0.1 秒** 逐字输出
 - 上游回传 `reasoning` / `reasoning_content` 时把思考过程单独放进「思考过程」卡片
