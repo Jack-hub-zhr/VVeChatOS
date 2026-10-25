@@ -9,6 +9,7 @@
   <meta name="theme-color" content="#8b5cf6" />
   <title>VVeChat</title>
   <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="boot550c.css" />
   <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><text x='32' y='44' font-family='system-ui' font-size='40' font-weight='800' text-anchor='middle' fill='%238b5cf6'>V</text></svg>" />
 </head>
 <body>
@@ -182,6 +183,16 @@
               </span>
               <span class="side-nav-label">Qwen</span>
             </button>
+            <button class="side-nav-item" data-pane="more" role="tab" title="更多">
+              <span class="side-nav-ic">
+                <svg viewBox="0 0 24 24" width="19" height="19" fill="currentColor" aria-hidden="true">
+                  <circle cx="5"  cy="12" r="1.9"/>
+                  <circle cx="12" cy="12" r="1.9"/>
+                  <circle cx="19" cy="12" r="1.9"/>
+                </svg>
+              </span>
+              <span class="side-nav-label">更多</span>
+            </button>
           </nav>
 
           <div class="search">
@@ -205,6 +216,36 @@
             </div>
             <ul id="chats-list" class="list"></ul>
             <div class="side-empty hidden" id="chats-empty">还没有群聊或好友</div>
+          </div>
+
+          <!-- ============ 更多：主题与外观设置 ============ -->
+          <div id="pane-more" class="pane">
+            <div class="side-section">
+              <span class="side-section-title">外观</span>
+            </div>
+            <div class="more-list">
+              <label class="more-row" for="toggle-boot-550c">
+                <span class="more-row-main">
+                  <span class="more-row-title">550C 启动动画主题</span>
+                  <span class="more-row-desc">重新进入账号时用 550C 开机动画替代欢迎页，并切换为琥珀色终端风格</span>
+                </span>
+                <span class="more-switch">
+                  <input type="checkbox" id="toggle-boot-550c" />
+                  <span class="more-switch-track"><span class="more-switch-knob"></span></span>
+                </span>
+              </label>
+            </div>
+            <div class="side-section">
+              <span class="side-section-title">关于</span>
+            </div>
+            <div class="more-list">
+              <div class="more-row static">
+                <span class="more-row-main">
+                  <span class="more-row-title">VVeChat OS</span>
+                  <span class="more-row-desc">550C 主题移植自 yannicksong0106/dsh-550c-boot（MIT）</span>
+                </span>
+              </div>
+            </div>
           </div>
 
         </aside>
@@ -489,6 +530,7 @@
        so there is no third-party CDN to fail (or be blocked). -->
   <script src="/socket.io/socket.io.js"></script>
   <script src="config.js"></script>
+  <script src="boot550c.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

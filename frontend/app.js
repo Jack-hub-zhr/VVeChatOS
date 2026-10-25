@@ -505,16 +505,53 @@
   function showApp()  { $('#auth-view').classList.add('hidden');  $('#app-view').classList.remove('hidden'); document.body.classList.add('app-active'); }
 
   // ----- Theme: auto / light / dark (driven by prefers-color-scheme + manual override) -----
+  function currentThemeMode() {
+    try { return localStorage.getItem('vve:theme') || 'auto'; } catch (_) { return 'auto'; }
+  }
+  function boot550cOn() { return !!(window.Boot550C && window.Boot550C.enabled()); }
   function applyTheme(mode) {
     const mql = window.matchMedia('(prefers-color-scheme: dark)');
     const systemDark = mql.matches;
-    const wantDark = mode === 'dark' || (mode === 'auto' && systemDark);
+    // The 550C theme is a dark terminal look — it always wins over the
+    // light/dark picker.
+    const c550 = boot550cOn();
+    const wantDark = c550 || mode === 'dark' || (mode === 'auto' && systemDark);
     document.body.classList.toggle('dark', wantDark);
     document.body.classList.remove('theme-light', 'theme-dark', 'theme-auto');
     document.body.classList.add('theme-' + mode);
+    document.body.classList.toggle('theme-550c', c550);
     // Update checkmarks in the menu
     $$('.theme-menu-item').forEach(b => b.classList.toggle('active', b.dataset.theme === mode));
     if (window.LiquidGlass) { try { window.LiquidGlass.markDirty(); } catch (_) {} }
+  }
+  // ----- 550C boot theme: local (instant) + server (per-account) -----
+  // The switch is stored in localStorage so the boot animation can be
+  // decided before we know who is signed in, and mirrored to the
+  // account so it follows the user to other devices.
+  async function saveBoot550cToServer(on) {
+    if (!state.token) return;
+    try {
+      const r = await api('/me', { method: 'PUT', body: { boot_550c: on ? 1 : 0 } });
+      if (r && r.user) {
+        state.user = r.user;
+        try { localStorage.setItem('vve:user', JSON.stringify(state.user)); } catch (_) {}
+      }
+    } catch (e) { console.warn('[VVeChat] boot_550c save failed:', e); }
+  }
+  function applyBoot550cFromUser(user) {
+    if (!user || user.boot_550c === undefined || user.boot_550c === null) return false;
+    // Once the user has made the choice on this device, the local
+    // value wins — the server copy is a backup for other devices, not
+    // an override that could yank the switch back mid-session.
+    let touched = false;
+    try { touched = localStorage.getItem('vve:boot550c') !== null; } catch (_) {}
+    const on = touched ? boot550cOn() : !!user.boot_550c;
+    if (on === boot550cOn()) return false;
+    window.Boot550C.setEnabled(on);
+    applyTheme(currentThemeMode());
+    const t = $('#toggle-boot-550c');
+    if (t) t.checked = on;
+    return true;
   }
   function initTheme() {
     let saved = 'auto';
@@ -3324,14 +3361,30 @@
     state.user=null; state.token=null; state.conversations=[]; state.friends=[]; state.groups=[]; state.requests=[];
     state.currentChat=null; state.messagesByConv={}; state.online.clear();
     localStorage.removeItem('vve:token'); localStorage.removeItem('vve:user');
-    if (state.socket) state.socket.disconnect();
+    if (state.socket) { try { state.socket.disconnect(); } catch (_) {} }
     showAuth();
     showSplashAgain();   // bring back the big-Hello splash on logout
   }
   function tryRestore() {
     const t = localStorage.getItem('vve:token');
     const u = localStorage.getItem('vve:user');
-    if (t && u) { try { state.token=t; state.user=JSON.parse(u); enterApp(); } catch (e) { showAuth(); } }
+    if (t && u) {
+      try {
+        state.token = t; state.user = JSON.parse(u);
+        applyBoot550cFromUser(state.user);
+        enterApp();
+        // Pull the account-level flag so the setting follows the user
+        // to other devices.  Failure here is harmless — the local
+        // value already decided this session's boot animation.
+        api('/me').then(r => {
+          if (r && r.user) {
+            applyBoot550cFromUser(r.user);
+            state.user = r.user;
+            try { localStorage.setItem('vve:user', JSON.stringify(state.user)); } catch (_) {}
+          }
+        }).catch(() => {});
+      } catch (e) { showAuth(); }
+    }
     else showAuth();
   }
 
@@ -3349,6 +3402,19 @@
 
     // language toggle button in main app topbar
     $$('#lang-btn-top').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); setLang(lang === 'zh' ? 'en' : 'zh'); }));
+
+    // 「更多」面板：550C 启动动画主题开关
+    const t550 = $('#toggle-boot-550c');
+    if (t550) {
+      t550.checked = boot550cOn();
+      t550.addEventListener('change', async () => {
+        const on = t550.checked;
+        window.Boot550C.setEnabled(on);
+        applyTheme(currentThemeMode());
+        if (window.toast) toast(on ? '已开启 550C 启动动画主题' : '已关闭 550C 启动动画主题');
+        saveBoot550cToServer(on);
+      });
+    }
 
     // Sidebar navigation: 聊天 / Qwen
     $$('.side-nav-item').forEach(btn => btn.addEventListener('click', () => {
@@ -3575,6 +3641,9 @@
           state.user = data.user; state.token = data.token;
           localStorage.setItem('vve:token', state.token);
           localStorage.setItem('vve:user', JSON.stringify(state.user));
+          // The account owns the 550C flag — adopt it on sign-in so the
+          // next visit boots the animation the way this account wants.
+          applyBoot550cFromUser(data.user);
           msgEl.classList.add('ok');
           msgEl.textContent = authMode === 'login' ? t('auth_ok_login') : t('auth_ok_register');
           btn.textContent = '✓';
@@ -3642,11 +3711,25 @@
   function initSplash() {
     const splash = $('#hello-splash');
     if (!splash) return;
-    // If user is already restored (has token), skip the splash.
+    let hasSession = false;
     try {
-      const hasSession = localStorage.getItem('vve:token') && localStorage.getItem('vve:user');
-      if (hasSession) { splash.classList.add('hidden'); splashDismissed = true; return; }
+      hasSession = !!(localStorage.getItem('vve:token') && localStorage.getItem('vve:user'));
     } catch (_) {}
+
+    // 550C theme — the boot animation replaces the Hello splash entirely.
+    // It plays on top of the login screen / restored session and fades
+    // out on its own, so the user lands straight in the app.
+    if (boot550cOn() && window.Boot550C) {
+      splash.classList.add('hidden');
+      splash.style.display = 'none';
+      splash.style.pointerEvents = 'none';
+      splashDismissed = true;
+      window.Boot550C.play();
+      return;
+    }
+
+    // If user is already restored (has token), skip the splash.
+    if (hasSession) { splash.classList.add('hidden'); splashDismissed = true; return; }
     const dismiss = () => {
       if (splashDismissed) return;
       splashDismissed = true;
@@ -3660,6 +3743,13 @@
   function showSplashAgain() {
     // Called on logout — re-create the splash overlay
     splashDismissed = false;
+    // 550C theme — play the boot animation instead of the Hello splash.
+    if (boot550cOn() && window.Boot550C) {
+      const old = $('#hello-splash');
+      if (old) old.remove();
+      window.Boot550C.play();
+      return;
+    }
     let splash = $('#hello-splash');
     if (splash) return; // already there
     splash = document.createElement('div');

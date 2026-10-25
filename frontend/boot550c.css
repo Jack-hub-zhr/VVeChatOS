@@ -1,0 +1,484 @@
+/* ============================================================
+   550C BOOT THEME
+   ------------------------------------------------------------
+   Visual layer ported from:
+     yannicksong0106/dsh-550c-boot
+     MIT License — Copyright (c) 2026 Ziyang Song
+   The upstream project is a DeepSeek-Harness plugin; only the
+   look & feel (palette, CRT texture, boot animation) is reused.
+   ============================================================ */
+
+:root {
+  --c550-bg:         #050403;
+  --c550-bg-panel:   #0a0805;
+  --c550-bg-win:     #0d0a06;
+  --c550-amber:      #e8a020;
+  --c550-amber-b:    #ffc043;
+  --c550-amber-d:    #8a5e10;
+  --c550-amber-fade: rgba(232, 160, 32, .35);
+  --c550-text:       #d8c090;
+  --c550-text-dim:   #8a7248;
+  --c550-text-faint: #4a3f28;
+  --c550-red:        #e05030;
+  --c550-red-b:      #ff7050;
+  --c550-green:      #b8c840;
+  --c550-cyan:       #4fd1c5;
+  --c550-mono: "SFMono-Regular", "JetBrains Mono", "Roboto Mono", Menlo, Consolas,
+               "Liberation Mono", "Courier New", "Noto Sans Mono CJK SC",
+               "Sarasa Mono SC", "Microsoft YaHei", monospace;
+}
+
+/* ============================================================
+   1. PALETTE OVERRIDE
+   The whole app is driven by CSS custom properties, so the 550C
+   look is mostly a matter of re-painting the ramp.  Terminal
+   styling also wants hard edges + monospace, so the radius
+   ladder and font stack are swapped too.
+   ============================================================ */
+body.theme-550c,
+body.dark.theme-550c {
+  --bg: #050403;
+  --bg2: #0a0805;
+  --bg3: #0d0a06;
+
+  --ink: #d8c090;
+  --ink-2: #b8a374;
+  --muted: #8a7248;
+  --muted-2: #5b4c2e;
+
+  /* Frosted glass becomes a hard-edged terminal panel. */
+  --glass-bg: rgba(10, 8, 5, 0.86);
+  --glass-bg-strong: rgba(13, 10, 6, 0.94);
+  --glass-bg-soft: rgba(232, 160, 32, 0.05);
+  --glass-bg-frost: rgba(232, 160, 32, 0.03);
+  --glass-border: rgba(232, 160, 32, 0.20);
+  --glass-border-soft: rgba(232, 160, 32, 0.11);
+  --glass-blur: 0px;
+  --glass-blur-strong: 0px;
+  --glass-shadow: 0 0 0 1px rgba(0, 0, 0, 0.75);
+  --glass-shadow-lg: 0 0 0 1px rgba(232, 160, 32, 0.14);
+  --glass-highlight: inset 0 0 0 1px rgba(232, 160, 32, 0.07);
+  --glass-chromatic: none;
+
+  --accent: #e8a020;
+  --accent2: #ffc043;
+  --accent-grad: linear-gradient(135deg, #e8a020, #ffc043);
+  --accent-soft: rgba(232, 160, 32, 0.13);
+  --accent-glow: rgba(232, 160, 32, 0.35);
+
+  --online: #b8c840;
+  --warn: #d8a020;
+  --danger: #e05030;
+  --success: #b8c840;
+
+  --bubble-me: linear-gradient(135deg, #e8a020, #ffc043);
+  --bubble-me-text: #1c1305;
+  --bubble-them-bg: rgba(13, 10, 6, 0.92);
+  --bubble-them-text: #d8c090;
+
+  --r-ctrl: 3px;
+  --r-row: 3px;
+  --r-card: 4px;
+  --r-panel: 4px;
+  --r-pill: 3px;
+  --r-input: 3px;
+
+  --font: var(--c550-mono);
+  --font-display: var(--c550-mono);
+}
+
+/* ============================================================
+   2. CRT BACKDROP
+   Kill the wallpaper, drop in a dark grid + amber scanlines.
+   ============================================================ */
+body.dark.theme-550c {
+  background-color: #050403;
+  background-image:
+    radial-gradient(ellipse 900px 520px at 50% -10%, rgba(232, 160, 32, .10), transparent 70%),
+    linear-gradient(rgba(232, 160, 32, .035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(232, 160, 32, .035) 1px, transparent 1px);
+  background-size: auto, 44px 44px, 44px 44px;
+  background-repeat: no-repeat, repeat, repeat;
+  background-attachment: fixed;
+}
+body.dark.theme-550c::before {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    rgba(232, 160, 32, .035) 0,
+    rgba(232, 160, 32, .035) 1px,
+    transparent 1px,
+    transparent 4px
+  );
+  background-repeat: repeat;
+  background-size: auto;
+  background-position: 0 0;
+  animation: none;
+  opacity: 1;
+}
+/* CRT vignette — the corners fall off into black */
+body.dark.theme-550c::after {
+  background: radial-gradient(ellipse 120% 100% at 50% 45%, transparent 45%, rgba(0, 0, 0, .55) 100%);
+}
+/* The drifting wallpaper animation is pointless on a static grid. */
+body.dark.theme-550c.app-active::before {
+  animation: none;
+  width: 100%; height: 100%;
+  top: 0; left: 0;
+}
+
+/* ============================================================
+   3. TERMINAL FLAVOUR
+   Small touches that sell the aesthetic without rewriting the
+   whole stylesheet.
+   ============================================================ */
+body.theme-550c ::selection {
+  background: rgba(232, 160, 32, .32);
+  color: #fff5e0;
+}
+body.theme-550c .side-nav-item.active {
+  color: var(--c550-amber-b);
+}
+body.theme-550c .msg-bubble.me {
+  box-shadow: 0 0 0 1px rgba(232, 160, 32, .30);
+}
+body.theme-550c .chat-input,
+body.theme-550c textarea,
+body.theme-550c input {
+  caret-color: var(--c550-amber-b);
+}
+body.theme-550c .brand-text,
+body.theme-550c .auth-card h1 {
+  letter-spacing: .12em;
+}
+
+/* ============================================================
+   4. BOOT ANIMATION
+   Full-screen overlay that plays the 550C logo write-on.
+   ============================================================ */
+#boot550c-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: #050403;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity .5s ease;
+  overflow: hidden;
+}
+#boot550c-overlay.boot550c-in {
+  opacity: 1;
+}
+#boot550c-overlay.boot550c-out {
+  opacity: 0;
+  pointer-events: none;
+}
+/* Scanlines over the whole boot screen */
+#boot550c-overlay::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(232, 160, 32, .035) 0,
+    rgba(232, 160, 32, .035) 1px,
+    transparent 1px,
+    transparent 4px
+  );
+  pointer-events: none;
+  z-index: 3;
+}
+/* Slow radial amber bloom behind the logo */
+#boot550c-overlay::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 42%, rgba(232, 160, 32, .12), transparent 55%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+#boot550c-overlay .boot550c-stage {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 26px;
+}
+#boot550c-overlay .boot550c-stage svg {
+  width: min(680px, 88vw);
+  height: auto;
+  overflow: visible;
+}
+#boot550c-overlay .boot550c-logo path,
+#boot550c-overlay .boot550c-logo .white {
+  fill: #fff;
+  stroke: none;
+}
+#boot550c-overlay .boot550c-logo.finished .white {
+  animation: c550GlowW 2.6s ease-in-out infinite;
+}
+#boot550c-overlay .boot550c-logo.finished .red {
+  animation: c550GlowR 2.6s ease-in-out infinite;
+}
+@keyframes c550GlowW {
+  0%, 100% { filter: drop-shadow(0 0 6px rgba(255, 255, 255, .45)); }
+  50%      { filter: drop-shadow(0 0 14px rgba(255, 255, 255, .90)); }
+}
+@keyframes c550GlowR {
+  0%, 100% { filter: drop-shadow(0 0 8px rgba(224, 80, 48, .60)); }
+  50%      { filter: drop-shadow(0 0 18px rgba(255, 112, 80, 1)); }
+}
+
+#boot550c-overlay .boot550c-text {
+  font-family: var(--c550-mono);
+  color: rgba(216, 192, 144, .55);
+  font-size: 12px;
+  letter-spacing: .4em;
+  padding-left: .4em;
+  text-transform: uppercase;
+  opacity: 0;
+  white-space: nowrap;
+}
+#boot550c-overlay .boot550c-text.show {
+  animation: c550FadeIn .6s ease forwards;
+}
+#boot550c-overlay .boot550c-text .cursor {
+  display: inline-block;
+  width: 6px;
+  height: 12px;
+  background: var(--c550-amber-b);
+  margin-left: 8px;
+  vertical-align: -2px;
+  animation: c550Blink 1s steps(1) infinite;
+}
+@keyframes c550FadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes c550Blink {
+  0%, 49%   { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+/* Sub-lines that type out under the logo */
+#boot550c-overlay .boot550c-log {
+  font-family: var(--c550-mono);
+  font-size: 10.5px;
+  line-height: 1.7;
+  letter-spacing: .12em;
+  color: var(--c550-text-dim);
+  text-align: center;
+  min-height: 3.4em;
+  white-space: pre;
+}
+#boot550c-overlay .boot550c-log b {
+  color: var(--c550-amber);
+  font-weight: 400;
+}
+#boot550c-overlay .boot550c-log .ok { color: var(--c550-green); }
+#boot550c-overlay .boot550c-log .warn { color: var(--c550-amber-b); }
+#boot550c-overlay .boot550c-hint {
+  position: absolute;
+  bottom: 8%;
+  left: 0; right: 0;
+  text-align: center;
+  font-family: var(--c550-mono);
+  font-size: 10px;
+  letter-spacing: .3em;
+  color: var(--c550-text-faint);
+  opacity: 0;
+  transition: opacity .6s ease;
+}
+#boot550c-overlay .boot550c-hint.show { opacity: 1; }
+
+/* ============================================================
+   5. CONTAINER OVERRIDES
+   The base stylesheet hard-codes frosted white panels for the
+   light theme.  On a near-black terminal background they read as
+   grey haze, so they are repainted as dark amber-edged panels.
+   ============================================================ */
+body.dark.theme-550c .app-shell {
+  background-color: rgba(5, 4, 3, .58);
+  background-image:
+    linear-gradient(rgba(232, 160, 32, .040) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(232, 160, 32, .040) 1px, transparent 1px);
+  background-size: 44px 44px;
+  background-position: 0 0;
+}
+/* Scanlines + vignette live inside the shell — the shell paints over
+   the body background, so anything on <body> would never be seen. */
+body.dark.theme-550c .app-shell::before,
+body.dark.theme-550c .app-shell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 6;
+}
+body.dark.theme-550c .app-shell::before {
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(232, 160, 32, .030) 0,
+    rgba(232, 160, 32, .030) 1px,
+    transparent 1px,
+    transparent 4px
+  );
+}
+body.dark.theme-550c .app-shell::after {
+  background: radial-gradient(ellipse 125% 105% at 50% 45%, transparent 42%, rgba(0, 0, 0, .55) 100%);
+}
+body.dark.theme-550c .topbar {
+  background: rgba(10, 8, 5, 0.82);
+  border-bottom-color: rgba(232, 160, 32, .18);
+}
+body.dark.theme-550c .left-pane { background: rgba(10, 8, 5, 0.38); }
+body.dark.theme-550c .right-pane { background: rgba(5, 4, 3, 0.16); }
+body.dark.theme-550c .tabbar { background: rgba(10, 8, 5, 0.55); }
+body.dark.theme-550c .chat-header { background: rgba(10, 8, 5, 0.55); }
+body.dark.theme-550c .chat-composer { background: rgba(10, 8, 5, 0.55); }
+
+body.dark.theme-550c .search {
+  background: rgba(232, 160, 32, .04);
+  border-color: rgba(232, 160, 32, .16);
+}
+body.dark.theme-550c .search:focus-within {
+  background: rgba(232, 160, 32, .07);
+  border-color: rgba(232, 160, 32, .40);
+}
+body.dark.theme-550c .chat-composer input[type="text"] {
+  background: rgba(5, 4, 3, .60);
+  border-color: rgba(232, 160, 32, .16);
+}
+body.dark.theme-550c .chat-composer input[type="text"]:focus {
+  border-color: rgba(232, 160, 32, .40);
+}
+body.dark.theme-550c .field textarea {
+  background: rgba(5, 4, 3, .60);
+  border-color: rgba(232, 160, 32, .16);
+}
+body.dark.theme-550c .field textarea:focus {
+  border-color: rgba(232, 160, 32, .40);
+}
+body.dark.theme-550c .icon-btn {
+  background: rgba(232, 160, 32, .04);
+  border-color: rgba(232, 160, 32, .13);
+}
+body.dark.theme-550c .icon-btn:hover {
+  background: rgba(232, 160, 32, .11);
+  border-color: rgba(232, 160, 32, .26);
+}
+body.dark.theme-550c .plus-action:hover,
+body.dark.theme-550c .btn-ghost:hover,
+body.dark.theme-550c .msg-dots:hover {
+  background: rgba(232, 160, 32, .10);
+}
+body.dark.theme-550c .side-nav-item.active .side-nav-ic {
+  box-shadow: 0 0 14px rgba(232, 160, 32, .45);
+}
+body.dark.theme-550c .side-nav-item.active {
+  box-shadow: inset 2px 0 0 var(--c550-amber), var(--glass-highlight);
+}
+body.dark.theme-550c .icon-btn-accent {
+  background: var(--accent-grad);
+  box-shadow: 0 6px 18px rgba(232, 160, 32, .32), inset 0 1px 0 rgba(255, 255, 255, .35);
+}
+body.dark.theme-550c .icon-btn-accent:hover {
+  box-shadow: 0 6px 22px rgba(232, 160, 32, .48), inset 0 1px 0 rgba(255, 255, 255, .35);
+}
+/* Hard-edged square buttons — the terminal look has no pills. */
+body.dark.theme-550c .ai-send {
+  border-radius: 3px;
+  color: #1c1305;
+  box-shadow: 0 3px 14px rgba(232, 160, 32, .34);
+}
+body.dark.theme-550c .ai-send:not(:disabled):hover {
+  box-shadow: 0 3px 20px rgba(232, 160, 32, .52);
+}
+/* Selected conversation row — amber instead of the blue default. */
+body.dark.theme-550c #chats-list li.active,
+body.dark.theme-550c #groups-list li.active,
+body.dark.theme-550c #friends-list li.active,
+body.dark.theme-550c #unread-list li.active {
+  background: rgba(232, 160, 32, .13);
+  box-shadow: inset 2px 0 0 var(--c550-amber);
+}
+/* Login card — the frosted white slab reads as a hole in the terminal. */
+body.dark.theme-550c .auth-card {
+  background: rgba(10, 8, 5, .88);
+  border-color: rgba(232, 160, 32, .28);
+  box-shadow:
+    inset 0 1px 0 rgba(232, 160, 32, .12),
+    0 0 0 1px rgba(0, 0, 0, .6),
+    0 18px 60px rgba(0, 0, 0, .62),
+    0 0 70px rgba(232, 160, 32, .07);
+}
+
+/* ============================================================
+   6. RECOLOUR THE HARD-CODED BLUE
+   The base stylesheet bakes Tailwind-blue into a handful of
+   focus rings, shadows and labels.  Those do not read from the
+   accent variables, so they are remapped to amber here.
+   ============================================================ */
+body.dark.theme-550c #hello-cycler {
+  background: linear-gradient(90deg, #e8a020, #ffc043, #e8a020);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+body.dark.theme-550c .tab.active {
+  background: rgba(232, 160, 32, .16);
+  color: var(--c550-amber-b);
+  box-shadow: none;
+}
+body.dark.theme-550c .tab2.active {
+  background: rgba(232, 160, 32, .18);
+  color: var(--c550-amber-b);
+}
+body.dark.theme-550c .btn-primary {
+  box-shadow: 0 8px 24px rgba(232, 160, 32, .30), inset 0 1px 0 rgba(255, 255, 255, .25);
+}
+body.dark.theme-550c .btn-primary:hover {
+  box-shadow: 0 12px 32px rgba(232, 160, 32, .42);
+}
+body.dark.theme-550c .btn-ok {
+  box-shadow: 0 4px 12px rgba(232, 160, 32, .30);
+}
+body.dark.theme-550c .brand-dot {
+  box-shadow: 0 4px 14px rgba(232, 160, 32, .35);
+}
+body.dark.theme-550c .brand-text {
+  text-shadow: 0 2px 12px rgba(232, 160, 32, .18);
+}
+body.dark.theme-550c .brand-mark {
+  box-shadow: 0 0 36px var(--accent-glow), 0 8px 24px rgba(232, 160, 32, .35);
+}
+body.dark.theme-550c .field textarea:focus,
+body.dark.theme-550c .search:focus-within,
+body.dark.theme-550c .chat-composer input[type="text"]:focus {
+  border-color: rgba(232, 160, 32, .45);
+  box-shadow: 0 0 0 4px rgba(232, 160, 32, .08);
+}
+body.dark.theme-550c .msg-row.me .msg-bubble {
+  box-shadow: 0 6px 20px rgba(232, 160, 32, .22);
+}
+body.dark.theme-550c .msg-quote {
+  background: rgba(232, 160, 32, .06);
+}
+body.dark.theme-550c .msg-action-forward,
+body.dark.theme-550c .msg-action-forward .msg-action-label {
+  color: var(--c550-amber);
+}
+body.dark.theme-550c .msg-action-forward:hover {
+  background: rgba(232, 160, 32, .12);
+  color: var(--c550-amber-b);
+}
+body.dark.theme-550c .empty-illus {
+  background: linear-gradient(135deg, rgba(232, 160, 32, .14), rgba(232, 160, 32, .08));
+}

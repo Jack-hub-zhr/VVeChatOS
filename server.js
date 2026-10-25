@@ -148,6 +148,8 @@ function ensureColumn(table, col, decl) {
 }
 ensureColumn('users', 'bio', 'TEXT');
 ensureColumn('users', 'avatar_color', 'TEXT');
+// 550C boot theme — per-account preference for the startup animation
+ensureColumn('users', 'boot_550c', 'INTEGER NOT NULL DEFAULT 0');
 ensureColumn('messages', 'type', "TEXT NOT NULL DEFAULT 'text'");
 ensureColumn('messages', 'meta', 'TEXT');
 ensureColumn('messages', 'reply_to', 'INTEGER');
@@ -163,6 +165,7 @@ function userPublic(u) {
     bio: u.bio || null,
     avatar_color: u.avatar_color || null,
     avatar_emoji: u.avatar_emoji || null,
+    boot_550c: u.boot_550c ? 1 : 0,
     is_admin: u.username === ADMIN_USERNAME,
   };
 }
@@ -1435,7 +1438,7 @@ app.get('/api/me', authRequired, (req, res) => {
 });
 
 app.put('/api/me', rateLimit('write'), authRequired, (req, res) => {
-  const { bio, username, avatar_color, avatar, avatar_emoji } = req.body || {};
+  const { bio, username, avatar_color, avatar, avatar_emoji, boot_550c } = req.body || {};
   const u = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
   if (!u) return res.status(404).json({ error: 'user not found' });
   const updates = [];
@@ -1478,6 +1481,10 @@ app.put('/api/me', rateLimit('write'), authRequired, (req, res) => {
       }
       updates.push('avatar_emoji = ?'); values.push(e);
     }
+  }
+  // boot_550c: 550C startup-animation theme toggle (0 = off, 1 = on)
+  if (boot_550c !== undefined) {
+    updates.push('boot_550c = ?'); values.push(boot_550c ? 1 : 0);
   }
   if (typeof username === 'string' && username.trim() && username !== u.username) {
     if (username.length < 2 || username.length > 24) return res.status(400).json({ error: '用户名长度需 2-24' });
