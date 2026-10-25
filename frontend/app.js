@@ -2811,6 +2811,8 @@
           } else if (j.type === 'search') {
             // The server tells us what the search actually produced, so the
             // answer never looks like it came from nowhere.
+            // A skipped search (a greeting, say) has nothing to report.
+            if (j.skipped) return;
             const note = document.createElement('div');
             note.className = 'ai-search-note';
             note.textContent = j.provider

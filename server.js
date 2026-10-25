@@ -794,6 +794,20 @@ function searchTerms(query) {
   return terms;
 }
 
+// A greeting or a very short question does not need the internet. Searching
+// for "你好" only produces noise — and the model then wastes its thinking
+// on deciding whether it is supposed to use that noise.
+function isTrivialQuery(raw) {
+  const t = String(raw || '').trim().toLowerCase()
+    .replace(/[\s。.!！?？~～,，、]/g, '');
+  if (!t) return true;
+  // Chinese short phrases ("你好" / "你是谁" / "在吗")
+  if (t.length <= 4 && !/[a-z]{4,}/.test(t)) return true;
+  // Small talk in English
+  if (/^(hi|hello|hey|yo|ok|okay|thanks|thankyou|test|bot)$/.test(t)) return true;
+  return false;
+}
+
 // The question the user asked is not always the best thing to hand to a
 // search engine: "Who won the 2022 World Cup? One sentence plus the source."
 // drags the instruction along. Take the question part first, and keep a
@@ -1008,14 +1022,15 @@ function relayStream(res, upstreamBody, source, opts) {
     // On success the response is closed here. On failure it is left open
     // so the caller can fall back to another source; the caller closes it
     // once every source has been tried.
+    // NOTE: the response is NOT closed here. The caller has to decide
+    // whether this source actually answered — a model that only thought
+    // and never wrote anything must not close the door on the sources
+    // behind it. Closing it here is what made the client show
+    // "没有收到回复" while the relay was still trying to recover.
     const finish = (err) => {
       if (done) return;
       done = true;
       if (firstTimer) { clearTimeout(firstTimer); firstTimer = null; }
-      if (!err) {
-        try { res.write(JSON.stringify({ type: 'done', source: source.name, error: null }) + '\n'); } catch (_) {}
-        try { res.end(); } catch (_) {}
-      }
       resolve(err ? { ok: false, error: err } : { ok: true, error: null });
     };
     const write = (obj) => {
@@ -1134,6 +1149,12 @@ app.post('/api/ai/chat', rateLimit('write'), authRequired, async (req, res) => {
   const getSearchCtx = async () => {
     if (searchCtx !== null) return searchCtx;
     const q = userMsg.slice(0, 200);
+    if (isTrivialQuery(q)) {
+      // Nothing worth searching for — say so and move on.
+      try { res.write(JSON.stringify({ type: 'search', count: 0, skipped: true }) + '\n'); } catch (_) {}
+      searchCtx = '';
+      return searchCtx;
+    }
     const results = await webSearch(q, 5);
     // Tell the client the search really happened — otherwise a model that
     // already knew the answer looks exactly like one that never searched.
@@ -1146,8 +1167,9 @@ app.post('/api/ai/chat', rateLimit('write'), authRequired, async (req, res) => {
     }
     const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ');
     searchCtx = '\n\n【联网搜索结果】以下是关于「' + q + '」的实时搜索结果（' + stamp + ' UTC）。' +
-      '请优先依据这些内容回答，并在结尾用「参考来源」列出用到的标题 + 链接。' +
-      '如果这些结果与问题无关，请直接说明没有查到相关信息，不要硬套：\n' +
+      '这些结果只是参考：如果与问题无关，请直接忽略、基于你自己的知识回答，' +
+      '不要为了「用上搜索结果」而硬套；如果确实相关，就依据它们回答，' +
+      '并在结尾用「参考来源」列出用到的标题 + 链接：\n' +
       results.map((r, i) => (i + 1) + '. ' + r.title + '\n   ' + r.url + '\n   ' + r.snippet).join('\n');
     return searchCtx;
   };
@@ -1251,8 +1273,14 @@ app.post('/api/ai/chat', rateLimit('write'), authRequired, async (req, res) => {
           // help, so move on right away.
           if (!gotContent) {
             errors.push(`${entry.label}: 只返回了思考过程，没有正文`);
+            // Drop the dead-end trace so the next model starts clean.
+            try { res.write(JSON.stringify({ type: 'reset' }) + '\n'); } catch (_) {}
+            wrote = false;
             break;
           }
+          // This one answered. Close the stream properly.
+          try { res.write(JSON.stringify({ type: 'done', source: entry.provider, error: null }) + '\n'); } catch (_) {}
+          try { res.end(); } catch (_) {}
           return;
         }
         // The source stalled or died mid-stream. Nothing was written to
@@ -1266,6 +1294,8 @@ app.post('/api/ai/chat', rateLimit('write'), authRequired, async (req, res) => {
           try { res.write(JSON.stringify({ type: 'reset' }) + '\n'); } catch (_) {}
           wrote = false;
         } else if (wrote) {
+          // Part of an answer already reached the client — finish it here.
+          try { res.write(JSON.stringify({ type: 'done', source: entry.provider, error: null }) + '\n'); } catch (_) {}
           try { res.end(); } catch (_) {}
           return;
         }
