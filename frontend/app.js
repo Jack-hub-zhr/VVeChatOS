@@ -1290,7 +1290,9 @@
     // unreachable on iPad/iPhone.
     // The three dots are laid out HORIZONTALLY and live inside .msg-content
     // so they sit directly beneath the time, aligned with it.
-    const dotsHtml = `<button class="msg-dots" type="button" aria-label="更多操作" title="更多操作">
+    // A deleted message has nothing to act on, so it gets no dots at all
+    // (a visible button that does nothing is worse than no button).
+    const dotsHtml = m.is_deleted ? '' : `<button class="msg-dots" type="button" aria-label="更多操作" title="更多操作">
       <svg viewBox="0 0 34 6" width="34" height="6" fill="currentColor">
         <circle cx="4" cy="3" r="2.2"/><circle cx="17" cy="3" r="2.2"/><circle cx="30" cy="3" r="2.2"/>
       </svg>
@@ -2737,12 +2739,7 @@
     // of text — no dots, no bubble.
     const waiting = document.createElement('div');
     waiting.className = 'ai-waiting';
-    // Same three dots as the thinking card: they live in the DOM the whole
-    // time and only show when the mouse comes near.
-    waiting.innerHTML = '<span class="ai-dots"><i></i><i></i><i></i></span>';
-    waiting.appendChild(document.createTextNode(
-      prefs.search ? '正在联网搜索…' : '正在思考…'
-    ));
+    waiting.textContent = prefs.search ? '正在联网搜索…' : '正在思考…';
     (aiLogEl() || document.body).appendChild(waiting);
 
     let answer = '';

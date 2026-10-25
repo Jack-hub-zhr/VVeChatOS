@@ -2470,11 +2470,15 @@ body.dark .chat-empty-mark {
   color: var(--muted);
   font-size: 0;
   cursor: pointer;
-  opacity: 0;
+  /* Always there — this button is the ONLY way into the action bar
+     (forward / reply / copy / delete), so hiding it until you happen to
+     hover the message made 引用 practically unreachable. It stays quiet
+     on its own and comes forward when the mouse comes near. */
+  opacity: 0.42;
   transition: opacity 0.18s ease, background 0.18s ease, transform 0.15s ease;
   -webkit-tap-highlight-color: transparent;
 }
-.msg-row:hover .msg-dots { opacity: 0.55; }
+.msg-row:hover .msg-dots { opacity: 0.85; }
 .msg-dots:hover { opacity: 1 !important; background: rgba(255, 255, 255, 0.5); }
 .msg-dots:active { transform: scale(0.9); }
 body.dark .msg-dots:hover { background: rgba(255, 255, 255, 0.10); }
@@ -3125,46 +3129,23 @@ body.dark .ai-welcome-title { color: var(--ink); }
    "thinking" indicator. */
 .ai-waiting {
   align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
   padding: 2px 2px 0;
   font-size: 12.5px;
   color: var(--muted);
   opacity: 0.75;
 }
-/* The waiting line carries the same three dots — invisible until the
-   mouse comes near. */
-.ai-waiting .ai-dots { opacity: 0; transition: opacity 0.22s ease; }
-.ai-waiting:hover .ai-dots { opacity: 1; }
-.ai-waiting:hover .ai-dots i { animation: aiDotWave 1.25s ease-in-out infinite; }
 
-/* Three breathing dots (used only in the reasoning card header).
-   They stay in the DOM the whole time — they are simply invisible until
-   the mouse comes near the card, so they never distract from the answer
-   but are there when you want to look at them. */
+/* Three breathing dots (used only in the reasoning card header). */
 .ai-dots, .ai-think-dots { display: inline-flex; align-items: center; gap: 4px; }
 .ai-dots i, .ai-think-dots i {
   width: 6px; height: 6px;
   border-radius: 999px;
   background: var(--muted);
   display: block;
-  /* Idle: still and out of sight. */
-  animation: none;
-  opacity: 0.5;
+  animation: aiDotWave 1.25s ease-in-out infinite;
 }
 .ai-dots i:nth-child(2), .ai-think-dots i:nth-child(2) { animation-delay: 0.16s; }
 .ai-dots i:nth-child(3), .ai-think-dots i:nth-child(3) { animation-delay: 0.32s; }
-
-/* Mouse near → the dots show up (and start breathing again while the
-   model is still thinking). */
-.ai-row.think .ai-think-dots { opacity: 0; transition: opacity 0.22s ease; }
-.ai-row.think:hover .ai-think-dots { opacity: 1; }
-.ai-row.think:hover .ai-think-dots i {
-  animation: aiDotWave 1.25s ease-in-out infinite;
-}
-/* Once the thinking is over they stay calm even on hover. */
-.ai-row.think.think-done:hover .ai-think-dots i { animation: none; opacity: 0.55; }
 @keyframes aiDotWave {
   0%, 60%, 100% { transform: translateY(0); opacity: 0.35; }
   30% { transform: translateY(-4px); opacity: 1; }
@@ -3292,7 +3273,7 @@ body.dark .ai-tool-btn.on { color: #0d1a12; }
    once the answer starts they would just be noise, so they freeze. */
 .ai-row.think.think-done .ai-think-dots i {
   animation: none !important;
-  opacity: 0.55;
+  opacity: 0.3;
 }
 
 /* "已联网搜索 · N 条来源" — proof that the answer was grounded. */
