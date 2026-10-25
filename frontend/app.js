@@ -2378,14 +2378,13 @@
   // Qwen panel
   // ------------------------------------------------------------
   // The user's message goes to the server relay, the relay streams back
-  // the reasoning trace and the answer, and we type them out here:
-  //   • the answer, one character every 100ms (as requested)
-  //   • the reasoning trace in a collapsible block, typed faster
+  // the reasoning trace and the answer, and we render them here:
+  //   • the reasoning trace is written as it arrives, in its own card
+  //   • the answer is typed out, one character every 100ms (as requested)
   // While waiting for the first token we show a "Thinking…" indicator
   // with three breathing dots.
   // ============================================================
   const AI_TYPE_MS = 100;          // 0.1s per character
-  const AI_THINK_TYPE_MS = 16;    // the trace reads faster than the answer
   let _aiBusy = false;
 
   // ------------------------------------------------------------
@@ -2711,6 +2710,7 @@
 
     let answer = '';
     let reasoning = '';
+    let reasoningStarted = false;
     let thinkRow = null;
     let thinkBody = null;
     let botRow = null;
@@ -2756,7 +2756,14 @@
             if (j.fallback) answeredBy += '（已切换）';
             aiSetStatus(answeredBy, 'ok');
           } else if (j.type === 'reasoning') {
-            reasoning += j.text || '';
+            // The upstream likes to open with a newline or two; those would
+            // show up as a blank first line inside the reasoning card.
+            let t = j.text || '';
+            if (!reasoningStarted) {
+              t = t.replace(/^\s+/, '');
+              if (t) reasoningStarted = true;
+            }
+            reasoning += t;
             if (!thinkRow) {
               thinkRow = aiAppendBlock('think');
               thinkBody = thinkRow && thinkRow.querySelector('.ai-think-body');
@@ -2764,7 +2771,10 @@
               if (title) title.textContent = '思考过程';
               waiting.remove();
             }
-            if (thinkBody) thinkBody.textContent = reasoning;
+            // The trace is written as it arrives. It must NOT be typed out
+            // again when the stream ends — that printed the whole trace
+            // twice.
+            if (thinkBody) thinkBody.textContent = reasoning.replace(/\s+$/, '');
             const log = aiLogEl();
             if (log) log.scrollTop = log.scrollHeight;
           } else if (j.type === 'delta') {
@@ -2808,12 +2818,10 @@
 
     waiting.remove();
 
-    // The reasoning trace is typed first (fast), then the answer, one
-    // character every 100ms. The reasoning card always stays ABOVE the
-    // answer bubble.
-    if (thinkBody && reasoning) {
-      await aiType(thinkBody, reasoning, AI_THINK_TYPE_MS);
-    }
+    // The reasoning trace was already written while it streamed in, so
+    // there is nothing to type out here. The answer is typed out now,
+    // one character every 100ms, with the leading blank lines the
+    // upstream likes to add stripped off.
     if (!botBubble && answer) {
       botRow = aiAppendBlock('bot');
       botBubble = botRow && botRow.querySelector('.ai-bubble');
@@ -2821,11 +2829,12 @@
         botRow.parentElement.insertBefore(botRow, thinkRow.nextSibling);
       }
     }
+    const cleanAnswer = answer.replace(/^\s+/, '').replace(/\s+$/, '');
     if (botBubble) {
       botBubble.innerHTML = '';
-      await aiType(botBubble, answer, AI_TYPE_MS);
+      await aiType(botBubble, cleanAnswer, AI_TYPE_MS);
     }
-    if (!answer) {
+    if (!cleanAnswer) {
       if (botBubble) botBubble.innerHTML = `<span class="ai-error">没有收到回复</span>`;
       else {
         const errRow = aiAppendBlock('bot');
@@ -2836,7 +2845,7 @@
 
     state.aiHistory = state.aiHistory || [];
     state.aiHistory.push({ role: 'user', content: msg });
-    state.aiHistory.push({ role: 'assistant', content: answer.slice(0, 2000) });
+    state.aiHistory.push({ role: 'assistant', content: cleanAnswer.slice(0, 2000) });
     if (state.aiHistory.length > 8) state.aiHistory = state.aiHistory.slice(-8);
 
     aiSetStatus(answeredBy || '就绪', 'ok');
