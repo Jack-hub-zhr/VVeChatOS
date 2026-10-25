@@ -116,7 +116,7 @@
 
     /* --- load the logo --- */
     var logoSvg = null;
-    fetch(LOGO_URL, { cache: 'force-cache' })
+    var logoReq = fetch(LOGO_URL, { cache: 'force-cache' })
       .then(function (r) { return r.ok ? r.text() : Promise.reject(new Error('logo http ' + r.status)); })
       .then(function (txt) {
         // Guard against a non-SVG response (a proxy error page, a JSON
@@ -125,8 +125,9 @@
         if (t.charAt(0) !== '<' || t.indexOf('<svg') === -1) throw new Error('not an svg');
         logoSvg = t;
       })
-      .catch(function () { logoSvg = null; })
-      .then(function () { return startAnimation(); });
+      .catch(function () { logoSvg = null; });
+    // Never let a slow CDN strand the boot on an empty screen.
+    Promise.race([logoReq, sleep(4000)]).then(function () { return startAnimation(); });
 
     function startAnimation() {
       if (logoSvg) {
@@ -207,4 +208,8 @@
   // Apply the class as early as possible so there is no flash of the
   // default theme before app.js boots.
   applyThemeClass();
+
+  // Warm the logo cache while the rest of the page is still loading —
+  // by the time the boot screen appears the SVG is usually already in.
+  try { fetch(LOGO_URL, { cache: 'force-cache' }).catch(function () {}); } catch (_) {}
 })();
