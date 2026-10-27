@@ -392,6 +392,15 @@
                 </div>
                 <button type="button" class="cancel" id="reply-preview-cancel" aria-label="取消">×</button>
               </div>
+              <!-- @ someone — the strip above the input box, so it is always
+                   obvious who the next message will call out. -->
+              <div id="mention-preview" class="mention-preview hidden">
+                <div class="info">
+                  <div class="name" id="mention-preview-name"></div>
+                  <div class="text" id="mention-preview-text"></div>
+                </div>
+                <button type="button" class="cancel" id="mention-preview-cancel" aria-label="取消 @">×</button>
+              </div>
               <div id="img-preview" class="img-preview hidden">
                 <img id="img-preview-img" alt="" />
                 <button type="button" class="cancel" id="img-preview-cancel" aria-label="移除">×</button>
@@ -409,6 +418,9 @@
                 <input id="chat-input" type="text" placeholder="输入消息…" autocomplete="off" />
                 <button class="btn btn-primary" type="submit" id="send-btn">发送</button>
               </div>
+              <!-- The @ picker. It floats above the composer and is only
+                   ever shown inside a group chat. -->
+              <div id="mention-menu" class="mention-menu hidden"></div>
               <div id="emoji-picker" class="emoji-picker hidden"></div>
             </form>
           </div>

@@ -181,6 +181,11 @@
   }
 
   var playing = false;
+  // The promise of the run that is on screen right now. When play() is
+  // called again while a boot is in flight we hand back THIS promise, so
+  // the caller waits for the animation instead of walking straight into
+  // the app while the overlay is still up.
+  var currentPlay = null;
 
   /**
    * Play the 550C boot animation.
@@ -189,7 +194,7 @@
    */
   function play(opts) {
     opts = opts || {};
-    if (playing) return Promise.resolve();
+    if (playing) return currentPlay || Promise.resolve();
     playing = true;
 
     var overlay = buildOverlay();
@@ -213,6 +218,7 @@
     var clockTimer = null;
     var resolveDone;
     var done = new Promise(function (r) { resolveDone = r; });
+    currentPlay = done;
 
     function later(fn, ms) { var t = setTimeout(fn, ms); timers.push(t); return t; }
     // Beats are written as offsets from the start of the boot, so they
@@ -232,6 +238,7 @@
       document.body.style.overflow = '';
       overlay.remove();
       playing = false;
+      currentPlay = null;
       resolveDone();
     }
     function onSkip() { if (!finished) finish(320); }
