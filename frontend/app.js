@@ -3259,7 +3259,11 @@
     const toggleBtn = $('#ai-sidebar-toggle');
     if (toggleBtn && !toggleBtn.__bound) {
       toggleBtn.__bound = true;
-      toggleBtn.addEventListener('click', () => {
+      toggleBtn.addEventListener('click', (e) => {
+        // The button now lives in the AI header, i.e. inside `.ai-main`,
+        // whose click handler closes the mobile drawer.  Without this the
+        // drawer would open and close again in the same tap.
+        e.stopPropagation();
         const sb = $('#ai-sidebar');
         if (!sb) return;
         // On a phone the list is a drawer that slides in from the left;
