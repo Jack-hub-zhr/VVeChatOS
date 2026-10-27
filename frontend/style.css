@@ -1263,7 +1263,8 @@ body.dark .chat-composer { background: rgba(20, 24, 32, 0.30); border-top-color:
   display: flex; align-items: center; gap: 8px;
 }
 .composer-row .emoji-btn,
-.composer-row .attach-btn {
+.composer-row .attach-btn,
+.composer-row .mention-btn {
   width: 40px; height: 40px;
   border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
@@ -1275,10 +1276,25 @@ body.dark .chat-composer { background: rgba(20, 24, 32, 0.30); border-top-color:
   transition: background 0.2s, transform 0.15s, color 0.2s;
   box-shadow: var(--glass-highlight);
 }
-.composer-row .emoji-btn:hover, .composer-row .attach-btn:hover {
+.composer-row .emoji-btn:hover, .composer-row .attach-btn:hover,
+.composer-row .mention-btn:hover {
   background: rgba(255, 255, 255, 0.85); color: var(--accent);
 }
-.composer-row .emoji-btn:active, .composer-row .attach-btn:active { transform: scale(0.92); }
+.composer-row .emoji-btn:active, .composer-row .attach-btn:active,
+.composer-row .mention-btn:active { transform: scale(0.92); }
+/* The @ sign is a bit smaller than the emoji, so it needs a nudge. */
+.composer-row .mention-btn {
+  font-size: 17px; font-weight: 700;
+  font-family: var(--mono, ui-monospace, monospace);
+}
+/* Outside a group chat there is nobody to @ — say so instead of
+   letting the button look broken. */
+.composer-row .mention-btn.disabled {
+  opacity: 0.45; cursor: not-allowed;
+}
+.composer-row .mention-btn.disabled:hover {
+  background: rgba(255, 255, 255, 0.55); color: var(--ink-2);
+}
 
 .chat-composer input[type="text"] {
   flex: 1;
@@ -1366,6 +1382,15 @@ body.dark .chat-composer { background: rgba(20, 24, 32, 0.30); border-top-color:
   cursor: pointer;
   font-size: 13.5px;
   color: var(--ink-2);
+}
+/* The little "what is this" line at the top of the picker. */
+.mention-menu .mention-hint {
+  padding: 3px 9px 7px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.07);
+  font-size: 11.5px;
+  color: var(--muted);
+  letter-spacing: 0.01em;
 }
 .mention-item:hover,
 .mention-item.active { background: rgba(0, 0, 0, 0.06); }
@@ -2122,6 +2147,7 @@ body.dark .theme-menu { background: rgba(20, 24, 32, 0.92); border-color: rgba(2
      and the media query now closes where it should. */
   .beta-tag { height: 18px; padding: 0 8px; font-size: 10px; }
   .composer-row .emoji-btn, .composer-row .attach-btn { width: 34px; height: 34px; font-size: 17px; }
+  .composer-row .mention-btn { width: 34px; height: 34px; font-size: 15px; }
   /* Root terminal on mobile: nearly full-screen */
   .root-terminal-card { width: 95vw; height: 80vh; }
   /* Auth card on iPhone: iOS-alert style — compact centered, NOT full-screen */
@@ -2230,7 +2256,8 @@ body.dark .beta-btn {
   color: var(--ink);
 }
 body.dark .composer-row .emoji-btn,
-body.dark .composer-row .attach-btn {
+body.dark .composer-row .attach-btn,
+body.dark .composer-row .mention-btn {
   background: rgba(255, 255, 255, 0.06);
   border-color: rgba(255, 255, 255, 0.10);
   color: var(--ink-2);

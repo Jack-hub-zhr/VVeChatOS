@@ -1181,6 +1181,7 @@
     state.pendingReply = null; state.pendingImage = null;
     clearMentionTarget();
     hideMentionMenu();
+    updateMentionButton();
     $('#chat-empty').classList.add('hidden');
     $('#chat-window').classList.remove('hidden');
     $('#reply-preview').classList.add('hidden');
@@ -1372,7 +1373,10 @@
     mentionState.index = 0;
     mentionState.start = q.start;
     mentionState.end = q.end;
-    menu.innerHTML = items.map((m, i) => {
+    // A hint line at the top of the picker: the "@" button is a new way
+    // in, so say what the list is for.
+    const head = '<div class="mention-hint">选择要 @ 的群成员</div>';
+    menu.innerHTML = head + items.map((m, i) => {
       const bg = m.avatar_color ? `background:linear-gradient(135deg, ${m.avatar_color}, ${shade(m.avatar_color, -25)});` : '';
       const em = emojiOf(m);
       const who = m.id === state.user.id ? '<div class="tag">我</div>' : '';
@@ -1453,7 +1457,19 @@
     return mentionTokens(input.value).includes(username);
   }
 
-  function renderMessages() {    if (!state.currentChat) return;
+  // The @ button only makes sense in a group — dim it in a one-to-one
+  // chat so nobody wonders why the list is empty.
+  function updateMentionButton() {
+    const b = $('#mention-btn');
+    if (!b) return;
+    const c = state.currentChat;
+    const on = !!(c && c.type === 'group');
+    b.classList.toggle('disabled', !on);
+    b.title = on ? '@ 群成员' : '只有群聊才能 @ 人';
+  }
+
+  function renderMessages() {
+    if (!state.currentChat) return;
     const {type,id} = state.currentChat;
     const key = convKey(type, id);
     const arr = state.messagesByConv[key] || [];
@@ -3992,11 +4008,32 @@
       if (found) { state.mentionTarget = found; updateMentionPreview(); }
       else if (state.mentionTarget && !inputHasMention(state.mentionTarget.username)) clearMentionTarget();
     });
-    // Clicking away from the picker closes it.
+    // Clicking away from the picker closes it — but NOT when the click
+    // was on the @ button: that click is what OPENED the picker.
     bindOnce(document, 'click', (e) => {
-      if (!e.target.closest('#mention-menu')) hideMentionMenu();
+      if (!e.target.closest('#mention-menu') && !e.target.closest('#mention-btn')) hideMentionMenu();
     }, undefined, 'mention-close');
     bindOnce($('#mention-preview-cancel'), 'click', () => { removeMentionFromInput(); $('#chat-input')?.focus(); });
+    // The @ button next to the picture button: opens the same picker.
+    bindOnce($('#mention-btn'), 'click', (e) => {
+      e.stopPropagation();
+      const c = state.currentChat;
+      if (!c || c.type !== 'group') { toast('只有群聊才能 @ 人'); return; }
+      const input = $('#chat-input');
+      if (!input) return;
+      input.focus();
+      // If the caret is already sitting in an "@something", the picker is
+      // what the user wants — don't type a second "@".
+      const q = detectMentionQuery();
+      if (q) { showMentionMenu(q); return; }
+      // Drop an "@" at the caret and let the normal input handler pick it
+      // up — one code path for typing "@" and for pressing the button.
+      const pos = input.selectionStart == null ? input.value.length : input.selectionStart;
+      input.value = input.value.slice(0, pos) + '@' + input.value.slice(pos);
+      input.setSelectionRange(pos + 1, pos + 1);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.focus();
+    });
     bindOnce($('#reply-preview-cancel'), 'click', () => { state.pendingReply = null; $('#reply-preview').classList.add('hidden'); });
     bindOnce($('#img-preview-cancel'), 'click', () => { state.pendingImage = null; $('#img-preview').classList.add('hidden'); });
     bindOnce($('#chat-input'), 'paste', (e) => {
