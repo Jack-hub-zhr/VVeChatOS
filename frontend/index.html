@@ -253,6 +253,29 @@
         <section class="right-pane" id="right-pane">
           <!-- ============ Qwen occupies the SAME big panel as the chat ============ -->
           <div class="ai-view hidden" id="ai-view">
+            <!-- ============ 会话侧栏（DeepSeek 式） ============ -->
+            <aside class="ai-sidebar" id="ai-sidebar">
+              <div class="ai-sidebar-top">
+                <button class="ai-new-chat" id="ai-new-chat" type="button" title="新对话">
+                  <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="9"/><line x1="12" y1="8.5" x2="12" y2="15.5"/><line x1="8.5" y1="12" x2="15.5" y2="12"/>
+                  </svg>
+                  <span>新对话</span>
+                </button>
+                <button class="ai-sidebar-toggle" id="ai-sidebar-toggle" type="button" title="收起会话列表">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="4" width="18" height="16" rx="3"/><line x1="9" y1="4" x2="9" y2="20"/>
+                  </svg>
+                </button>
+              </div>
+              <div class="ai-chat-list" id="ai-chat-list"></div>
+              <div class="ai-sidebar-user">
+                <div class="avatar sm" id="ai-side-avatar"></div>
+                <div class="ai-sidebar-user-name" id="ai-side-name">—</div>
+              </div>
+            </aside>
+
+            <div class="ai-main">
             <header class="ai-head">
               <div class="ai-head-left">
                 <div class="ai-head-mark">
@@ -299,37 +322,22 @@
                       <option value="high">思考 · 高</option>
                     </select>
                   </div>
-                  <!-- 深度思考：开关式，决定模型要不要先想再答 -->
-                  <button type="button" class="ai-tool-btn" id="ai-thinking" title="深度思考" aria-pressed="false">
-                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/>
-                      <path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/>
-                      <path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4"/>
-                      <path d="M17.599 6.5a3 3 0 0 0 .399-1.375"/>
-                      <path d="M6.003 5.125A3 3 0 0 0 6.401 6.5"/>
-                      <path d="M3.477 10.896a4 4 0 0 1 .585-.396"/>
-                      <path d="M19.938 10.5a4 4 0 0 1 .585.396"/>
-                      <path d="M6 18a4 4 0 0 1-1.967-.516"/>
-                      <path d="M19.967 17.484A4 4 0 0 1 18 18"/>
-                    </svg>
-                    <span>深度思考</span>
-                  </button>
-                  <!-- 搜索：开启后先联网查资料再回答 -->
-                  <button type="button" class="ai-tool-btn ai-tool-pop" id="ai-search" title="联网搜索" aria-pressed="false">
-                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-                      <circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-                    </svg>
-                    <span>搜索</span>
-                  </button>
                 </div>
+                <!-- Two states in one button: the arrow sends, and while the
+                     model is working the same round button becomes a STOP
+                     square (a filled white rounded square in a blue disc). -->
                 <button type="submit" class="ai-send" id="ai-send" title="发送">
-                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <svg class="ai-send-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                     <line x1="12" y1="20" x2="12" y2="5"/>
                     <polyline points="5.5 11.5 12 5 18.5 11.5"/>
+                  </svg>
+                  <svg class="ai-stop-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" aria-hidden="true">
+                    <rect x="7" y="7" width="10" height="10" rx="2.4" fill="currentColor"/>
                   </svg>
                 </button>
               </div>
             </form>
+            </div>
           </div>
 
           <div class="chat-empty" id="chat-empty">

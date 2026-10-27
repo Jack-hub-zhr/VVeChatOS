@@ -88,6 +88,28 @@ db.exec(`
     value TEXT
   );
 
+  -- AI conversations. The panel keeps a list of chats on the left, the way
+  -- a chat app should, and each chat owns its own message history.
+  CREATE TABLE IF NOT EXISTS ai_chats (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    title TEXT NOT NULL DEFAULT '新对话',
+    model TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_ai_chats_user ON ai_chats(user_id, updated_at DESC);
+
+  CREATE TABLE IF NOT EXISTS ai_chat_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    chat_id INTEGER NOT NULL,
+    role TEXT NOT NULL,           -- 'user' | 'assistant'
+    content TEXT NOT NULL DEFAULT '',
+    reasoning TEXT,              -- the model's chain of thought, if any
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_ai_chat_msgs ON ai_chat_messages(chat_id, id);
+
   CREATE TABLE IF NOT EXISTS friend_requests (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     from_user_id INTEGER NOT NULL,
@@ -1105,11 +1127,21 @@ function relayStream(res, upstreamBody, source, opts) {
 }
 
 app.post('/api/ai/chat', rateLimit('write'), authRequired, async (req, res) => {
-  const { message, history, model, thinking, level, search } = req.body || {};
+  const { message, history, model, thinking, level, search, chat_id } = req.body || {};
   const userMsg = String(message || '').trim();
   if (!userMsg) return res.status(400).json({ error: '消息不能为空' });
 
-  const wantThink = thinking === true || thinking === 'true' || thinking === 'on';
+  // The chat this turn belongs to. When the client sends one, the turn is
+  // appended to its history; otherwise the exchange is not persisted.
+  const chat = chat_id ? aiChatOwned(chat_id, req.user.id) : null;
+  const chatId = chat ? chat.id : null;
+
+  // The 深度思考 toggle was removed from the UI, so the models that CAN
+  // think now always do — the user asked to see the reasoning trace, not
+  // to lose it. `thinking` is still honoured if a client sends it.
+  const wantThink = thinking === undefined
+    ? true
+    : (thinking === true || thinking === 'true' || thinking === 'on');
   const wantSearch = search === true || search === 'true' || search === 'on';
   const thinkLevel = ['low', 'medium', 'high'].includes(String(level)) ? String(level) : 'medium';
 
@@ -1242,8 +1274,12 @@ app.post('/api/ai/chat', rateLimit('write'), authRequired, async (req, res) => {
         let gotContent = false;
         let reasonLen = 0;
         let gaveUp = false;
+        // Accumulated for the chat history.
+        let turnReasoning = '';
+        let turnContent = '';
         const result = await relayStream(res, upstream.body, source, {
           onReasoning: (t) => {
+            turnReasoning += String(t || '');
             reasonLen += t.length;
             // Some models think forever and never answer. Once the trace
             // is this long with no answer in sight, give up on them.
@@ -1254,7 +1290,10 @@ app.post('/api/ai/chat', rateLimit('write'), authRequired, async (req, res) => {
           },
           abort: () => { try { ac.abort(); } catch (_) {} },
           firstTokenMs: UPSTREAM_FIRST_TOKEN_MS,
-          onDelta: (t) => { if (String(t || '').trim()) gotContent = true; },
+          onDelta: (t) => {
+            turnContent += String(t || '');
+            if (String(t || '').trim()) gotContent = true;
+          },
           onFirst: () => {
             wrote = true;
             res.write(JSON.stringify({
@@ -1282,7 +1321,8 @@ app.post('/api/ai/chat', rateLimit('write'), authRequired, async (req, res) => {
             break;
           }
           // This one answered. Close the stream properly.
-          try { res.write(JSON.stringify({ type: 'done', source: entry.provider, error: null }) + '\n'); } catch (_) {}
+          aiSaveTurn(chatId, req.user.id, userMsg, turnReasoning, turnContent, entry.model);
+          try { res.write(JSON.stringify({ type: 'done', source: entry.provider, error: null, chatId: chatId || null }) + '\n'); } catch (_) {}
           try { res.end(); } catch (_) {}
           return;
         }
@@ -1352,6 +1392,95 @@ app.get('/api/ai/status', authRequired, (req, res) => {
       hasKey: !!aiProviderKey(pid)
     }))
   });
+});
+
+// ============================================================
+// AI conversation history
+// ============================================================
+// A chat is owned by exactly one user. Everything is scoped by user_id so
+// one account can never read another's AI history.
+function aiChatOwned(chatId, userId) {
+  return db.prepare('SELECT * FROM ai_chats WHERE id = ? AND user_id = ?').get(Number(chatId), Number(userId));
+}
+
+// Persist one turn (user message + the model's answer) and touch the chat.
+// The first user message becomes the chat's title.
+function aiSaveTurn(chatId, userId, userMsg, reasoning, content, model) {
+  if (!chatId) return;
+  const t = now();
+  try {
+    const tx = db.transaction(() => {
+      db.prepare('INSERT INTO ai_chat_messages (chat_id, role, content, reasoning, created_at) VALUES (?, ?, ?, ?, ?)')
+        .run(chatId, 'user', userMsg, null, t);
+      if (content) {
+        db.prepare('INSERT INTO ai_chat_messages (chat_id, role, content, reasoning, created_at) VALUES (?, ?, ?, ?, ?)')
+          .run(chatId, 'assistant', content, reasoning || null, t + 1);
+      }
+      const c = db.prepare('SELECT title FROM ai_chats WHERE id = ?').get(chatId);
+      if (model) db.prepare('UPDATE ai_chats SET model = ? WHERE id = ?').run(model, chatId);
+      if (c && (!c.title || c.title === '新对话')) {
+        const title = String(userMsg).replace(/\s+/g, ' ').trim().slice(0, 28) || '新对话';
+        db.prepare('UPDATE ai_chats SET title = ?, updated_at = ? WHERE id = ?').run(title, t, chatId);
+      } else {
+        db.prepare('UPDATE ai_chats SET updated_at = ? WHERE id = ?').run(t, chatId);
+      }
+    });
+    tx();
+  } catch (e) {
+    console.error('[VVeChat] aiSaveTurn failed:', e.message);
+  }
+}
+
+// List the user's chats, newest first.
+app.get('/api/ai/chats', authRequired, (req, res) => {
+  const rows = db.prepare(`
+    SELECT c.id, c.title, c.model, c.created_at, c.updated_at,
+           (SELECT COUNT(*) FROM ai_chat_messages m WHERE m.chat_id = c.id) AS message_count
+    FROM ai_chats c WHERE c.user_id = ?
+    ORDER BY c.updated_at DESC
+  `).all(req.user.id);
+  res.json({ chats: rows });
+});
+
+// Create a chat. The title is filled in from the first user message.
+app.post('/api/ai/chats', rateLimit('write'), authRequired, (req, res) => {
+  const model = String((req.body || {}).model || '').slice(0, 80) || null;
+  const t = now();
+  const info = db.prepare('INSERT INTO ai_chats (user_id, title, model, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
+    .run(req.user.id, '新对话', model, t, t);
+  const row = db.prepare('SELECT * FROM ai_chats WHERE id = ?').get(info.lastInsertRowid);
+  res.json({ chat: row });
+});
+
+// One chat with its full message list.
+app.get('/api/ai/chats/:id', authRequired, (req, res) => {
+  const chat = aiChatOwned(req.params.id, req.user.id);
+  if (!chat) return res.status(404).json({ error: '对话不存在' });
+  const messages = db.prepare('SELECT id, role, content, reasoning, created_at FROM ai_chat_messages WHERE chat_id = ? ORDER BY id ASC')
+    .all(chat.id);
+  res.json({ chat, messages });
+});
+
+// Rename a chat.
+app.patch('/api/ai/chats/:id', rateLimit('write'), authRequired, (req, res) => {
+  const chat = aiChatOwned(req.params.id, req.user.id);
+  if (!chat) return res.status(404).json({ error: '对话不存在' });
+  const title = String((req.body || {}).title || '').trim().slice(0, 60);
+  if (!title) return res.status(400).json({ error: '标题不能为空' });
+  db.prepare('UPDATE ai_chats SET title = ?, updated_at = ? WHERE id = ?').run(title, now(), chat.id);
+  res.json({ chat: db.prepare('SELECT * FROM ai_chats WHERE id = ?').get(chat.id) });
+});
+
+// Delete a chat and its messages.
+app.delete('/api/ai/chats/:id', rateLimit('write'), authRequired, (req, res) => {
+  const chat = aiChatOwned(req.params.id, req.user.id);
+  if (!chat) return res.status(404).json({ error: '对话不存在' });
+  const tx = db.transaction(() => {
+    db.prepare('DELETE FROM ai_chat_messages WHERE chat_id = ?').run(chat.id);
+    return db.prepare('DELETE FROM ai_chats WHERE id = ?').run(chat.id).changes;
+  });
+  const deleted = tx();
+  res.json({ ok: true, deleted });
 });
 
 // Admin-only: plug in a relay key from the UI. Stored in the database, so

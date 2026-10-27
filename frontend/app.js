@@ -2586,60 +2586,162 @@
   //   深度思考 → on / off / "自带思考，不可关"
   //   思考档位 → only for models that accept a thinking budget
   //   搜索     → on / off
+  // The 深度思考 and 搜索 buttons were removed from the toolbar, so the
+  // only thing left to sync is the model dropdown itself. The models that
+  // can think now always do (the server decides), and search is off unless
+  // the model performs it on its own.
   function aiSyncTools() {
     const cur = aiCurrentModel();
     const prefs = aiPrefs();
-
-    const thinkBtn = $('#ai-thinking');
-    if (thinkBtn) {
-      const mode = cur ? cur.thinking : 'none';
-      const can = mode === 'toggle' || mode === 'budget';
-      const always = mode === 'always';
-      thinkBtn.classList.toggle('hidden', !cur);
-      // 'always' keeps the button clickable so a tap can explain WHY it
-      // cannot be turned off, instead of being a dead control.
-      thinkBtn.disabled = !can && !always;
-      // The endpoint thinks no matter what, so the button reads as on.
-      const on = always ? true : (can ? prefs.thinking : false);
-      thinkBtn.classList.toggle('on', on);
-      thinkBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
-      thinkBtn.title = !cur
-        ? '请先选择一个模型'
-        : always ? '该模型自带深度思考，无法关闭'
-        : mode === 'none' ? '该模型不支持深度思考'
-        : '开启后模型会先思考再回答';
+    const sel = $('#ai-model');
+    if (sel && cur && sel.value !== cur.id) sel.value = cur.id;
+    // Keep the stored preferences consistent with the new behaviour so a
+    // stale "thinking: off" from an earlier session cannot silence the
+    // reasoning trace.
+    if (prefs.thinking !== true) {
+      prefs.thinking = true;
+      try { localStorage.setItem('vve:ai-prefs', JSON.stringify(prefs)); } catch (_) {}
     }
+  }
 
-    const levelWrap = $('#ai-level-wrap');
-    if (levelWrap) {
-      // 档位 only matters when the model takes a thinking budget AND
-      // 深度思考 is actually switched on.
-      const show = !!(cur && cur.thinking === 'budget' && prefs.thinking);
-      levelWrap.classList.toggle('hidden', !show);
+  // ============================================================
+  // AI conversation list (the DeepSeek-style sidebar)
+  // ============================================================
+  let _aiChats = [];
+  let _aiChatId = null;
+
+  async function aiLoadChats() {
+    try {
+      const r = await api('/ai/chats');
+      _aiChats = r.chats || [];
+    } catch (e) {
+      _aiChats = [];
     }
-    const levelSel = $('#ai-level');
-    if (levelSel && levelSel.value !== prefs.level) levelSel.value = prefs.level;
+    aiRenderChats();
+  }
 
-    const searchBtn = $('#ai-search');
-    if (searchBtn) {
-      // The button belongs to the MODEL: it only springs into view when
-      // the picked model can actually search, and it hides again when the
-      // user switches to one that cannot.
-      const can = !!(cur && cur.search && cur.search !== 'none');
-      const wasHidden = searchBtn.classList.contains('hidden');
-      searchBtn.classList.toggle('hidden', !can);
-      searchBtn.disabled = !can;
-      searchBtn.classList.toggle('on', can && prefs.search);
-      searchBtn.setAttribute('aria-pressed', can && prefs.search ? 'true' : 'false');
-      searchBtn.title = can
-        ? (cur.search === 'provider' ? '开启后由模型自己联网搜索' : '开启后先联网查资料再回答')
-        : '该模型不支持搜索';
-      // Replay the pop animation every time it comes back.
-      if (can && wasHidden) {
-        searchBtn.classList.remove('ai-tool-pop');
-        void searchBtn.offsetWidth;
-        searchBtn.classList.add('ai-tool-pop');
+  // Group the chats the way a chat app does: 今天 / 昨天 / 更早.
+  function aiGroupLabel(ts) {
+    const d = new Date(ts);
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    if (ts >= startOfToday) return '今天';
+    if (ts >= startOfToday - 86400000) return '昨天';
+    if (ts >= startOfToday - 7 * 86400000) return '本周';
+    if (ts >= startOfToday - 30 * 86400000) return '本月';
+    return '更早';
+  }
+
+  function aiRenderChats() {
+    const list = $('#ai-chat-list');
+    if (!list) return;
+    list.innerHTML = '';
+    if (!_aiChats.length) {
+      const empty = document.createElement('div');
+      empty.className = 'ai-chat-empty';
+      empty.textContent = '还没有对话记录';
+      list.appendChild(empty);
+      return;
+    }
+    let lastGroup = null;
+    for (const c of _aiChats) {
+      const g = aiGroupLabel(c.updated_at || c.created_at);
+      if (g !== lastGroup) {
+        lastGroup = g;
+        const h = document.createElement('div');
+        h.className = 'ai-chat-group';
+        h.textContent = g;
+        list.appendChild(h);
       }
+      const item = document.createElement('div');
+      item.className = 'ai-chat-item' + (String(c.id) === String(_aiChatId) ? ' active' : '');
+      const title = document.createElement('span');
+      title.className = 'ai-chat-title';
+      title.textContent = c.title || '新对话';
+      title.title = c.title || '新对话';
+      const del = document.createElement('button');
+      del.className = 'ai-chat-del';
+      del.type = 'button';
+      del.title = '删除对话';
+      del.setAttribute('aria-label', '删除对话');
+      del.innerHTML = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>`;
+      del.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await aiDeleteChat(c.id);
+      });
+      item.appendChild(title);
+      item.appendChild(del);
+      item.addEventListener('click', () => aiOpenChat(c.id));
+      list.appendChild(item);
+    }
+  }
+
+  async function aiOpenChat(chatId) {
+    _aiChatId = chatId;
+    aiRenderChats();
+    const log = aiLogEl();
+    if (log) log.innerHTML = '';
+    try {
+      const r = await api(`/ai/chats/${chatId}`);
+      const msgs = r.messages || [];
+      for (const m of msgs) {
+        if (m.role === 'user') {
+          const row = aiAppendBlock('user');
+          const b = row && row.querySelector('.ai-bubble');
+          if (b) b.textContent = m.content;
+        } else {
+          // The assistant's turn: reasoning card first (if any), then answer.
+          if (m.reasoning) {
+            const row = aiAppendBlock('think');
+            const body = row && row.querySelector('.ai-think-body');
+            const title = row && row.querySelector('.ai-think-title');
+            if (title) title.textContent = '思考过程';
+            if (body) body.textContent = m.reasoning;
+          }
+          const row = aiAppendBlock('bot');
+          const b = row && row.querySelector('.ai-bubble');
+          if (b) b.textContent = m.content;
+        }
+      }
+      if (!msgs.length) {
+        const w = document.createElement('div');
+        w.className = 'ai-welcome';
+        w.innerHTML = '<p class="ai-welcome-title">有什么可以帮你？</p>';
+        if (log) { const old = log.querySelector('.ai-welcome'); if (old) old.remove(); log.appendChild(w); }
+      }
+      if (log) log.scrollTop = log.scrollHeight;
+    } catch (e) {
+      toast(e.message || '加载对话失败');
+    }
+  }
+
+  async function aiNewChat() {
+    if (_aiBusy) return;
+    try {
+      const r = await api('/ai/chats', { method: 'POST', body: { model: (aiCurrentModel() || {}).id || '' } });
+      _aiChatId = r.chat ? r.chat.id : null;
+      await aiLoadChats();
+      const log = aiLogEl();
+      if (log) {
+        log.innerHTML = '<div class="ai-welcome"><p class="ai-welcome-title">有什么可以帮你？</p></div>';
+      }
+    } catch (e) {
+      toast(e.message || '新建对话失败');
+    }
+  }
+
+  async function aiDeleteChat(chatId) {
+    try {
+      await api(`/ai/chats/${chatId}`, { method: 'DELETE' });
+      if (String(chatId) === String(_aiChatId)) {
+        _aiChatId = null;
+        const log = aiLogEl();
+        if (log) log.innerHTML = '<div class="ai-welcome"><p class="ai-welcome-title">有什么可以帮你？</p></div>';
+      }
+      await aiLoadChats();
+    } catch (e) {
+      toast(e.message || '删除失败');
     }
   }
 
@@ -2760,7 +2862,14 @@
     if (!msg) return;
     _aiBusy = true;
     const sendBtn = $('#ai-send');
-    if (sendBtn) sendBtn.disabled = true;
+    // While the model works the send button becomes a STOP button: the same
+    // blue disc, with a white rounded square inside it. Tapping it aborts
+    // the request.
+    if (sendBtn) {
+      sendBtn.classList.add('stopping');
+      sendBtn.title = '停止生成';
+      sendBtn.setAttribute('aria-label', '停止生成');
+    }
 
     const prefs = aiPrefs();
 
@@ -2793,17 +2902,20 @@
     let answeredBy = '';
 
     try {
+      _aiAbort = new AbortController();
       const resp = await fetch(`${API_BASE}/api/ai/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${state.token}` },
         body: JSON.stringify({
           message: msg,
           history: state.aiHistory || [],
+          chat_id: _aiChatId || null,
           model: prefs.model,
           thinking: prefs.thinking,
           level: prefs.level,
           search: prefs.search
-        })
+        }),
+        signal: _aiAbort.signal
       });
       if (!resp.ok) {
         let detail = '';
@@ -2911,6 +3023,16 @@
     } catch (e) {
       waiting.remove();
       aiFinishThinking();
+      // A user-initiated stop is not an error — the abort surfaces as a
+      // DOMException with a message like "BodyStreamBuffer was aborted".
+      const aborted = e && (e.name === 'AbortError' ||
+        /abort/i.test(String(e.message || '')));
+      if (aborted) {
+        aiSetStatus('已停止', 'warn');
+        aiEndBusy();
+        await aiLoadChats();
+        return;
+      }
       const msgText = String(e.message || '请求失败');
       const showErr = (row) => {
         const b = row && row.querySelector('.ai-bubble');
@@ -2924,8 +3046,7 @@
       }
       // Keep the header status short too.
       aiSetStatus(msgText.length > 60 ? msgText.slice(0, 60) + '…' : msgText, 'warn');
-      _aiBusy = false;
-      if (sendBtn) sendBtn.disabled = false;
+      aiEndBusy();
       return;
     }
 
@@ -2963,8 +3084,33 @@
     if (state.aiHistory.length > 8) state.aiHistory = state.aiHistory.slice(-8);
 
     aiSetStatus(answeredBy || '就绪', 'ok');
+    aiEndBusy();
+  }
+
+  // Put the send button back into its arrow state and release the request
+  // handle. Called on every exit path: success, failure and STOP.
+  function aiEndBusy() {
     _aiBusy = false;
-    if (sendBtn) sendBtn.disabled = false;
+    _aiAbort = null;
+    const btn = $('#ai-send');
+    if (btn) {
+      btn.classList.remove('stopping');
+      btn.title = '发送';
+      btn.setAttribute('aria-label', '发送');
+      btn.disabled = false;
+    }
+  }
+
+  // The user tapped the STOP square: abort the request and keep whatever
+  // already arrived on screen.
+  function aiStop() {
+    if (!_aiBusy) return;
+    try { if (_aiAbort) _aiAbort.abort(); } catch (_) {}
+    const waiting = document.querySelector('.ai-waiting');
+    if (waiting) waiting.remove();
+    aiEndBusy();
+    aiSetStatus('已停止', 'warn');
+    toast('已停止生成');
   }
 
   // The Qwen panel lives in the SAME big right-hand panel as the chat.
@@ -2973,6 +3119,7 @@
     const ai = $('#ai-view');
     if (!ai) return;
     ai.classList.remove('hidden');
+    ai.classList.add('open');
     $('#chat-window')?.classList.add('hidden');
     $('#chat-empty')?.classList.add('hidden');
     // On mobile the chat pane is an overlay that covers the sidebar.
@@ -2986,13 +3133,37 @@
     }
     ensureAiPanelBound();
     aiCheckStatus();
+    aiLoadChats();
+    // If no chat is open yet, open (or create) the first one so a message
+    // always lands somewhere the user can find again.
+    if (!_aiChatId) {
+      const first = _aiChats && _aiChats[0];
+      if (first) aiOpenChat(first.id);
+      else aiNewChat();
+    }
+    // Sidebar user chip at the bottom of the conversation list.
+    const sideName = $('#ai-side-name');
+    if (sideName && state.user) sideName.textContent = state.user.username;
+    const sideAv = $('#ai-side-avatar');
+    if (sideAv && state.user) {
+      const em = state.user.avatar_emoji;
+      const color = state.user.avatar_color || '#5eead4';
+      sideAv.innerHTML = em
+        ? `<span class="avatar-emoji">${escapeHtml(em)}</span>`
+        : escapeHtml(initials(state.user.username));
+      sideAv.style.background = em
+        ? 'rgba(255,255,255,0.55)'
+        : `linear-gradient(135deg, ${color}, ${shade(color, -25)})`;
+    }
   }
 
   function closeAiView() {
     const ai = $('#ai-view');
     if (!ai) return;
-    ai.classList.remove('hidden');
+    ai.classList.remove('open');
     ai.classList.add('hidden');
+    // Leave the phone drawer closed too.
+    $('#ai-sidebar')?.classList.remove('mobile-open');
     // Restore the chat: either the open conversation, or the empty state.
     if (state.currentChat) {
       $('#chat-window')?.classList.remove('hidden');
@@ -3054,45 +3225,69 @@
       });
     }
 
-    // --- 思考档位 ---
-    const levelSel = $('#ai-level');
-    if (levelSel && !levelSel.__bound) {
-      levelSel.__bound = true;
-      levelSel.value = aiPrefs().level;
-      levelSel.addEventListener('change', () => aiSetPrefs({ level: levelSel.value }));
-    }
-
-    // --- 深度思考 ---
-    const thinkBtn = $('#ai-thinking');
-    if (thinkBtn && !thinkBtn.__bound) {
-      thinkBtn.__bound = true;
-      thinkBtn.addEventListener('click', () => {
-        const cur = aiCurrentModel();
-        if (cur && cur.thinking === 'always') {
-          toast('该模型自带深度思考，无法关闭');
-          return;
-        }
-        const p = aiPrefs();
-        aiSetPrefs({ thinking: !p.thinking });
-        aiSyncTools();
-      });
-    }
-
-    // --- 搜索 ---
-    const searchBtn = $('#ai-search');
-    if (searchBtn && !searchBtn.__bound) {
-      searchBtn.__bound = true;
-      searchBtn.addEventListener('click', () => {
-        const p = aiPrefs();
-        aiSetPrefs({ search: !p.search });
-        aiSyncTools();
-      });
-    }
+    // NOTE: the 思考档位 / 深度思考 / 搜索 controls were removed from the
+    // toolbar, so their listeners went with them. The models that support
+    // reasoning now always reason (the server side decides), and the panel
+    // shows the trace when one arrives.
 
     const setupBtn = $('#ai-setup-btn');
     if (setupBtn && !setupBtn.__bound) {
       setupBtn.__bound = true;
       setupBtn.addEventListener('click', () => aiOpenSetup());
+    }
+
+    // The send button doubles as the STOP button while the model works.
+    // It is a submit button, so the click has to be intercepted in the
+    // capture phase — otherwise it would submit the form again.
+    const sendBtn = $('#ai-send');
+    if (sendBtn && !sendBtn.__stopBound) {
+      sendBtn.__stopBound = true;
+      sendBtn.addEventListener('click', (e) => {
+        if (!sendBtn.classList.contains('stopping')) return;   // normal send
+        e.preventDefault();
+        e.stopPropagation();
+        aiStop();
+      }, true);
+    }
+
+    // New chat + sidebar toggle
+    const newBtn = $('#ai-new-chat');
+    if (newBtn && !newBtn.__bound) {
+      newBtn.__bound = true;
+      newBtn.addEventListener('click', () => aiNewChat());
+    }
+    const toggleBtn = $('#ai-sidebar-toggle');
+    if (toggleBtn && !toggleBtn.__bound) {
+      toggleBtn.__bound = true;
+      toggleBtn.addEventListener('click', () => {
+        const sb = $('#ai-sidebar');
+        if (!sb) return;
+        // On a phone the list is a drawer that slides in from the left;
+        // on a wide screen it is a column that collapses to nothing.
+        if (window.innerWidth <= 820) {
+          const open = sb.classList.toggle('mobile-open');
+          toggleBtn.title = open ? '关闭会话列表' : '打开会话列表';
+          toggleBtn.setAttribute('aria-label', toggleBtn.title);
+        } else {
+          const collapsed = sb.classList.toggle('collapsed');
+          toggleBtn.title = collapsed ? '展开会话列表' : '收起会话列表';
+          toggleBtn.setAttribute('aria-label', toggleBtn.title);
+        }
+      });
+    }
+    // On a phone, tapping the transcript closes the drawer.
+    const aiMain = document.querySelector('.ai-main');
+    if (aiMain && !aiMain.__drawerBound) {
+      aiMain.__drawerBound = true;
+      aiMain.addEventListener('click', () => {
+        if (window.innerWidth > 820) return;
+        const sb = $('#ai-sidebar');
+        if (sb && sb.classList.contains('mobile-open')) {
+          sb.classList.remove('mobile-open');
+          const tb = $('#ai-sidebar-toggle');
+          if (tb) { tb.title = '打开会话列表'; tb.setAttribute('aria-label', tb.title); }
+        }
+      });
     }
 
     const closeBtn = $('#ai-close');

@@ -3002,14 +3002,10 @@ body.dark .tag-official { color: #fcd34d; background: rgba(245, 158, 11, 0.16); 
 /* ============================================================
    QWEN — occupies the same big right-hand panel as the chat.
    ============================================================ */
-.ai-view {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  height: 100%;
-}
-.ai-view.hidden { display: none !important; }
-
+/* NOTE: .ai-view's own layout rules live at the END of this file — it is a
+   two-column flex (conversation list + transcript) now, and the rules there
+   also gate visibility on .open. This stub is kept only so the comment
+   above it still reads correctly. */
 .ai-head {
   display: flex;
   align-items: center;
@@ -3553,4 +3549,205 @@ body.dark .mobile-menu-scrim { background: rgba(0, 0, 0, 0.34); }
 }
 .more-switch input:focus-visible + .more-switch-track {
   box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* ============================================================
+   AI PANEL — DeepSeek-style layout
+   ------------------------------------------------------------
+   .ai-view is now a two-column flex:
+     .ai-sidebar  → conversation list (新对话 / history / user)
+     .ai-main     → header, transcript, composer
+   ============================================================ */
+.ai-view {
+  display: none;
+  flex-direction: row;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+.ai-view.hidden { display: none !important; }
+.ai-view.open { display: flex; }
+
+/* ---------- conversation sidebar ---------- */
+.ai-sidebar {
+  width: 248px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 12px 10px;
+  border-right: 1px solid var(--glass-border-soft);
+  background: rgba(255, 255, 255, 0.22);
+  transition: width 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+              padding 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+              opacity 0.2s ease;
+}
+body.dark .ai-sidebar { background: rgba(255, 255, 255, 0.035); }
+.ai-sidebar.collapsed {
+  width: 0;
+  padding-left: 0; padding-right: 0;
+  opacity: 0;
+  overflow: hidden;
+}
+.ai-sidebar-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.ai-new-chat {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--glass-border-soft);
+  border-radius: 999px;
+  background: var(--glass-bg-strong);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.18s, transform 0.12s, box-shadow 0.18s;
+  -webkit-tap-highlight-color: transparent;
+}
+.ai-new-chat:hover { background: var(--glass-bg); box-shadow: var(--glass-shadow); }
+.ai-new-chat:active { transform: scale(0.98); }
+.ai-sidebar-toggle {
+  width: 34px; height: 34px;
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.16s, color 0.16s;
+}
+.ai-sidebar-toggle:hover { background: var(--glass-bg-soft); color: var(--ink); }
+
+.ai-chat-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.ai-chat-group {
+  padding: 14px 10px 5px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--muted-2);
+}
+.ai-chat-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 8px 9px 11px;
+  border-radius: 12px;
+  cursor: pointer;
+  color: var(--ink-2);
+  transition: background 0.15s, color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.ai-chat-item:hover { background: var(--glass-bg-soft); color: var(--ink); }
+.ai-chat-item.active {
+  background: var(--glass-bg-strong);
+  color: var(--ink);
+  font-weight: 600;
+}
+.ai-chat-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ai-chat-del {
+  width: 22px; height: 22px;
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border: none; border-radius: 7px;
+  background: transparent;
+  color: var(--muted-2);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+}
+.ai-chat-item:hover .ai-chat-del { opacity: 1; }
+.ai-chat-del:hover { background: rgba(255, 59, 48, 0.14); color: var(--danger); }
+.ai-chat-empty {
+  padding: 16px 11px;
+  font-size: 12px;
+  color: var(--muted-2);
+}
+.ai-sidebar-user {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 12px 8px 2px;
+  margin-top: 6px;
+  border-top: 1px solid var(--glass-border-soft);
+}
+.ai-sidebar-user .avatar {
+  width: 30px; height: 30px;
+  flex-shrink: 0;
+  font-size: 13px; font-weight: 700; color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 999px;
+}
+.ai-sidebar-user-name {
+  font-size: 13px; font-weight: 600; color: var(--ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* ---------- the right-hand column ---------- */
+.ai-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* ---------- STOP button ---------- */
+/* While the model works, the send button keeps its blue disc and the arrow
+   is replaced by a white rounded square — the universal "stop" glyph. */
+.ai-send .ai-stop-icon { display: none; }
+.ai-send.stopping .ai-send-icon { display: none; }
+.ai-send.stopping .ai-stop-icon { display: block; }
+.ai-send.stopping {
+  background: var(--accent-grad);
+  cursor: pointer;
+}
+.ai-send.stopping:hover { filter: brightness(1.06); }
+
+/* ---------- mobile: the list becomes a drawer ---------- */
+@media (max-width: 820px) {
+  .ai-view { position: relative; }
+  .ai-sidebar {
+    position: absolute;
+    inset: 0 auto 0 0;
+    z-index: 40;
+    width: 78%;
+    max-width: 300px;
+    background: rgba(250, 252, 255, 0.94);
+    backdrop-filter: blur(26px) saturate(180%);
+    -webkit-backdrop-filter: blur(26px) saturate(180%);
+    box-shadow: 0 0 40px rgba(20, 40, 80, 0.18);
+    transform: translateX(-102%);
+    opacity: 1;
+    transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  body.dark .ai-sidebar {
+    background: rgba(20, 24, 34, 0.94);
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.5);
+  }
+  .ai-sidebar.collapsed { width: 78%; max-width: 300px; opacity: 1; }
+  .ai-sidebar.mobile-open { transform: translateX(0); }
 }
