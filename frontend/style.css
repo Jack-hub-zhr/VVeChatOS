@@ -184,7 +184,8 @@ body.app-active::before {
   top: -5%; left: -5%;
   animation: wallpaperDrift 30s linear infinite;
 }
-body.dark::before {
+body.dark::before,
+body.theme-dark::before {
   background-image: url('assets/wall-dark.jpg');
 }
 /* Static filter overlay — separates the expensive filter from the animation */
@@ -714,6 +715,8 @@ body.dark .tab2.active { background: rgba(96, 165, 250, 0.25); color: #93c5fd; }
   display: flex; align-items: center; gap: 8px;
   margin: 6px 14px 10px;
   padding: 10px 16px;
+  /* The suggestion dropdown hangs off the bottom of this box. */
+  position: relative;
   border-radius: var(--r-pill);
   background: rgba(255, 255, 255, 0.55);
   border: 1px solid var(--glass-border-soft);
@@ -3750,4 +3753,110 @@ body.dark .ai-sidebar { background: rgba(255, 255, 255, 0.035); }
   }
   .ai-sidebar.collapsed { width: 78%; max-width: 300px; opacity: 1; }
   .ai-sidebar.mobile-open { transform: translateX(0); }
+}
+
+/* ============================================================
+   Search suggestion dropdown (the "@ 提及" list)
+   ------------------------------------------------------------
+   These classes had NO styles at all, so the dropdown rendered with
+   the browser's default white box — which looked like a broken patch
+   in dark mode. Now it is a proper glass panel in both themes.
+   ============================================================ */
+.search-suggestions {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 600;
+  max-height: 320px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(28px) saturate(190%);
+  -webkit-backdrop-filter: blur(28px) saturate(190%);
+  border: 1px solid var(--glass-border);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 12px 34px rgba(30, 80, 150, 0.20),
+    0 2px 8px rgba(30, 80, 150, 0.10);
+  animation: suggestIn 0.18s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.search-suggestions.hidden { display: none !important; }
+@keyframes suggestIn {
+  from { opacity: 0; transform: translateY(-6px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.suggestion-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 13px;
+  cursor: pointer;
+  color: var(--ink);
+  transition: background 0.15s;
+}
+.suggestion-item:hover { background: rgba(59, 130, 246, 0.10); }
+.suggestion-item .avatar { flex-shrink: 0; }
+.suggestion-item .meta { flex: 1; min-width: 0; }
+.suggestion-item .name {
+  font-size: 14px; font-weight: 600; color: var(--ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.suggestion-hint {
+  padding: 14px 12px;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.action-tag {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  color: #1d4ed8;
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(59, 130, 246, 0.24);
+}
+.action-tag.friend {
+  color: #15803d;
+  background: rgba(52, 199, 89, 0.14);
+  border-color: rgba(52, 199, 89, 0.28);
+}
+
+/* ---------- dark theme ---------- */
+body.dark .search-suggestions,
+body.theme-dark .search-suggestions {
+  background: rgba(26, 31, 42, 0.94);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.10),
+    0 12px 34px rgba(0, 0, 0, 0.55);
+}
+body.dark .suggestion-item:hover,
+body.theme-dark .suggestion-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+body.dark .suggestion-hint,
+body.theme-dark .suggestion-hint { color: var(--muted); }
+body.dark .action-tag,
+body.theme-dark .action-tag {
+  color: #9dc2ff;
+  background: rgba(96, 165, 250, 0.16);
+  border-color: rgba(96, 165, 250, 0.30);
+}
+body.dark .action-tag.friend,
+body.theme-dark .action-tag.friend {
+  color: #86efac;
+  background: rgba(52, 199, 89, 0.16);
+  border-color: rgba(52, 199, 89, 0.32);
 }

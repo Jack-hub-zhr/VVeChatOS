@@ -2464,6 +2464,35 @@
 
   function aiLogEl() { return $('#ai-log'); }
 
+  // ---------- auto-scroll that yields to the reader ----------
+  // While the model streams, the transcript grows. Forcing the view to the
+  // bottom on every character made it impossible to scroll UP and read an
+  // earlier answer while the model was still working — the view yanked
+  // itself back down.
+  //
+  // The rule: follow the output ONLY while the reader is parked at the
+  // bottom. The moment they scroll up, stop moving. Content growing does
+  // not fire a scroll event (scrollTop does not change), so the flag
+  // reliably distinguishes "the reader scrolled up" from "more text
+  // arrived".
+  let _aiSticky = true;
+
+  function aiInitSticky() {
+    const log = aiLogEl();
+    if (!log || log.__stickyBound) return;
+    log.__stickyBound = true;
+    log.addEventListener('scroll', () => {
+      const gap = log.scrollHeight - log.scrollTop - log.clientHeight;
+      _aiSticky = gap < 60;
+    }, { passive: true });
+  }
+
+  function aiAutoScroll(force) {
+    const log = aiLogEl();
+    if (!log) return;
+    if (force || _aiSticky) log.scrollTop = log.scrollHeight;
+  }
+
   function aiAppendBlock(kind) {
     const log = aiLogEl();
     if (!log) return null;
@@ -2483,7 +2512,7 @@
       row.innerHTML = `<div class="ai-bubble bot"></div>`;
     }
     log.appendChild(row);
-    log.scrollTop = log.scrollHeight;
+    aiAutoScroll();
     return row;
   }
 
@@ -2512,10 +2541,7 @@
       // stutters once the answer gets long.
       const node = document.createTextNode('');
       el.appendChild(node);
-      const scroll = () => {
-        const log = aiLogEl();
-        if (log) log.scrollTop = log.scrollHeight;
-      };
+      const scroll = () => aiAutoScroll();
       let i = 0;
       const step = () => {
         if (i >= text.length) return resolve();
@@ -2710,7 +2736,7 @@
         w.innerHTML = '<p class="ai-welcome-title">有什么可以帮你？</p>';
         if (log) { const old = log.querySelector('.ai-welcome'); if (old) old.remove(); log.appendChild(w); }
       }
-      if (log) log.scrollTop = log.scrollHeight;
+      if (log) aiAutoScroll(true);
     } catch (e) {
       toast(e.message || '加载对话失败');
     }
@@ -2976,7 +3002,7 @@
             const log = aiLogEl();
             if (log) {
               log.appendChild(note);
-              log.scrollTop = log.scrollHeight;
+              aiAutoScroll();
             }
           } else if (j.type === 'reasoning') {
             // The upstream likes to open with a newline or two; those would
@@ -2998,8 +3024,7 @@
             // again when the stream ends — that printed the whole trace
             // twice.
             if (thinkBody) thinkBody.textContent = reasoning.replace(/\s+$/, '');
-            const log = aiLogEl();
-            if (log) log.scrollTop = log.scrollHeight;
+            aiAutoScroll();
           } else if (j.type === 'delta') {
             answer += j.text || '';
             if (!botBubble) {
@@ -3187,6 +3212,7 @@
     const form = $('#ai-form');
     const input = $('#ai-input');
     if (!form || !input) return;
+    aiInitSticky();
     if (form.__aiBound) {
       aiSyncTools();
       return;

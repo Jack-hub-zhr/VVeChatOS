@@ -225,6 +225,30 @@ try {
 }
 
 // ============================================================
+// Self-heal on boot: friendships must be SYMMETRIC.
+//
+// Every current code path inserts both directions, but older rows (and any
+// row written by an earlier build) can be one-way. A one-way row means the
+// friend sees the other person in their list while the other side does
+// not — which reads as "my friends vanished when I signed in on another
+// device", even though the data is on the server.
+//
+// Mirroring every row fixes it in place, and INSERT OR IGNORE makes it
+// idempotent.
+// ============================================================
+try {
+  const mirrored = db.prepare(
+    'INSERT OR IGNORE INTO friends (user_id, friend_id, created_at) ' +
+    'SELECT friend_id, user_id, created_at FROM friends'
+  ).run();
+  if (mirrored.changes) {
+    console.log(`[VVeChat] friend self-heal: mirrored ${mirrored.changes} one-way row(s)`);
+  }
+} catch (e) {
+  console.error('[VVeChat] friend self-heal failed:', e.message);
+}
+
+// ============================================================
 // Seed the built-in admin on boot. Previously Jack was only created by
 // /api/admin/wipe, so a fresh database had no admin at all and nobody could
 // log in with Jack / Zhr121005.
