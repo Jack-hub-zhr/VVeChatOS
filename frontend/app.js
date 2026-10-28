@@ -312,6 +312,9 @@
     online: new Set(),
     typingUsers: new Map(),
     pendingReply: null, pendingImage: null,
+    // @ mentions: the member list of every group we have opened, and
+    // who the next message is about to call out.
+    groupMembers: {}, mentionTarget: null,
   };
 
   // ---------- i18n helpers ----------
@@ -620,7 +623,7 @@
   }
 
   // ---------- rendering ----------
-  function renderAll() { renderChats(); renderBell(); renderTopbarAvatar(); renderSideMe(); }
+  function renderAll() { renderChats(); renderBell(); renderTopbarAvatar(); renderSideMe(); setListMode('chats'); }
 
   // The identity card at the top of the sidebar.
   function renderSideMe() {
@@ -718,13 +721,17 @@
     const avatarCls = [ac, online?'online':''].filter(Boolean).join(' ');
     const senderPrefix = c.last_sender_id && c.last_sender_id !== state.user.id && isGroup
       ? `<span style="color:var(--accent);font-weight:600;">${escapeHtml(userInfo(c.last_sender_id).username)}:</span> ` : '';
+    // A group message that calls the user out gets a loud prefix, so it
+    // is visible even in the one-line preview.
+    const atMePrefix = isGroup && mentionsMe(c.last_message)
+      ? '<span style="color:var(--accent);font-weight:700;">[有人@我] </span>' : '';
     const unreadHtml = c.unread > 0 ? `<span class="unread">${c.unread>99?'99+':c.unread}</span>` : '';
     const inner = isGroup
       ? escapeHtml(groupLetter(c.username, isOfficial))
       : avatarInner(c);
     li.innerHTML = `<div class="${avatarCls}"${avatarBg} data-peer="${isGroup ? '' : c.id}">${inner}${dot}</div>
       <div class="meta"><div class="name">${escapeHtml(c.username)} ${officialTag}</div>
-      <div class="preview">${senderPrefix}${escapeHtml(preview)}</div></div>
+      <div class="preview">${atMePrefix}${senderPrefix}${escapeHtml(preview)}</div></div>
       <div class="time">${fmtTime(c.last_at)}</div>${unreadHtml}`;
     li.addEventListener('click', () => {
       openChat(c.type, c.id, c.username, isOfficial);
@@ -1172,11 +1179,20 @@
     state.currentChat = {type, id, title, isOfficial};
     state.typingUsers.clear();
     state.pendingReply = null; state.pendingImage = null;
+    clearMentionTarget();
+    hideMentionMenu();
+    updateMentionButton();
+    // On a phone the list is a drawer over the content — picking a
+    // conversation must close it again.
+    $('.app-body')?.classList.remove('list-open');
     $('#chat-empty').classList.add('hidden');
     $('#chat-window').classList.remove('hidden');
     $('#reply-preview').classList.add('hidden');
     $('#img-preview').classList.add('hidden');
     renderChatHeader();
+    // The @ picker needs the member list — fetch it in the background
+    // so the chat itself opens instantly.
+    if (type === 'group') loadGroupMembers(id).then(() => { if (state.currentChat && state.currentChat.id === id) renderMessages(); });
     if (window.innerWidth <= 820) {
       $('.app-body')?.classList.add('chat-open');
       $('#chat-back')?.classList.add('mobile-show');
@@ -1264,6 +1280,197 @@
       }
     }
   }
+  // ============================================================
+  // @ mentions — group chats
+  // ============================================================
+  // Usernames are UNIQUE in the database, so a plain "@name" inside the
+  // message text identifies exactly one person. The text IS the mention:
+  // no extra column, no server change.
+  const MENTION_TOKEN = /@([^\s@,.;:!?，。；：！？、"'（）()\[\]]{1,32})/g;
+
+  function mentionTokens(text) {
+    const out = [];
+    if (!text) return out;
+    MENTION_TOKEN.lastIndex = 0;
+    let m;
+    while ((m = MENTION_TOKEN.exec(text))) out.push(m[1]);
+    return out;
+  }
+
+  // Does this text call ME out? The token has to equal my username
+  // exactly — "@jacky" must never light up Jack's flag.
+  function mentionsMe(text) {
+    const me = state.user && state.user.username;
+    if (!me) return false;
+    return mentionTokens(text).some(n => n === me);
+  }
+
+  function currentGroupMembers() {
+    const c = state.currentChat;
+    if (!c || c.type !== 'group') return [];
+    return state.groupMembers[c.id] || [];
+  }
+
+  async function loadGroupMembers(gid) {
+    if (!gid) return [];
+    try {
+      const r = await api(`/groups/${gid}/members`);
+      const list = r.members || [];
+      state.groupMembers[gid] = list;
+      return list;
+    } catch (e) { console.warn('[VVeChat] group members failed', e); return []; }
+  }
+
+  // Render message text, turning "@name" into a highlighted chip when
+  // that name really is a member of this group. Everything else is
+  // escaped, so the text can never inject markup.
+  function renderMentionText(text) {
+    const members = currentGroupMembers();
+    if (!members.length) return escapeHtml(text);
+    const byName = new Map();
+    for (const m of members) byName.set(String(m.username), m.id);
+    let out = '', last = 0, m;
+    MENTION_TOKEN.lastIndex = 0;
+    while ((m = MENTION_TOKEN.exec(text))) {
+      const uid = byName.get(m[1]);
+      if (uid === undefined) continue;   // not a member — leave it as plain text
+      out += escapeHtml(text.slice(last, m.index));
+      out += `<span class="mention" data-uid="${uid}">@${escapeHtml(m[1])}</span>`;
+      last = m.index + m[0].length;
+    }
+    out += escapeHtml(text.slice(last));
+    return out;
+  }
+
+  // ---- the "@" picker ----
+  const mentionState = { open: false, items: [], index: 0, start: -1, end: -1 };
+
+  function detectMentionQuery() {
+    const input = $('#chat-input');
+    if (!input || !state.currentChat || state.currentChat.type !== 'group') return null;
+    const caret = input.selectionStart;
+    const upto = input.value.slice(0, caret);
+    const m = /@([^\s@]*)$/.exec(upto);
+    if (!m) return null;
+    return { query: m[1], start: caret - m[0].length, end: caret };
+  }
+
+  function hideMentionMenu() {
+    mentionState.open = false;
+    mentionState.items = [];
+    mentionState.index = 0;
+    const menu = $('#mention-menu');
+    if (menu) { menu.classList.add('hidden'); menu.innerHTML = ''; }
+  }
+
+  function showMentionMenu(q) {
+    const menu = $('#mention-menu');
+    if (!menu) return;
+    const members = currentGroupMembers();
+    if (!members.length) { hideMentionMenu(); return; }
+    const needle = String(q.query || '').toLowerCase();
+    const items = members.filter(m => !needle || String(m.username).toLowerCase().includes(needle));
+    if (!items.length) { hideMentionMenu(); return; }
+    mentionState.open = true;
+    mentionState.items = items;
+    mentionState.index = 0;
+    mentionState.start = q.start;
+    mentionState.end = q.end;
+    // A hint line at the top of the picker: the "@" button is a new way
+    // in, so say what the list is for.
+    const head = '<div class="mention-hint">选择要 @ 的群成员</div>';
+    menu.innerHTML = head + items.map((m, i) => {
+      const bg = m.avatar_color ? `background:linear-gradient(135deg, ${m.avatar_color}, ${shade(m.avatar_color, -25)});` : '';
+      const em = emojiOf(m);
+      const who = m.id === state.user.id ? '<div class="tag">我</div>' : '';
+      return `<div class="mention-item${i === 0 ? ' active' : ''}" data-i="${i}">
+        <div class="avatar sm" style="${bg}">${em ? `<span class="avatar-emoji">${escapeHtml(em)}</span>` : escapeHtml(initials(m.username))}</div>
+        <div class="name">${escapeHtml(m.username)}</div>${who}
+      </div>`;
+    }).join('');
+    menu.classList.remove('hidden');
+    menu.onmousedown = (e) => {
+      const it = e.target.closest('.mention-item');
+      if (!it) return;
+      e.preventDefault();   // don't let the input lose focus before we patch it
+      applyMention(mentionState.items[Number(it.dataset.i)]);
+    };
+  }
+
+  function moveMentionSelection(delta) {
+    const menu = $('#mention-menu');
+    if (!menu || !mentionState.items.length) return;
+    mentionState.index = (mentionState.index + delta + mentionState.items.length) % mentionState.items.length;
+    $$('.mention-item', menu).forEach((el, i) => el.classList.toggle('active', i === mentionState.index));
+    const cur = menu.querySelector('.mention-item.active');
+    if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: 'nearest' });
+  }
+
+  function applyMention(member) {
+    const input = $('#chat-input');
+    if (!input || !member) return;
+    const q = detectMentionQuery();
+    const start = q ? q.start : input.selectionStart;
+    const end = q ? q.end : input.selectionStart;
+    const ins = '@' + member.username + ' ';
+    input.value = input.value.slice(0, start) + ins + input.value.slice(end);
+    const pos = start + ins.length;
+    input.setSelectionRange(pos, pos);
+    input.focus();
+    state.mentionTarget = member;
+    updateMentionPreview();
+    hideMentionMenu();
+  }
+
+  function updateMentionPreview() {
+    const box = $('#mention-preview');
+    if (!box) return;
+    const t = state.mentionTarget;
+    if (!t) { box.classList.add('hidden'); return; }
+    box.classList.remove('hidden');
+    const nameEl = $('#mention-preview-name');
+    const textEl = $('#mention-preview-text');
+    if (nameEl) nameEl.textContent = '@ ' + t.username;
+    if (textEl) textEl.textContent = '这条消息会 @ 他';
+  }
+
+  function clearMentionTarget() {
+    state.mentionTarget = null;
+    updateMentionPreview();
+  }
+
+  // Pull the "@name" back out of the input box when the strip is cancelled.
+  function removeMentionFromInput() {
+    const input = $('#chat-input');
+    const t = state.mentionTarget;
+    if (input && t) {
+      const token = '@' + t.username;
+      const i = input.value.indexOf(token);
+      if (i >= 0) {
+        input.value = input.value.slice(0, i) + input.value.slice(i + token.length).replace(/^\s+/, '');
+        input.setSelectionRange(i, i);
+      }
+    }
+    clearMentionTarget();
+  }
+
+  function inputHasMention(username) {
+    const input = $('#chat-input');
+    if (!input) return false;
+    return mentionTokens(input.value).includes(username);
+  }
+
+  // The @ button only makes sense in a group — dim it in a one-to-one
+  // chat so nobody wonders why the list is empty.
+  function updateMentionButton() {
+    const b = $('#mention-btn');
+    if (!b) return;
+    const c = state.currentChat;
+    const on = !!(c && c.type === 'group');
+    b.classList.toggle('disabled', !on);
+    b.title = on ? '@ 群成员' : '只有群聊才能 @ 人';
+  }
+
   function renderMessages() {
     if (!state.currentChat) return;
     const {type,id} = state.currentChat;
@@ -1306,7 +1513,10 @@
     let bubbleContent = '';
     if (m.is_deleted) bubbleContent = `<div class="msg-bubble deleted">${t('msg_deleted')}</div>`;
     else if (m.type === 'image') bubbleContent = `<div class="msg-bubble image-bubble"><img class="chat-img" src="${escapeHtml(m.content)}" alt="${t('img_alt')}" data-img="${escapeHtml(m.content)}" loading="lazy" /></div>`;
-    else bubbleContent = `<div class="msg-bubble">${escapeHtml(m.content)}</div>`;
+    else bubbleContent = `<div class="msg-bubble">${renderMentionText(m.content)}</div>`;
+    // "Someone called you out" — a flag above the bubble.
+    const mentionFlag = (ctype === 'group' && !mine && !m.is_deleted && mentionsMe(m.content))
+      ? '<div class="mention-flag">@ 我</div>' : '';
     const time = new Date(m.created_at).toTimeString().slice(0,5);
     let receipt = '';
     if (mine && ctype === 'user' && !m.is_deleted) {
@@ -1333,7 +1543,7 @@
     //   sender name → bubble → quoted reply → timestamp → dots
     // The quoted reply sits BELOW the message it answers and ABOVE the
     // timestamp, as requested.
-    row.innerHTML = `${avatarHtml}<div class="msg-content">${senderName}${bubbleContent}${quoteHtml}${metaHtml}${dotsHtml}</div>`;
+    row.innerHTML = `${avatarHtml}<div class="msg-content">${senderName}${mentionFlag}${bubbleContent}${quoteHtml}${metaHtml}${dotsHtml}</div>`;
     // The message action bar opens ONLY from the "..." button. Tapping the
     // bubble and right-clicking used to open it too, which made it easy to
     // trigger by accident and left two different menus for the same action.
@@ -1611,6 +1821,8 @@
       reply_to: state.pendingReply ? state.pendingReply.id : null,
     };
     state.pendingReply = null; state.pendingImage = null;
+    clearMentionTarget();
+    hideMentionMenu();
     $('#reply-preview').classList.add('hidden');
     $('#img-preview').classList.add('hidden');
     const key = convKey(type, id);
@@ -2503,7 +2715,7 @@
     if (kind === 'think') {
       row.innerHTML = `<div class="ai-think-head">
           <span class="ai-think-dots"><i></i><i></i><i></i></span>
-          <span class="ai-think-title">思考中</span>
+          <span class="ai-think-title">思考过程</span>
         </div>
         <div class="ai-think-body"></div>`;
     } else if (kind === 'user') {
@@ -3016,8 +3228,9 @@
             if (!thinkRow) {
               thinkRow = aiAppendBlock('think');
               thinkBody = thinkRow && thinkRow.querySelector('.ai-think-body');
-              // The title stays 「思考中」 — and the three dots keep
-              // pulsing — until the model starts writing the answer.
+              // The title says 「思考过程」 from the start — and the
+              // three dots keep pulsing — until the model starts
+              // writing the answer.
               waiting.remove();
             }
             // The trace is written as it arrives. It must NOT be typed out
@@ -3187,8 +3400,6 @@
     if (!ai) return;
     ai.classList.remove('open');
     ai.classList.add('hidden');
-    // Leave the phone drawer closed too.
-    $('#ai-sidebar')?.classList.remove('mobile-open');
     // Restore the chat: either the open conversation, or the empty state.
     if (state.currentChat) {
       $('#chat-window')?.classList.remove('hidden');
@@ -3206,6 +3417,34 @@
       $('.app-body')?.classList.remove('chat-open');
       $('#chat-back')?.classList.remove('mobile-show');
     }
+  }
+
+  // Fold the middle list pane away, and bring it back. Both headers
+  // carry a switch — the chat header and the AI header — so there is
+  // always a way to undo it. The switch lives in the CONTENT pane, never
+  // inside the list it hides.
+  function toggleListPane() {
+    const body = $('.app-body');
+    if (!body) return;
+    // On a phone the content pane covers the list, so the list slides in
+    // as a drawer instead of collapsing to nothing.
+    const phone = window.innerWidth <= 820;
+    let folded;
+    if (phone) folded = !body.classList.toggle('list-open');
+    else folded = body.classList.toggle('list-collapsed');
+    const title = folded ? '展开会话列表' : '收起会话列表';
+    for (const b of [$('#ai-sidebar-toggle'), $('#list-toggle'), $('#list-toggle-empty')]) {
+      if (b) { b.title = title; b.setAttribute('aria-label', title); }
+    }
+  }
+
+  // Which list is on screen — the rail decides, and the list pane's
+  // title and search box follow along.
+  function setListMode(mode) {
+    const lp = $('#list-pane');
+    if (lp) lp.dataset.mode = mode;
+    const titleEl = $('#list-title');
+    if (titleEl) titleEl.textContent = mode === 'ai' ? 'Qwen' : (mode === 'more' ? '更多' : '聊天');
   }
 
   function ensureAiPanelBound() {
@@ -3285,34 +3524,12 @@
     const toggleBtn = $('#ai-sidebar-toggle');
     if (toggleBtn && !toggleBtn.__bound) {
       toggleBtn.__bound = true;
-      toggleBtn.addEventListener('click', () => {
-        const sb = $('#ai-sidebar');
-        if (!sb) return;
-        // On a phone the list is a drawer that slides in from the left;
-        // on a wide screen it is a column that collapses to nothing.
-        if (window.innerWidth <= 820) {
-          const open = sb.classList.toggle('mobile-open');
-          toggleBtn.title = open ? '关闭会话列表' : '打开会话列表';
-          toggleBtn.setAttribute('aria-label', toggleBtn.title);
-        } else {
-          const collapsed = sb.classList.toggle('collapsed');
-          toggleBtn.title = collapsed ? '展开会话列表' : '收起会话列表';
-          toggleBtn.setAttribute('aria-label', toggleBtn.title);
-        }
-      });
-    }
-    // On a phone, tapping the transcript closes the drawer.
-    const aiMain = document.querySelector('.ai-main');
-    if (aiMain && !aiMain.__drawerBound) {
-      aiMain.__drawerBound = true;
-      aiMain.addEventListener('click', () => {
-        if (window.innerWidth > 820) return;
-        const sb = $('#ai-sidebar');
-        if (sb && sb.classList.contains('mobile-open')) {
-          sb.classList.remove('mobile-open');
-          const tb = $('#ai-sidebar-toggle');
-          if (tb) { tb.title = '打开会话列表'; tb.setAttribute('aria-label', tb.title); }
-        }
+      toggleBtn.addEventListener('click', (e) => {
+        // The button lives in the AI header, i.e. inside `.ai-main`,
+        // whose click handler closes the mobile drawer.  Without this the
+        // drawer would open and close again in the same tap.
+        e.stopPropagation();
+        toggleListPane();
       });
     }
 
@@ -3322,6 +3539,7 @@
       closeBtn.addEventListener('click', () => {
         $$('.side-nav-item').forEach(b => b.classList.toggle('active', b.dataset.pane === 'chats'));
         $$('.pane').forEach(p => p.classList.toggle('active', p.id === 'pane-chats'));
+        setListMode('chats');
         closeAiView();
       });
     }
@@ -3671,17 +3889,28 @@
         applyTheme(currentThemeMode());
         if (window.toast) toast(isOn ? '已开启 550C 启动动画主题' : '已关闭 550C 启动动画主题');
         saveBoot550cToServer(isOn);
+        // Turning it on is a demo — play the boot right here so the
+        // user sees what they just turned on.
+        if (isOn && window.Boot550C) {
+          setTimeout(() => { try { window.Boot550C.play(); } catch (_) {} }, 260);
+        }
       });
     }
 
-    // Sidebar navigation: 聊天 / Qwen
+    // The rail: 聊天 / Qwen / 更多. It picks the list in the middle
+    // pane AND the detail in the content pane.
     $$('.side-nav-item').forEach(btn => bindOnce(btn, 'click', () => {
       $$('.side-nav-item').forEach(b => b.classList.toggle('active', b === btn));
       const target = btn.dataset.pane;
       $$('.pane').forEach(p => p.classList.toggle('active', p.id === `pane-${target}`));
+      setListMode(target);
       if (target === 'ai') openAiView();
       else closeAiView();
     }));
+    // The chat header carries the same list switch as the AI header —
+    // and so does the empty state, which has no header at all.
+    bindOnce($('#list-toggle'), 'click', (e) => { e.stopPropagation(); toggleListPane(); });
+    bindOnce($('#list-toggle-empty'), 'click', (e) => { e.stopPropagation(); toggleListPane(); });
     // NOTE: the handler is wrapped in a thunk on purpose. `#btn-create-board`
     // is not in the markup and `openCreateBoard` is not defined any more, so
     // passing the bare identifier would evaluate it (and throw) even when
@@ -3778,12 +4007,68 @@
 
     // Enter sends, Shift+Enter inserts a newline.
     bindOnce($('#chat-input'), 'keydown', (e) => {
+      // While the @ picker is open the arrow keys drive it and Enter
+      // picks a member instead of sending the message.
+      if (mentionState.open) {
+        if (e.key === 'ArrowDown') { e.preventDefault(); moveMentionSelection(1); return; }
+        if (e.key === 'ArrowUp') { e.preventDefault(); moveMentionSelection(-1); return; }
+        if (e.key === 'Enter' || e.key === 'Tab') {
+          e.preventDefault();
+          applyMention(mentionState.items[mentionState.index]);
+          return;
+        }
+        if (e.key === 'Escape') { e.preventDefault(); hideMentionMenu(); return; }
+      }
       if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
         e.preventDefault();
         $('#chat-composer')?.requestSubmit
           ? $('#chat-composer').requestSubmit()
           : $('#chat-composer')?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
       }
+    });
+    // Typing "@" in a group chat pulls up the member list.
+    bindOnce($('#chat-input'), 'input', () => {
+      const el = $('#chat-input');
+      const q = detectMentionQuery();
+      if (q) { showMentionMenu(q); return; }
+      hideMentionMenu();
+      // A hand-typed "@name" lights the strip up as well — the strip must
+      // tell the truth no matter how the mention got into the box.
+      const members = currentGroupMembers();
+      const tokens = mentionTokens(el ? el.value : '');
+      let found = null;
+      for (const tk of tokens) {
+        const hit = members.find(x => String(x.username) === tk);
+        if (hit) { found = hit; break; }
+      }
+      if (found) { state.mentionTarget = found; updateMentionPreview(); }
+      else if (state.mentionTarget && !inputHasMention(state.mentionTarget.username)) clearMentionTarget();
+    });
+    // Clicking away from the picker closes it — but NOT when the click
+    // was on the @ button: that click is what OPENED the picker.
+    bindOnce(document, 'click', (e) => {
+      if (!e.target.closest('#mention-menu') && !e.target.closest('#mention-btn')) hideMentionMenu();
+    }, undefined, 'mention-close');
+    bindOnce($('#mention-preview-cancel'), 'click', () => { removeMentionFromInput(); $('#chat-input')?.focus(); });
+    // The @ button next to the picture button: opens the same picker.
+    bindOnce($('#mention-btn'), 'click', (e) => {
+      e.stopPropagation();
+      const c = state.currentChat;
+      if (!c || c.type !== 'group') { toast('只有群聊才能 @ 人'); return; }
+      const input = $('#chat-input');
+      if (!input) return;
+      input.focus();
+      // If the caret is already sitting in an "@something", the picker is
+      // what the user wants — don't type a second "@".
+      const q = detectMentionQuery();
+      if (q) { showMentionMenu(q); return; }
+      // Drop an "@" at the caret and let the normal input handler pick it
+      // up — one code path for typing "@" and for pressing the button.
+      const pos = input.selectionStart == null ? input.value.length : input.selectionStart;
+      input.value = input.value.slice(0, pos) + '@' + input.value.slice(pos);
+      input.setSelectionRange(pos + 1, pos + 1);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.focus();
     });
     bindOnce($('#reply-preview-cancel'), 'click', () => { state.pendingReply = null; $('#reply-preview').classList.add('hidden'); });
     bindOnce($('#img-preview-cancel'), 'click', () => { state.pendingImage = null; $('#img-preview').classList.add('hidden'); });
@@ -3919,7 +4204,15 @@
           msgEl.classList.add('ok');
           msgEl.textContent = authMode === 'login' ? t('auth_ok_login') : t('auth_ok_register');
           btn.textContent = '✓';
-          setTimeout(() => { enterApp(); }, 300);
+          // 550C — signing in IS "entering the account" again, and the
+          // whole point of the theme is the boot sequence. Play it once
+          // more on the way in, then drop the user into the app.
+          setTimeout(async () => {
+            if (boot550cOn() && window.Boot550C) {
+              try { await window.Boot550C.play(); } catch (_) {}
+            }
+            enterApp();
+          }, 300);
         } catch (err) {
           msgEl.textContent = err.message;
           btn.textContent = orig;
