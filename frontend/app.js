@@ -623,7 +623,7 @@
   }
 
   // ---------- rendering ----------
-  function renderAll() { renderChats(); renderBell(); renderTopbarAvatar(); renderSideMe(); }
+  function renderAll() { renderChats(); renderBell(); renderTopbarAvatar(); renderSideMe(); setListMode('chats'); }
 
   // The identity card at the top of the sidebar.
   function renderSideMe() {
@@ -1182,6 +1182,9 @@
     clearMentionTarget();
     hideMentionMenu();
     updateMentionButton();
+    // On a phone the list is a drawer over the content — picking a
+    // conversation must close it again.
+    $('.app-body')?.classList.remove('list-open');
     $('#chat-empty').classList.add('hidden');
     $('#chat-window').classList.remove('hidden');
     $('#reply-preview').classList.add('hidden');
@@ -3372,8 +3375,6 @@
     if (!ai) return;
     ai.classList.remove('open');
     ai.classList.add('hidden');
-    // Leave the phone drawer closed too.
-    $('#ai-sidebar')?.classList.remove('mobile-open');
     // Restore the chat: either the open conversation, or the empty state.
     if (state.currentChat) {
       $('#chat-window')?.classList.remove('hidden');
@@ -3391,6 +3392,34 @@
       $('.app-body')?.classList.remove('chat-open');
       $('#chat-back')?.classList.remove('mobile-show');
     }
+  }
+
+  // Fold the middle list pane away, and bring it back. Both headers
+  // carry a switch — the chat header and the AI header — so there is
+  // always a way to undo it. The switch lives in the CONTENT pane, never
+  // inside the list it hides.
+  function toggleListPane() {
+    const body = $('.app-body');
+    if (!body) return;
+    // On a phone the content pane covers the list, so the list slides in
+    // as a drawer instead of collapsing to nothing.
+    const phone = window.innerWidth <= 820;
+    let folded;
+    if (phone) folded = !body.classList.toggle('list-open');
+    else folded = body.classList.toggle('list-collapsed');
+    const title = folded ? '展开会话列表' : '收起会话列表';
+    for (const b of [$('#ai-sidebar-toggle'), $('#list-toggle'), $('#list-toggle-empty')]) {
+      if (b) { b.title = title; b.setAttribute('aria-label', title); }
+    }
+  }
+
+  // Which list is on screen — the rail decides, and the list pane's
+  // title and search box follow along.
+  function setListMode(mode) {
+    const lp = $('#list-pane');
+    if (lp) lp.dataset.mode = mode;
+    const titleEl = $('#list-title');
+    if (titleEl) titleEl.textContent = mode === 'ai' ? 'Qwen' : (mode === 'more' ? '更多' : '聊天');
   }
 
   function ensureAiPanelBound() {
@@ -3470,37 +3499,11 @@
     if (toggleBtn && !toggleBtn.__bound) {
       toggleBtn.__bound = true;
       toggleBtn.addEventListener('click', (e) => {
-        // The button now lives in the AI header, i.e. inside `.ai-main`,
+        // The button lives in the AI header, i.e. inside `.ai-main`,
         // whose click handler closes the mobile drawer.  Without this the
         // drawer would open and close again in the same tap.
         e.stopPropagation();
-        const sb = $('#ai-sidebar');
-        if (!sb) return;
-        // On a phone the list is a drawer that slides in from the left;
-        // on a wide screen it is a column that collapses to nothing.
-        if (window.innerWidth <= 820) {
-          const open = sb.classList.toggle('mobile-open');
-          toggleBtn.title = open ? '关闭会话列表' : '打开会话列表';
-          toggleBtn.setAttribute('aria-label', toggleBtn.title);
-        } else {
-          const collapsed = sb.classList.toggle('collapsed');
-          toggleBtn.title = collapsed ? '展开会话列表' : '收起会话列表';
-          toggleBtn.setAttribute('aria-label', toggleBtn.title);
-        }
-      });
-    }
-    // On a phone, tapping the transcript closes the drawer.
-    const aiMain = document.querySelector('.ai-main');
-    if (aiMain && !aiMain.__drawerBound) {
-      aiMain.__drawerBound = true;
-      aiMain.addEventListener('click', () => {
-        if (window.innerWidth > 820) return;
-        const sb = $('#ai-sidebar');
-        if (sb && sb.classList.contains('mobile-open')) {
-          sb.classList.remove('mobile-open');
-          const tb = $('#ai-sidebar-toggle');
-          if (tb) { tb.title = '打开会话列表'; tb.setAttribute('aria-label', tb.title); }
-        }
+        toggleListPane();
       });
     }
 
@@ -3510,6 +3513,7 @@
       closeBtn.addEventListener('click', () => {
         $$('.side-nav-item').forEach(b => b.classList.toggle('active', b.dataset.pane === 'chats'));
         $$('.pane').forEach(p => p.classList.toggle('active', p.id === 'pane-chats'));
+        setListMode('chats');
         closeAiView();
       });
     }
@@ -3867,14 +3871,20 @@
       });
     }
 
-    // Sidebar navigation: 聊天 / Qwen
+    // The rail: 聊天 / Qwen / 更多. It picks the list in the middle
+    // pane AND the detail in the content pane.
     $$('.side-nav-item').forEach(btn => bindOnce(btn, 'click', () => {
       $$('.side-nav-item').forEach(b => b.classList.toggle('active', b === btn));
       const target = btn.dataset.pane;
       $$('.pane').forEach(p => p.classList.toggle('active', p.id === `pane-${target}`));
+      setListMode(target);
       if (target === 'ai') openAiView();
       else closeAiView();
     }));
+    // The chat header carries the same list switch as the AI header —
+    // and so does the empty state, which has no header at all.
+    bindOnce($('#list-toggle'), 'click', (e) => { e.stopPropagation(); toggleListPane(); });
+    bindOnce($('#list-toggle-empty'), 'click', (e) => { e.stopPropagation(); toggleListPane(); });
     // NOTE: the handler is wrapped in a thunk on purpose. `#btn-create-board`
     // is not in the markup and `openCreateBoard` is not defined any more, so
     // passing the bare identifier would evaluate it (and throw) even when

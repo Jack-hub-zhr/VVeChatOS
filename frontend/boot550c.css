@@ -338,7 +338,8 @@ body.dark.theme-550c .topbar {
   background: rgba(10, 8, 5, 0.82);
   border-bottom-color: rgba(232, 160, 32, .18);
 }
-body.dark.theme-550c .left-pane { background: rgba(10, 8, 5, 0.38); }
+body.dark.theme-550c .rail-pane,
+body.dark.theme-550c .list-pane { background: rgba(10, 8, 5, 0.38); }
 body.dark.theme-550c .right-pane { background: rgba(5, 4, 3, 0.16); }
 body.dark.theme-550c .tabbar { background: rgba(10, 8, 5, 0.55); }
 body.dark.theme-550c .chat-header { background: rgba(10, 8, 5, 0.55); }
