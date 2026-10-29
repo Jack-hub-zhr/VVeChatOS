@@ -1373,23 +1373,24 @@ body.dark .chat-composer { background: rgba(20, 24, 32, 0.30); border-top-color:
 }
 .composer-row .emoji-btn:active, .composer-row .attach-btn:active,
 .composer-row .mention-btn:active { transform: scale(0.92); }
-/* The @ is just a character, not another round icon — it sits on the
-   input's edge and reads as "@" at a glance. */
+/* The @ is a character, not a picture, so it gets a slightly smaller
+   face than the emoji and image buttons — but it keeps the same round
+   chip, otherwise it looks like a typo next to them. */
 .composer-row .mention-btn {
-  width: auto; height: auto;
+  width: 40px; height: 40px;
   min-width: 0;
-  padding: 0 2px 0 4px;
-  border: none;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  color: var(--muted);
-  font-size: 17px;
-  font-weight: 600;
+  padding: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid var(--glass-border-soft);
+  box-shadow: var(--glass-highlight);
+  color: var(--ink-2);
+  font-size: 18px;
+  font-weight: 700;
   line-height: 1;
   font-family: inherit;
 }
-.composer-row .mention-btn:hover { background: transparent; color: var(--accent); }
+.composer-row .mention-btn:hover { background: rgba(255, 255, 255, 0.85); color: var(--accent); }
 /* Outside a group chat there is nobody to @ — say so instead of
    letting the button look broken. */
 .composer-row .mention-btn.disabled {
@@ -2279,7 +2280,7 @@ body.dark .theme-menu { background: rgba(20, 24, 32, 0.92); border-color: rgba(2
      and the media query now closes where it should. */
   .beta-tag { height: 18px; padding: 0 8px; font-size: 10px; }
   .composer-row .emoji-btn, .composer-row .attach-btn { width: 34px; height: 34px; font-size: 17px; }
-  .composer-row .mention-btn { width: auto; height: auto; padding: 0 2px 0 5px; font-size: 16px; }
+  .composer-row .mention-btn { width: 34px; height: 34px; padding: 0; font-size: 16px; }
   /* Root terminal on mobile: nearly full-screen */
   .root-terminal-card { width: 95vw; height: 80vh; }
   /* Auth card on iPhone: iOS-alert style — compact centered, NOT full-screen */
@@ -4109,7 +4110,7 @@ body.dark .mobile-menu-scrim { background: rgba(0, 0, 0, 0.34); }
   .msg-bubble { font-size: 13.5px; padding: 8px 12px; }
   .chat-composer { padding: 6px 8px 8px; }
   .composer-row .emoji-btn, .composer-row .attach-btn { width: 32px; height: 32px; font-size: 16px; }
-  .composer-row .mention-btn { width: auto; height: auto; padding: 0 2px 0 5px; font-size: 16px; }
+  .composer-row .mention-btn { width: 32px; height: 32px; padding: 0; font-size: 15px; }
   .chat-composer .btn-primary { padding: 8px 13px; font-size: 12.5px; }
 
   .app-body {
