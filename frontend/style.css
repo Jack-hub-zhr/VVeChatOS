@@ -4220,6 +4220,10 @@ body.dark .mobile-menu-scrim { background: rgba(0, 0, 0, 0.34); }
   /* The list still needs a little breathing room at the bottom so the
      last row can be scrolled clear of the floating bar. */
   .list-pane { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+  /* The panes are their own scroll containers, so the padding on
+     .list-pane never reaches the last row — the floating tab bar
+     would sit on top of it and it could not be tapped. */
+  .pane { padding-bottom: calc(66px + env(safe-area-inset-bottom)); }
   /* The transcript may run under the bar, but the composer must not —
      it has to stay above it or you cannot type. */
   .chat-composer {
