@@ -204,6 +204,18 @@
              Chats list, AI conversation list, or settings — the rail
              picks which one is on screen. -->
         <aside class="list-pane" id="list-pane" data-mode="chats">
+          <!-- The profile row sits flush against the top edge of the
+               list, so the first thing in the column is always who you
+               are — and it is right at the edge, not floating in the
+               middle of the panel. -->
+          <button class="list-me" id="list-me" type="button" title="我的资料">
+            <div class="avatar md" id="list-avatar"></div>
+            <div class="list-me-text">
+              <div class="list-me-name" id="list-me-name">—</div>
+              <div class="list-me-sub" id="list-me-sub">VVeChat</div>
+            </div>
+            <span class="list-me-arrow">›</span>
+          </button>
           <div class="list-head">
             <div class="list-title" id="list-title">聊天</div>
             <div class="search">

@@ -709,6 +709,42 @@ body.dark .list-pane {
   pointer-events: none;
 }
 
+/* The profile row at the very top of the list column. It hugs the
+   top edge — there is no padding above it. */
+.list-me {
+  display: none;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 10px 12px 8px;
+  margin: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+.list-me:hover { background: var(--glass-bg-soft); }
+.list-me .avatar.md {
+  width: 32px; height: 32px; flex-shrink: 0;
+  font-size: 15px; font-weight: 700; color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 999px;
+  box-shadow: 0 2px 8px rgba(38, 62, 100, 0.16);
+}
+body.dark .list-me .avatar.md { color: #e6ecf5; }
+.list-me-text { flex: 1; min-width: 0; }
+.list-me-name {
+  font-size: 13.5px; font-weight: 700; color: var(--ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.list-me-sub {
+  font-size: 11px; color: var(--muted); margin-top: 1px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.list-me-arrow { color: var(--muted-2); font-size: 17px; line-height: 1; }
+
 /* The title strip on top of the list pane. */
 .list-head {
   display: flex; flex-direction: column;
@@ -3917,33 +3953,78 @@ body.dark .mobile-menu-scrim { background: rgba(0, 0, 0, 0.34); }
      than 16px. That is why typing in the chat box used to blow the
      layout up and leave you staring at a cropped corner of it. ---- */
   input, textarea, select, .contenteditable { font-size: 16px !important; }
-  .chat-composer input[type="text"] { padding: 10px 14px; }
-  .search input { padding: 9px 12px; }
-  .auth-card .field input { padding: 11px 14px; }
-  .ai-composer textarea { line-height: 1.45; }
+  .chat-composer input[type="text"] { padding: 9px 13px; }
+  .search input { padding: 7px 11px; }
+  .auth-card .field input { padding: 10px 13px; }
+  .ai-composer textarea { line-height: 1.4; }
+
+  /* ---- everything is a notch smaller on a phone ----
+     The desktop type sizes are tuned for a wide screen; on a 390pt
+     phone they read oversized. These are the sizes the reference app
+     uses at the same width. */
+  .brand-name { font-size: 16px; }
+  .beta-tag { height: 20px; padding: 0 10px; font-size: 10px; min-width: 24px; }
+  .topbar { height: 44px; padding: 0 10px 0 12px; gap: 8px; }
+  .icon-btn { width: 32px; height: 32px; }
+  .icon-btn-sm { width: 30px; height: 30px; }
+
+  /* On a phone the face lives here instead of in the top bar. */
+  .list-me { display: flex; padding: 7px 10px 6px; gap: 8px; }
+  .topbar .rail-me { display: none; }
+  .list-me .avatar.md { width: 28px; height: 28px; font-size: 13px; }
+  .list-me-name { font-size: 12.5px; }
+  .list-me-sub { font-size: 10px; }
+  .list-me-arrow { font-size: 15px; }
+
+  .list-head { padding: 6px 10px 4px; }
+  .list-title { font-size: 14.5px; padding: 0 4px 6px; }
+  .search { padding: 6px 10px; gap: 7px; }
+  .search svg { width: 14px; height: 14px; }
+
+  .side-section { padding: 10px 12px 4px; }
+  .side-section-title { font-size: 10.5px; letter-spacing: 0.07em; }
+  .side-badge { min-width: 17px; height: 17px; font-size: 10px; }
+
+  .list-item { padding: 7px 10px; gap: 9px; }
+  .list-item .name { font-size: 13px; }
+  .list-item .preview { font-size: 11px; margin-top: 1px; }
+  .list-item .time { top: 7px; right: 9px; font-size: 10px; }
+  .list-item .avatar.sm { width: 34px; height: 34px; font-size: 14px; }
+  .chat-item .badge-num { min-width: 17px; height: 17px; font-size: 10px; }
+
+  .chat-header { height: 48px; padding: 0 10px; }
+  .chat-header h3 { font-size: 15px; }
+  .chat-header small { font-size: 11px; }
+  .messages { padding: 12px 12px 8px; }
+  .msg-bubble { font-size: 13.5px; padding: 8px 12px; }
+  .chat-composer { padding: 6px 8px 8px; }
+  .composer-row .emoji-btn, .composer-row .attach-btn { width: 32px; height: 32px; font-size: 16px; }
+  .composer-row .mention-btn { width: 32px; height: 32px; font-size: 14px; }
+  .chat-composer .btn-primary { padding: 8px 13px; font-size: 12.5px; }
 
   .app-body {
     position: relative; gap: 0; flex-direction: column;
-    /* room for the floating tab bar */
-    padding-bottom: calc(82px + env(safe-area-inset-bottom));
   }
 
-  /* ---- the tab bar ---- */
+  /* ---- the tab bar ----
+     It FLOATS over the page: nothing is reserved for it, the content
+     runs all the way to the bottom edge and the bar sits on top of it
+     like a pill-shaped overlay. */
   .rail-pane {
     position: fixed;
-    left: 12px; right: 12px;
-    bottom: calc(10px + env(safe-area-inset-bottom));
+    left: 16px; right: 16px;
+    bottom: calc(8px + env(safe-area-inset-bottom));
     width: auto; height: auto;
     flex-direction: row; align-items: center;
-    gap: 4px;
-    margin: 0; padding: 7px 8px;
-    border-radius: 24px;
-    background: rgba(255, 255, 255, 0.74);
+    gap: 2px;
+    margin: 0; padding: 5px 6px;
+    border-radius: 28px;
+    background: rgba(255, 255, 255, 0.72);
     backdrop-filter: blur(26px) saturate(180%);
     -webkit-backdrop-filter: blur(26px) saturate(180%);
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.55),
-      0 10px 34px rgba(30, 80, 150, 0.18);
+      0 8px 26px rgba(30, 80, 150, 0.18);
     border: 1px solid rgba(255, 255, 255, 0.7);
     z-index: 80;
   }
@@ -3953,39 +4034,32 @@ body.dark .mobile-menu-scrim { background: rgba(0, 0, 0, 0.34); }
   }
   .rail-nav {
     flex-direction: row; justify-content: space-between;
-    width: 100%; flex: 1; padding: 0; gap: 4px;
+    width: 100%; flex: 1; padding: 0; gap: 2px;
     overflow: visible;
   }
   .side-nav-item {
     flex: 1;
-    flex-direction: column; align-items: center; gap: 3px;
-    width: auto; padding: 5px 2px 4px;
-    font-size: 10.5px; font-weight: 600;
-    border-radius: 16px;
+    flex-direction: column; align-items: center; gap: 2px;
+    width: auto; padding: 4px 2px 3px;
+    font-size: 9.5px; font-weight: 600;
+    border-radius: 22px;
   }
   .side-nav-item.active {
     background: transparent;
     box-shadow: none;
     color: var(--accent);
   }
-  .side-nav-ic { width: 30px; height: 30px; border-radius: 10px; }
+  .side-nav-ic { width: 26px; height: 26px; border-radius: 9px; }
+  .side-nav-ic svg { width: 16px; height: 16px; }
   .side-nav-item.active .side-nav-ic {
     background: var(--accent-grad);
     color: #fff;
-    box-shadow: 0 3px 10px rgba(76, 111, 255, 0.28);
+    box-shadow: 0 2px 8px rgba(76, 111, 255, 0.28);
   }
-  .side-nav-label { font-size: 10.5px; }
+  .side-nav-label { font-size: 9.5px; }
 
-  /* ---- the avatar moved up to the top bar ---- */
-  .topbar .rail-me {
-    display: flex; flex-direction: row; align-items: center; gap: 7px;
-    width: auto; padding: 0 8px 0 0;
-    margin-right: 2px;
-    border: none;
-    border-right: 1px solid var(--glass-border-soft);
-  }
-  .topbar .rail-me .avatar.md { width: 32px; height: 32px; font-size: 15px; }
-  .topbar .rail-me .rail-me-name { font-size: 12px; max-width: 72px; }
+  /* ---- the face lives at the top of the list column now ---- */
+  .topbar .rail-me { display: none; }
 
   /* ---- the list ---- */
   .list-pane {
@@ -4000,7 +4074,7 @@ body.dark .mobile-menu-scrim { background: rgba(0, 0, 0, 0.34); }
   .app-body.chat-open .list-pane {
     display: flex;
     position: absolute;
-    inset: 0 auto calc(82px + env(safe-area-inset-bottom)) 0;
+    inset: 0 auto calc(64px + env(safe-area-inset-bottom)) 0;
     width: 78%; max-width: 296px;
     z-index: 90;
     transform: translateX(-102%);
@@ -4030,10 +4104,18 @@ body.dark .mobile-menu-scrim { background: rgba(0, 0, 0, 0.34); }
     pointer-events: auto;
   }
 
-  /* The content pane has to stop above the tab bar. */
-  .right-pane {
-    inset: 0 0 calc(82px + env(safe-area-inset-bottom)) 0;
+  /* The content pane runs all the way to the bottom — the tab bar floats
+     over it rather than sitting in a reserved strip. */
+  .right-pane { inset: 0; }
+  /* The list still needs a little breathing room at the bottom so the
+     last row can be scrolled clear of the floating bar. */
+  .list-pane { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+  /* The transcript may run under the bar, but the composer must not —
+     it has to stay above it or you cannot type. */
+  .chat-composer {
+    padding-bottom: calc(66px + env(safe-area-inset-bottom));
   }
+  .ai-composer { padding-bottom: calc(66px + env(safe-area-inset-bottom)); }
 
   /* The empty state has no header, so its switch would float over
      nothing — on a phone the list is already the whole screen. */

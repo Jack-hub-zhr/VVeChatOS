@@ -633,15 +633,28 @@
     if (!av || !state.user) return;
     const emoji = state.user.avatar_emoji || null;
     const color = state.user.avatar_color || '#5eead4';
-    av.innerHTML = emoji
+    const face = emoji
       ? `<span class="avatar-emoji">${escapeHtml(emoji)}</span>`
       : escapeHtml(initials(state.user.username));
-    av.style.background = emoji
+    const fill = emoji
       ? 'rgba(255,255,255,0.55)'
       : `linear-gradient(135deg, ${color}, ${shade(color, -25)})`;
+    av.innerHTML = face;
+    av.style.background = fill;
     av.classList.toggle('avatar-jack-glow', state.user.username === 'Jack');
     if (nm) nm.textContent = state.user.username;
     if (sb) sb.textContent = state.user.username === 'Jack' ? '管理员' : 'VVeChat';
+    // The same face, at the top of the list column.
+    const la = $('#list-avatar');
+    if (la) {
+      la.innerHTML = face;
+      la.style.background = fill;
+      la.classList.toggle('avatar-jack-glow', state.user.username === 'Jack');
+    }
+    const lnm = $('#list-me-name');
+    if (lnm) lnm.textContent = state.user.username;
+    const lsb = $('#list-me-sub');
+    if (lsb) lsb.textContent = state.user.username === 'Jack' ? '管理员' : 'VVeChat';
   }
 
   function renderTopbarAvatar() {
@@ -2622,7 +2635,7 @@
     if (_sideMeBound) return;
     _sideMeBound = true;
     document.addEventListener('click', (e) => {
-      const card = e.target.closest('#side-me');
+      const card = e.target.closest('#side-me, #list-me');
       if (!card) return;
       e.preventDefault(); e.stopPropagation();
       if (state.user) openProfileModal(state.user);
