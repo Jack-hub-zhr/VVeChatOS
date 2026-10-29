@@ -3430,11 +3430,48 @@
     // as a drawer instead of collapsing to nothing.
     const phone = window.innerWidth <= 820;
     let folded;
-    if (phone) folded = !body.classList.toggle('list-open');
-    else folded = body.classList.toggle('list-collapsed');
+    if (phone) {
+      const open = body.classList.toggle('list-open');
+      folded = !open;
+    } else {
+      folded = body.classList.toggle('list-collapsed');
+    }
     const title = folded ? '展开会话列表' : '收起会话列表';
     for (const b of [$('#ai-sidebar-toggle'), $('#list-toggle'), $('#list-toggle-empty')]) {
       if (b) { b.title = title; b.setAttribute('aria-label', title); }
+    }
+  }
+
+  // The keyboard: while a text field has focus the bottom tab bar would
+  // sit right on top of it, so the bar steps aside. Only text fields
+  // count — a tapped button takes focus too, and the bar must not slide
+  // out from under the finger that just pressed it.
+  function isTextField(t) {
+    if (!t || t.nodeType !== 1) return false;
+    if (t.isContentEditable) return true;
+    const tag = t.tagName;
+    return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+  }
+  document.addEventListener('focusin', (e) => {
+    if (!isTextField(e.target)) return;
+    $('.app-body')?.classList.add('kb-open');
+  });
+  document.addEventListener('focusout', () => {
+    // The next focused element is only known after the browser has moved
+    // on, so wait a tick before deciding the keyboard is gone.
+    setTimeout(() => {
+      if (!isTextField(document.activeElement)) $('.app-body')?.classList.remove('kb-open');
+    }, 80);
+  });
+
+  // Close the phone drawer — used by the scrim and whenever the list
+  // stops being the thing the user is looking at.
+  function closeListPane() {
+    const body = $('.app-body');
+    if (!body) return;
+    body.classList.remove('list-open');
+    for (const b of [$('#ai-sidebar-toggle'), $('#list-toggle'), $('#list-toggle-empty')]) {
+      if (b) { b.title = '展开会话列表'; b.setAttribute('aria-label', b.title); }
     }
   }
 
@@ -3904,6 +3941,7 @@
       const target = btn.dataset.pane;
       $$('.pane').forEach(p => p.classList.toggle('active', p.id === `pane-${target}`));
       setListMode(target);
+      closeListPane();
       if (target === 'ai') openAiView();
       else closeAiView();
     }));
@@ -3911,6 +3949,9 @@
     // and so does the empty state, which has no header at all.
     bindOnce($('#list-toggle'), 'click', (e) => { e.stopPropagation(); toggleListPane(); });
     bindOnce($('#list-toggle-empty'), 'click', (e) => { e.stopPropagation(); toggleListPane(); });
+    // Tapping the empty area closes the list drawer — on a phone that is
+    // the only way back that does not involve the little arrow.
+    bindOnce($('#list-scrim'), 'click', () => closeListPane());
     // NOTE: the handler is wrapped in a thunk on purpose. `#btn-create-board`
     // is not in the markup and `openCreateBoard` is not defined any more, so
     // passing the bare identifier would evaluate it (and throw) even when

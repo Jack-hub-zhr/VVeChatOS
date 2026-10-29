@@ -56,6 +56,12 @@
     <section class="app-shell">
       <header class="topbar">
         <div class="topbar-left">
+          <!-- identity — on a phone the rail becomes a bottom tab bar,
+               so the avatar lives up here instead. -->
+          <button class="rail-me" id="side-me" type="button" title="我的资料">
+            <div class="avatar md" id="side-avatar"></div>
+            <span class="rail-me-name" id="side-name">—</span>
+          </button>
           <span class="brand-name">VVeChat</span>
           <span class="beta-tag">OS 1</span>
         </div>
@@ -147,18 +153,14 @@
         </div>
       </header>
       <div class="app-body">
+        <!-- Tapping the empty area closes the list drawer on a phone. -->
+        <div class="list-scrim" id="list-scrim"></div>
         <!-- ============ RAIL: the narrow icon column ============
              It only carries the category switches. Everything that
              belongs to a category (the lists, the settings) lives in the
              list pane to its right; the conversation itself lives in the
              content pane on the far right. -->
         <aside class="rail-pane">
-          <!-- identity -->
-          <button class="rail-me" id="side-me" type="button" title="我的资料">
-            <div class="avatar md" id="side-avatar"></div>
-            <span class="rail-me-name" id="side-name">—</span>
-          </button>
-
           <!-- ============ primary navigation ============ -->
           <nav class="side-nav rail-nav" role="tablist">
             <button class="side-nav-item active" data-pane="chats" role="tab" title="聊天">

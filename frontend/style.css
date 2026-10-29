@@ -3048,6 +3048,20 @@ body.dark .plus-result-btn:hover { background: var(--accent); color: #0d1a12; }
   box-shadow: 0 3px 10px rgba(38, 62, 100, 0.16);
 }
 body.dark .rail-me .avatar.md { color: #e6ecf5; }
+/* On a desktop the avatar sits in the top bar, to the left of the
+   wordmark — it is a horizontal chip there, not a column. */
+.topbar .rail-me {
+  display: flex; flex-direction: row; align-items: center; gap: 9px;
+  width: auto; padding: 0 12px 0 0;
+  margin-right: 12px;
+  border: none;
+  border-right: 1px solid var(--glass-border-soft);
+}
+.topbar .rail-me .avatar.md { width: 34px; height: 34px; font-size: 16px; }
+.topbar .rail-me .rail-me-name { font-size: 13px; max-width: 110px; }
+
+/* The scrim behind the phone drawer — off on a desktop. */
+.list-scrim { display: none; }
 
 /* Emoji avatars render on top of the coloured disc. */
 .avatar-emoji {
@@ -3225,7 +3239,8 @@ body.dark .qwen-ring { --qwen-ring: #e2e8f0; }
 
 /* The sidebar entry looks like the other entries: no tile of its own
    until it is selected. */
-.side-nav-ic-qwen { background: transparent; }
+.side-nav-ic-qwen { background: rgba(30, 80, 150, 0.07); }
+body.dark .side-nav-ic-qwen { background: rgba(255, 255, 255, 0.07); }
 /* The white halo is meant for the DARK ring. On an idle item it swallowed
    the dark ring whole, leaving a faint blob — so it only lights up when
    the item is selected. */
@@ -3889,67 +3904,155 @@ body.dark .mobile-menu-scrim { background: rgba(0, 0, 0, 0.34); }
 .ai-send.stopping:hover { filter: brightness(1.06); }
 
 /* ============================================================
-   PHONE LAYOUT — the three columns become: the rail turns into a
-   horizontal strip on top, the list sits under it, and the content
-   pane covers both. These rules live at the END of the file on
-   purpose: they override the desktop ones above, and CSS gives the
-   LAST rule of equal specificity the win.
+   PHONE LAYOUT — modelled on DingTalk's mobile app:
+     top bar  : the brand and the icon buttons
+     content  : the lists and the conversations
+     bottom   : a floating glass tab bar with the category switches
+   These rules live at the END of the file on purpose: they override
+   the desktop ones above, and CSS gives the LAST rule of equal
+   specificity the win.
    ============================================================ */
 @media (max-width: 820px) {
-  .app-body { position: relative; gap: 0; flex-direction: column; }
+  /* ---- iOS zooms the whole page when a focused field is smaller
+     than 16px. That is why typing in the chat box used to blow the
+     layout up and leave you staring at a cropped corner of it. ---- */
+  input, textarea, select, .contenteditable { font-size: 16px !important; }
+  .chat-composer input[type="text"] { padding: 10px 14px; }
+  .search input { padding: 9px 12px; }
+  .auth-card .field input { padding: 11px 14px; }
+  .ai-composer textarea { line-height: 1.45; }
+
+  .app-body {
+    position: relative; gap: 0; flex-direction: column;
+    /* room for the floating tab bar */
+    padding-bottom: calc(82px + env(safe-area-inset-bottom));
+  }
+
+  /* ---- the tab bar ---- */
   .rail-pane {
-    width: 100%; height: auto;
+    position: fixed;
+    left: 12px; right: 12px;
+    bottom: calc(10px + env(safe-area-inset-bottom));
+    width: auto; height: auto;
     flex-direction: row; align-items: center;
-    gap: 6px;
-    margin: 0; padding: 8px 10px;
-    border-radius: 0;
-    border-left: 0; border-right: 0; border-top: 0;
+    gap: 4px;
+    margin: 0; padding: 7px 8px;
+    border-radius: 24px;
+    background: rgba(255, 255, 255, 0.74);
+    backdrop-filter: blur(26px) saturate(180%);
+    -webkit-backdrop-filter: blur(26px) saturate(180%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.55),
+      0 10px 34px rgba(30, 80, 150, 0.18);
+    border: 1px solid rgba(255, 255, 255, 0.7);
+    z-index: 80;
   }
-  .rail-me {
-    flex-direction: row; gap: 8px;
-    width: auto; padding: 0 10px 0 2px;
-    border-right: 1px solid var(--glass-border-soft);
+  body.dark .rail-pane {
+    background: rgba(20, 24, 32, 0.78);
+    border-color: rgba(255, 255, 255, 0.12);
   }
-  .rail-me .avatar.md { width: 32px; height: 32px; font-size: 15px; }
   .rail-nav {
-    flex-direction: row; justify-content: flex-start;
-    width: auto; flex: 1; padding: 0; gap: 4px;
+    flex-direction: row; justify-content: space-between;
+    width: 100%; flex: 1; padding: 0; gap: 4px;
+    overflow: visible;
   }
   .side-nav-item {
-    flex-direction: row; gap: 7px;
-    width: auto; padding: 6px 12px 6px 6px;
-    font-size: 12.5px; border-radius: 12px;
+    flex: 1;
+    flex-direction: column; align-items: center; gap: 3px;
+    width: auto; padding: 5px 2px 4px;
+    font-size: 10.5px; font-weight: 600;
+    border-radius: 16px;
   }
-  .side-nav-ic { width: 26px; height: 26px; border-radius: 9px; }
+  .side-nav-item.active {
+    background: transparent;
+    box-shadow: none;
+    color: var(--accent);
+  }
+  .side-nav-ic { width: 30px; height: 30px; border-radius: 10px; }
+  .side-nav-item.active .side-nav-ic {
+    background: var(--accent-grad);
+    color: #fff;
+    box-shadow: 0 3px 10px rgba(76, 111, 255, 0.28);
+  }
+  .side-nav-label { font-size: 10.5px; }
+
+  /* ---- the avatar moved up to the top bar ---- */
+  .topbar .rail-me {
+    display: flex; flex-direction: row; align-items: center; gap: 7px;
+    width: auto; padding: 0 8px 0 0;
+    margin-right: 2px;
+    border: none;
+    border-right: 1px solid var(--glass-border-soft);
+  }
+  .topbar .rail-me .avatar.md { width: 32px; height: 32px; font-size: 15px; }
+  .topbar .rail-me .rail-me-name { font-size: 12px; max-width: 72px; }
+
+  /* ---- the list ---- */
   .list-pane {
     flex: 1; width: 100%;
     margin: 0; padding: 4px;
     border-radius: 0;
     border-left: 0; border-right: 0; border-bottom: 0;
   }
-  /* On a phone the content pane covers the list, so the list becomes a
-     drawer that the ☰ button slides in — otherwise the AI conversation
-     list would be unreachable on a phone. */
+  /* With a conversation open the list becomes a drawer — and it has to
+     stay narrow enough that the conversation behind it still reads as
+     "the place you came from". */
   .app-body.chat-open .list-pane {
     display: flex;
     position: absolute;
-    inset: 0 auto 0 0;
-    width: 86%; max-width: 330px;
-    z-index: 12;
+    inset: 0 auto calc(82px + env(safe-area-inset-bottom)) 0;
+    width: 78%; max-width: 296px;
+    z-index: 90;
     transform: translateX(-102%);
     transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
-    border-radius: 0 20px 20px 0;
+    border-radius: 0 20px 0 0;
     border-top: 0; border-bottom: 0; border-left: 0;
-    background: rgba(255, 255, 255, 0.92);
+    background: rgba(255, 255, 255, 0.96);
     backdrop-filter: blur(26px) saturate(180%);
     -webkit-backdrop-filter: blur(26px) saturate(180%);
-    box-shadow: 8px 0 30px rgba(30, 80, 150, 0.18);
+    box-shadow: 8px 0 30px rgba(30, 80, 150, 0.22);
   }
-  body.dark .app-body.chat-open .list-pane { background: rgba(20, 24, 32, 0.94); }
+  body.dark .app-body.chat-open .list-pane { background: rgba(18, 22, 30, 0.97); }
   .app-body.chat-open.list-open .list-pane { transform: translateX(0); }
+
+  /* Tapping the empty area closes the drawer. */
+  .list-scrim {
+    display: block;
+    position: absolute; inset: 0;
+    z-index: 85;
+    background: rgba(10, 18, 34, 0.38);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+  }
+  .app-body.chat-open.list-open .list-scrim {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* The content pane has to stop above the tab bar. */
+  .right-pane {
+    inset: 0 0 calc(82px + env(safe-area-inset-bottom)) 0;
+  }
+
   /* The empty state has no header, so its switch would float over
      nothing — on a phone the list is already the whole screen. */
-  @media (max-width: 820px) { .list-toggle-float { display: none; } }
+  .list-toggle-float { display: none; }
+
+  /* The toast used to land on top of the tab bar. */
+  .toast { bottom: calc(96px + env(safe-area-inset-bottom)); }
+
+  /* When the keyboard is up the tab bar would float right on top of
+     it, so it gets out of the way — but ONLY while a text field has
+     focus. A plain :focus-within would also fire when you tap one of
+     the tab buttons (a button takes focus on tap), and the bar would
+     slide away under your finger. */
+  .app-body.kb-open .rail-pane {
+    transform: translateY(140%);
+    opacity: 0;
+    pointer-events: none;
+  }
+  .rail-pane { transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.25s; }
 }
 
 /* ============================================================
