@@ -88,6 +88,11 @@
           <button id="btn-profile" class="icon-btn" title="我的资料">
             <div class="avatar sm" id="topbar-avatar"></div>
           </button>
+          <!-- Language toggle. The globe says "language", the letter on
+               it says which one you are in right now. -->
+          <button id="btn-lang" class="icon-btn icon-btn-lang" title="中文 / English" aria-label="切换语言 / Switch language">
+            <span class="lang-glyph" id="lang-glyph">EN</span>
+          </button>
           <button id="btn-bell" class="icon-btn" title="好友申请">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
               <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/>
@@ -491,6 +496,10 @@
               </button>
             </header>
             <div class="chat-messages" id="chat-messages"></div>
+            <!-- "Qwen is typing" — the assistant works in the background,
+                 so the room would otherwise look dead while it thinks. It
+                 shares the slot with the hint bar; only one shows at a time. -->
+            <div class="typing-indicator hidden" id="typing-indicator"></div>
             <form class="chat-composer" id="chat-composer">
               <div id="reply-preview" class="reply-preview hidden">
                 <div class="info">
@@ -505,7 +514,7 @@
                    by name. Tapping it drops the @ in for you. -->
               <button type="button" class="mention-hint-bar hidden" id="qwen-hint">
                 <span class="mention-hint-dot">@</span>
-                <span class="mention-hint-text" data-i18n="hint_assistant_call">叫一下助手，它会看群里的上下文来回答</span>
+                <span class="mention-hint-text" data-i18n="hint_assistant_call">点击我 让Qwen也一起来聊！</span>
               </button>
               <div id="mention-preview" class="mention-preview hidden">
                 <div class="info">

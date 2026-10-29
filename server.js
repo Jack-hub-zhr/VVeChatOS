@@ -1920,12 +1920,16 @@ app.post('/api/groups/:id/members', rateLimit('write'), authRequired, (req, res)
   if (!u) return res.status(404).json({ error: '用户不存在' });
   db.prepare('INSERT OR IGNORE INTO group_members (group_id, user_id, joined_at) VALUES (?, ?, ?)')
     .run(gid, memberId, now());
+  // Put their live socket into the room as well — otherwise they only get
+  // the messages of groups they were already in when they connected.
+  try { if (io) io.in(`user:${memberId}`).socketsJoin(`group:${gid}`); } catch (e) { }
   try { if (io) io.to(`group:${gid}`).emit('group:member-added', { group_id: gid, user_id: memberId }); } catch {}
   res.json({ ok: true });
 });
 
 // Remove a member. Owner or Jack only.
 app.delete('/api/groups/:id/members/:uid', rateLimit('write'), authRequired, (req, res) => {
+  // (the socket room is cleaned up below, right after the row is deleted)
   const gid = Number(req.params.id);
   const uid = Number(req.params.uid);
   if (!isOfficialGroup(gid)) return res.status(404).json({ error: '群不存在' });
@@ -1933,6 +1937,7 @@ app.delete('/api/groups/:id/members/:uid', rateLimit('write'), authRequired, (re
     return res.status(403).json({ error: '只有群主或管理员可以移除成员' });
   }
   db.prepare('DELETE FROM group_members WHERE group_id = ? AND user_id = ?').run(gid, uid);
+  try { if (io) io.in(`user:${uid}`).socketsLeave(`group:${gid}`); } catch (e) { }
   try { if (io) io.to(`group:${gid}`).emit('group:member-removed', { group_id: gid, user_id: uid }); } catch {}
   res.json({ ok: true });
 });
@@ -1978,6 +1983,10 @@ app.post('/api/groups/:id/join', rateLimit('write'), authRequired, (req, res) =>
   if (!isOfficialGroup(gid)) return res.status(404).json({ error: '群不存在' });
   db.prepare('INSERT OR IGNORE INTO group_members (group_id, user_id, joined_at) VALUES (?, ?, ?)')
     .run(gid, req.user.id, now());
+  // The socket joined its group rooms when it connected; a group joined
+  // after that needs the room added now, or the live messages stay out
+  // of reach until the next reconnect.
+  try { if (io) io.in(`user:${req.user.id}`).socketsJoin(`group:${gid}`); } catch (e) { }
   res.json({ ok: true });
 });
 
@@ -2237,7 +2246,13 @@ app.post('/api/messages', rateLimit('write'), authRequired, (req, res) => {
       .replace(/^\s*[,，:：]\s*/, '')
       .trim() || String(content);
     const context = groupContext(gid, 24);
+    // The answer takes a few seconds to come back. Say so in the room,
+    // otherwise it looks like the message was swallowed.
+    const typingOn = { conv_type: 'group', conv_id: String(gid), uid: assistantId, username: ASSISTANT_NAME };
+    try { if (io) io.to(`group:${gid}`).emit('typing:start', typingOn); } catch (e) { }
+    const stopTyping = () => { try { if (io) io.to(`group:${gid}`).emit('typing:stop', typingOn); } catch (e) { } };
     assistantAnswer(question, context).then((answer) => {
+      stopTyping();
       if (!answer) {
         // Say so in the group — silence reads like the message was lost.
         const fInfo = db.prepare(
@@ -2253,7 +2268,7 @@ app.post('/api/messages', rateLimit('write'), authRequired, (req, res) => {
       const aRow = db.prepare('SELECT * FROM messages WHERE id = ?').get(aInfo.lastInsertRowid);
       const aMsg = buildMessage({ ...aRow, sender_username: ASSISTANT_NAME });
       broadcastMessage(aMsg, 'group', gid, assistantId);
-    }).catch((e) => console.warn('[VVeChat] assistant reply failed:', e.message));
+    }).catch((e) => { stopTyping(); console.warn('[VVeChat] assistant reply failed:', e.message); });
   }
 });
 
@@ -2488,8 +2503,11 @@ io.on('connection', (socket) => {
   // Join every group room the user belongs to, so group message + typing
   // broadcasts actually reach them (without this, group chats looked "dead").
   try {
+    // NOTE: the column is `group_id`, not `id` — reading `g.id` put every
+    // socket in a room called "group:undefined", so nothing that was
+    // broadcast to a group ever reached anybody.
     const gs = db.prepare('SELECT group_id FROM group_members WHERE user_id = ?').all(uid);
-    for (const g of gs) socket.join(`group:${g.id}`);
+    for (const g of gs) socket.join(`group:${g.group_id}`);
   } catch (e) {
     console.error('[socket] group join failed:', e.message);
   }

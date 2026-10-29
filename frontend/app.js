@@ -209,7 +209,7 @@
       list_sessions: '会话',
       list_empty: '还没有群聊或好友',
       list_search_ph: '搜索好友 / 群聊 / 用户',
-      hint_assistant_call: '叫一下助手，它会看群里的上下文来回答',
+      hint_assistant_call: '点击我 让Qwen也一起来聊！',
       ai_new_chat: '新对话',
       ai_welcome: '有什么可以帮你？',
       ai_input_ph: '给 Qwen 发消息…（Enter 发送，Shift+Enter 换行）',
@@ -417,7 +417,7 @@
       list_sessions: 'Conversations',
       list_empty: 'No groups or friends yet',
       list_search_ph: 'Search friends / groups / people',
-      hint_assistant_call: 'Call the assistant — it reads the room and answers',
+      hint_assistant_call: 'Tap me — let Qwen join the chat!',
       ai_new_chat: 'New chat',
       ai_welcome: 'What can I help with?',
       ai_input_ph: 'Message Qwen… (Enter to send, Shift+Enter for a newline)',
@@ -489,6 +489,8 @@
     }
     document.documentElement.lang = lang === 'en' ? 'en' : 'zh-CN';
     applyI18n();
+    const lg = $('#lang-glyph');
+    if (lg) lg.textContent = lang === 'en' ? '中' : 'EN';
     if (state.user) {
       renderAll();
       if (state.currentChat) { renderChatHeader(); renderMessages(); }
@@ -1359,6 +1361,7 @@
   async function openChat(type, id, title, isOfficial) {
     state.currentChat = {type, id, title, isOfficial};
     state.typingUsers.clear();
+    renderTyping();
     state.pendingReply = null; state.pendingImage = null;
     clearMentionTarget();
     hideMentionMenu();
@@ -1564,9 +1567,13 @@
       const bg = m.avatar_color ? `background:linear-gradient(135deg, ${m.avatar_color}, ${shade(m.avatar_color, -25)});` : '';
       const em = emojiOf(m);
       const who = m.id === state.user.id ? '<div class="tag">我</div>' : '';
+      // The assistant is a person here, but a special one — mark it, so
+      // it does not get lost among the ordinary members.
+      const isBot = String(m.username || '').toLowerCase() === 'qwen';
+      const bot = isBot ? '<div class="tag tag-bot">' + escapeHtml(lang === 'en' ? 'Assistant' : '助手') + '</div>' : '';
       return `<div class="mention-item${i === 0 ? ' active' : ''}" data-i="${i}">
         <div class="avatar sm" style="${bg}">${em ? `<span class="avatar-emoji">${escapeHtml(em)}</span>` : escapeHtml(initials(m.username))}</div>
-        <div class="name">${escapeHtml(m.username)}</div>${who}
+        <div class="name">${escapeHtml(m.username)}</div>${who}${bot}
       </div>`;
     }).join('');
     menu.classList.remove('hidden');
@@ -2513,6 +2520,13 @@
     if (!arr.find(x => x.id === msg.id)) arr.push(msg);
     state.messagesByConv[key] = arr;
     if (!isMine) {
+      // They just spoke — clear their typing bubble.
+      if (state.typingUsers.has(msg.sender_id)) {
+        const t = state.typingUsers.get(msg.sender_id);
+        if (t) clearTimeout(t.timer);
+        state.typingUsers.delete(msg.sender_id);
+        renderTyping();
+      }
       const inChat = state.currentChat && state.currentChat.type===msg.conv_type &&
         ((msg.conv_type==='user' && state.currentChat.id===peerId) ||
          (msg.conv_type==='group' && state.currentChat.id===msg.conv_id));
@@ -2587,13 +2601,41 @@
     if (state.currentChat && convKey(state.currentChat.type, state.currentChat.id) === key) {
       const existing = state.typingUsers.get(user_id);
       if (existing) clearTimeout(existing.timer);
-      const timer = setTimeout(() => onTypingStop({ conv_type, conv_id, user_id }), 4000);
+      const timer = setTimeout(() => onTypingStop({ conv_type, conv_id, user_id }), 8000);
       state.typingUsers.set(user_id, { username, timer });
+      renderTyping();
     }
   }
   function onTypingStop({ conv_type, conv_id, user_id }) {
     const t2 = state.typingUsers.get(user_id);
     if (t2) { clearTimeout(t2.timer); state.typingUsers.delete(user_id); }
+    renderTyping();
+  }
+
+  // The line that says who is typing. It lives under the messages, so
+  // it reads as part of the conversation rather than as a banner.
+  function renderTyping() {
+    const box = $('#typing-indicator');
+    if (!box) return;
+    const names = [];
+    for (const [uid, v] of state.typingUsers) {
+      if (v && v.username) names.push(v.username);
+    }
+    const hint = $('#qwen-hint');
+    if (!names.length) {
+      box.classList.add('hidden'); box.innerHTML = '';
+      // Let the hint bar decide for itself whether it belongs here —
+      // it only shows inside a group.
+      updateMentionButton();
+      return;
+    }
+    const who = names.length === 1 ? names[0] : (lang === 'en' ? 'Someone' : '有人');
+    const verb = lang === 'en' ? 'is typing…' : '正在输入…';
+    box.innerHTML = '<span class="typing-dots"><i></i><i></i><i></i></span><span>' +
+      escapeHtml(who + ' ' + verb) + '</span>';
+    box.classList.remove('hidden');
+    // The hint bar and the typing bubble share one slot.
+    if (hint) hint.classList.add('hidden');
   }
 
   // ---------- refresh ----------
@@ -2655,7 +2697,7 @@
   // ============================================================
   const MOBILE_BP = 820;           // must match the CSS breakpoint
   const MOBILE_MENU_KEYS = [
-    'btn-profile', 'btn-bell', 'btn-plus', 'btn-logout',
+    'btn-profile', 'btn-bell', 'btn-plus', 'btn-lang', 'btn-logout',
     'theme-menu-wrap', 'topbar-jack-pill'
   ];
   let _mobileMenuBound = false;
@@ -2673,6 +2715,7 @@
     'btn-profile': '我的资料',
     'btn-bell': '好友申请',
     'btn-plus': '搜索 / 添加',
+    'btn-lang': '中文 / English',
     'btn-logout': '退出登录',
     'theme-menu-wrap': '切换主题'
   };
@@ -4254,6 +4297,7 @@
       if (btn.id === 'btn-profile') openProfileModal(state.user);
       else if (btn.id === 'btn-bell') { renderBell(); openModal('modal-bell'); }
       else if (btn.id === 'btn-plus') openModal('modal-plus');
+      else if (btn.id === 'btn-lang') { /* has its own listener — do not toggle twice */ }
       else if (btn.id === 'btn-logout') logout();
       else if (btn.id === 'btn-admin') {};  // (deprecated) Jack-only mode: no topbar admin button
     }, true);
@@ -4455,6 +4499,13 @@
 
     // bell
     bindOnce($('#btn-bell'), 'click', (e) => { e.currentTarget._handled = true; renderBell(); openModal('modal-bell'); });
+    // The language toggle. It shows the language you would switch TO,
+    // so the label reads as an action rather than as a state.
+    bindOnce($('#btn-lang'), 'click', (e) => {
+      e.currentTarget._handled = true;
+      setLang(lang === 'en' ? 'zh' : 'en');
+      toast(lang === 'en' ? '已切换到 English' : '已切换到中文');
+    });
 
     // add friend form
     bindOnce($('#form-add-friend'), 'submit', async (e) => {
