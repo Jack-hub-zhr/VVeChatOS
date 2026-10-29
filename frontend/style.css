@@ -1373,19 +1373,29 @@ body.dark .chat-composer { background: rgba(20, 24, 32, 0.30); border-top-color:
 }
 .composer-row .emoji-btn:active, .composer-row .attach-btn:active,
 .composer-row .mention-btn:active { transform: scale(0.92); }
-/* The @ sign is a bit smaller than the emoji, so it needs a nudge. */
+/* The @ is just a character, not another round icon — it sits on the
+   input's edge and reads as "@" at a glance. */
 .composer-row .mention-btn {
-  font-size: 17px; font-weight: 700;
-  font-family: var(--mono, ui-monospace, monospace);
+  width: auto; height: auto;
+  min-width: 0;
+  padding: 0 2px 0 4px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--muted);
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1;
+  font-family: inherit;
 }
+.composer-row .mention-btn:hover { background: transparent; color: var(--accent); }
 /* Outside a group chat there is nobody to @ — say so instead of
    letting the button look broken. */
 .composer-row .mention-btn.disabled {
-  opacity: 0.45; cursor: not-allowed;
+  opacity: 0.4; cursor: not-allowed;
 }
-.composer-row .mention-btn.disabled:hover {
-  background: rgba(255, 255, 255, 0.55); color: var(--ink-2);
-}
+.composer-row .mention-btn.disabled:hover { color: var(--muted); }
 
 .chat-composer input[type="text"] {
   flex: 1;
@@ -1450,6 +1460,35 @@ body.dark .chat-composer { background: rgba(20, 24, 32, 0.30); border-top-color:
   font-size: 16px; line-height: 1;
   display: flex; align-items: center; justify-content: center;
 }
+
+/* The hint above the composer: "you can call the assistant by name". */
+.mention-hint-bar {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%;
+  padding: 7px 11px;
+  margin-bottom: 6px;
+  border: 1px solid var(--glass-border-soft);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.45);
+  color: var(--ink-2);
+  font-family: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s;
+  -webkit-tap-highlight-color: transparent;
+}
+.mention-hint-bar:hover { background: rgba(255, 255, 255, 0.8); color: var(--accent); }
+.mention-hint-dot {
+  width: 19px; height: 19px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 6px;
+  background: var(--accent-grad);
+  color: #fff;
+  font-size: 11px; font-weight: 700;
+}
+.mention-hint-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+body.dark .mention-hint-bar { background: rgba(255, 255, 255, 0.05); }
 
 /* The picker that pops up while you type "@". */
 .mention-menu {
@@ -2240,7 +2279,7 @@ body.dark .theme-menu { background: rgba(20, 24, 32, 0.92); border-color: rgba(2
      and the media query now closes where it should. */
   .beta-tag { height: 18px; padding: 0 8px; font-size: 10px; }
   .composer-row .emoji-btn, .composer-row .attach-btn { width: 34px; height: 34px; font-size: 17px; }
-  .composer-row .mention-btn { width: 34px; height: 34px; font-size: 15px; }
+  .composer-row .mention-btn { width: auto; height: auto; padding: 0 2px 0 5px; font-size: 16px; }
   /* Root terminal on mobile: nearly full-screen */
   .root-terminal-card { width: 95vw; height: 80vh; }
   /* Auth card on iPhone: iOS-alert style — compact centered, NOT full-screen */
@@ -2351,9 +2390,10 @@ body.dark .beta-btn {
 body.dark .composer-row .emoji-btn,
 body.dark .composer-row .attach-btn,
 body.dark .composer-row .mention-btn {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.10);
-  color: var(--ink-2);
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  color: var(--muted-2);
 }
 body.dark .chat-composer input[type="text"] {
   background: rgba(255, 255, 255, 0.12);
@@ -3099,6 +3139,73 @@ body.dark .rail-me .avatar.md { color: #e6ecf5; }
 /* The scrim behind the phone drawer — off on a desktop. */
 .list-scrim { display: none; }
 
+/* ============================================================
+   PERSONALISATION
+   Density and text size are applied on the body, so nothing has to
+   be re-rendered when they change.
+   ============================================================ */
+body { --font-scale: 1; }
+
+body.density-compact .list-item { padding-top: 5px; padding-bottom: 5px; }
+body.density-compact .messages { padding-top: 8px; }
+body.density-compact .msg-bubble { padding-top: 6px; padding-bottom: 6px; }
+body.density-compact .side-section { padding-top: 8px; padding-bottom: 2px; }
+
+body.density-roomy .list-item { padding-top: 12px; padding-bottom: 12px; }
+body.density-roomy .messages { padding-top: 18px; }
+body.density-roomy .msg-bubble { padding-top: 11px; padding-bottom: 11px; }
+body.density-roomy .side-section { padding-top: 18px; padding-bottom: 6px; }
+
+/* The text size scales the parts that carry the words. */
+body .brand-name,
+body .list-title,
+body .list-item .name,
+body .list-me-name,
+body .chat-header h3,
+body .ai-head-title,
+body .msg-bubble,
+body .side-section-title {
+  font-size: calc(1em * var(--font-scale));
+}
+body .list-item .preview,
+body .list-item .sub,
+body .msg-meta,
+body .ai-head-sub,
+body .chat-header small {
+  font-size: calc(1em * var(--font-scale));
+}
+
+/* The segmented pickers in the personalisation panel. */
+.seg {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.05);
+  flex-shrink: 0;
+}
+body.dark .seg { background: rgba(255, 255, 255, 0.07); }
+.seg button {
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  padding: 4px 9px;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.18s, color 0.18s;
+}
+.seg button:hover { color: var(--ink); }
+.seg button.on {
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 0 1px 4px rgba(38, 62, 100, 0.14);
+}
+body.dark .seg button.on { background: rgba(255, 255, 255, 0.14); color: #fff; }
+
 /* Emoji avatars render on top of the coloured disc. */
 .avatar-emoji {
   font-size: 0.92em;
@@ -3705,6 +3812,9 @@ body.dark .mobile-menu-scrim { background: rgba(0, 0, 0, 0.34); }
   flex-direction: column;
   gap: 3px;
   flex: 1;
+  /* Without this the text refuses to shrink and gets squeezed into a
+     one-word-per-line column when the description is long. */
+  min-width: 0;
   min-width: 0;
 }
 .more-row-title {
@@ -3999,7 +4109,7 @@ body.dark .mobile-menu-scrim { background: rgba(0, 0, 0, 0.34); }
   .msg-bubble { font-size: 13.5px; padding: 8px 12px; }
   .chat-composer { padding: 6px 8px 8px; }
   .composer-row .emoji-btn, .composer-row .attach-btn { width: 32px; height: 32px; font-size: 16px; }
-  .composer-row .mention-btn { width: 32px; height: 32px; font-size: 14px; }
+  .composer-row .mention-btn { width: auto; height: auto; padding: 0 2px 0 5px; font-size: 16px; }
   .chat-composer .btn-primary { padding: 8px 13px; font-size: 12.5px; }
 
   .app-body {
@@ -4123,6 +4233,15 @@ body.dark .mobile-menu-scrim { background: rgba(0, 0, 0, 0.34); }
 
   /* The toast used to land on top of the tab bar. */
   .toast { bottom: calc(96px + env(safe-area-inset-bottom)); }
+
+  /* Inside a conversation the tab bar has nothing to switch to — it
+     only gets in the way of the transcript. It comes back when the
+     user goes back to the list. */
+  .app-body.chat-open .rail-pane {
+    transform: translateY(160%);
+    opacity: 0;
+    pointer-events: none;
+  }
 
   /* When the keyboard is up the tab bar would float right on top of
      it, so it gets out of the way — but ONLY while a text field has

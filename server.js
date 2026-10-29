@@ -172,6 +172,12 @@ ensureColumn('users', 'bio', 'TEXT');
 ensureColumn('users', 'avatar_color', 'TEXT');
 // 550C boot theme — per-account preference for the startup animation
 ensureColumn('users', 'boot_550c', 'INTEGER NOT NULL DEFAULT 0');
+// Personalisation preferences: the assistant answering in groups, a
+// denser list, a bigger type size and a 12-hour clock.
+ensureColumn('users', 'ai_in_groups', 'INTEGER NOT NULL DEFAULT 1');
+ensureColumn('users', 'density', "TEXT NOT NULL DEFAULT 'normal'");
+ensureColumn('users', 'font_scale', 'REAL NOT NULL DEFAULT 1');
+ensureColumn('users', 'clock24', 'INTEGER NOT NULL DEFAULT 1');
 ensureColumn('messages', 'type', "TEXT NOT NULL DEFAULT 'text'");
 ensureColumn('messages', 'meta', 'TEXT');
 ensureColumn('messages', 'reply_to', 'INTEGER');
@@ -188,6 +194,10 @@ function userPublic(u) {
     avatar_color: u.avatar_color || null,
     avatar_emoji: u.avatar_emoji || null,
     boot_550c: u.boot_550c ? 1 : 0,
+    ai_in_groups: u.ai_in_groups === undefined ? 1 : (u.ai_in_groups ? 1 : 0),
+    density: u.density || 'normal',
+    font_scale: Number(u.font_scale) > 0 ? Number(u.font_scale) : 1,
+    clock24: u.clock24 === undefined ? 1 : (u.clock24 ? 1 : 0),
     is_admin: u.username === ADMIN_USERNAME,
   };
 }
@@ -275,6 +285,145 @@ try {
 }
 
 
+// ============================================================
+// The assistant as a group member.
+//
+// People call it by name — "@Qwen …" — and it answers with the
+// group's own context, in the voice of someone who has been sitting
+// in the chat the whole time. It is a real account, so it shows up in
+// the member list and can be picked from the @ picker like anybody
+// else.
+// ============================================================
+const ASSISTANT_NAME = 'Qwen';
+let assistantId = 0;
+try {
+  let row = db.prepare('SELECT id FROM users WHERE username = ?').get(ASSISTANT_NAME);
+  if (!row) {
+    const info = db.prepare(
+      `INSERT INTO users (username, password_hash, avatar_color, bio, created_at)
+       VALUES (?, ?, ?, ?, ?)`
+    ).run(ASSISTANT_NAME, bcrypt.hashSync(require('crypto').randomBytes(24).toString('hex'), 10),
+      '#4fd1c5', 'VVeChat 助手', now());
+    row = { id: info.lastInsertRowid };
+    console.log('[VVeChat] seeded assistant account: Qwen');
+  }
+  assistantId = row.id;
+  // He belongs to every group, so "@Qwen" is always available.
+  const groups = db.prepare('SELECT id FROM groups').all();
+  const addMember = db.prepare(
+    'INSERT OR IGNORE INTO group_members (group_id, user_id, joined_at) VALUES (?, ?, ?)'
+  );
+  for (const g of groups) addMember.run(g.id, assistantId, now());
+} catch (e) {
+  console.error('[VVeChat] assistant seed failed:', e.message);
+}
+
+// Is this message calling the assistant by name?
+function mentionsAssistant(text) {
+  return /(^|[^\w@])@(qwen|助手|千问)(?![a-z0-9_])/i.test(String(text || ''));
+}
+
+// Ask the model, with the group chat as the context.
+async function assistantAnswer(question, context) {
+  const catalog = aiModelCatalog().filter((m) => m.ready);
+  if (!catalog.length) return null;
+
+  const system = [
+    '你叫 Qwen，是这个群聊里的一位成员。大家聊天时会喊你一声，你就把话接过来。',
+    '请像真人一样回话：口语、简短、直接，最多两三句话。',
+    '不要出现「作为一个AI」「作为一个助手」这类说法，也不要罗列要点或加小标题。',
+    '如果上下文里找不到答案，就直接说没看到相关信息，别编。',
+    '默认用简体中文。'
+  ].join('\n');
+
+  const messages = [{ role: 'system', content: system }];
+  for (const c of context) {
+    messages.push({ role: c.role === 'assistant' ? 'assistant' : 'user', content: c.content.slice(0, 1200) });
+  }
+  messages.push({ role: 'user', content: question.slice(0, 2000) });
+
+  for (const entry of catalog) {
+    const provider = QWEN_PROVIDERS[entry.provider];
+    if (!provider) continue;
+    const key = aiProviderKey(entry.provider);
+    const headers = { 'Content-Type': 'application/json' };
+    if (key) headers.Authorization = 'Bearer ' + key;
+    const body = {
+      model: entry.model,
+      messages,
+      stream: true,
+      temperature: 0.6,
+      // The public Qwen models think before they answer, and the trace
+      // eats most of the budget: too small and the answer never comes.
+      max_tokens: 8192
+    };
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 45000);
+      const resp = await fetch(provider.base + provider.path, {
+        method: 'POST', headers, body: JSON.stringify(body), signal: ctrl.signal
+      });
+      clearTimeout(timer);
+      if (!resp.ok || !resp.body) {
+        console.warn('[VVeChat] assistant: ' + entry.id + ' returned ' + resp.status);
+        continue;
+      }
+
+      // Read the stream and keep only the answer text — the reasoning
+      // trace is dropped on the floor, the group only gets the reply.
+      const reader = resp.body.getReader();
+      const dec = new TextDecoder();
+      let buf = '', out = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop() || '';
+        for (const line of lines) {
+          const t = line.trim();
+          // The stream is SSE: every chunk is "data: {json}".
+          if (!t.startsWith('data:')) continue;
+          const payload = t.slice(5).trim();
+          if (!payload || payload === '[DONE]') continue;
+          let j;
+          try { j = JSON.parse(payload); } catch (_) { continue; }
+          const ch = j && j.choices && j.choices[0];
+          if (!ch) continue;
+          const d = ch.delta || {};
+          // The thinking trace (d.reasoning / d.reasoning_content) is
+          // deliberately dropped — the group gets the answer, not the
+          // scratch work.
+          if (d.content) out += String(d.content);
+        }
+      }
+      const text = out.trim();
+      console.log('[VVeChat] assistant answered on', entry.id, text.length, 'chars');
+      if (text) return text;
+    } catch (e) {
+      console.warn('[VVeChat] assistant answer failed on', entry.id, e.message);
+    }
+  }
+  console.warn('[VVeChat] assistant: every source failed');
+  return null;
+}
+
+// Pull the recent group conversation so the assistant knows what people
+// are talking about.
+function groupContext(groupId, limit) {
+  const rows = db.prepare(`
+    SELECT m.sender_id, u.username, m.content, m.type
+    FROM messages m LEFT JOIN users u ON u.id = m.sender_id
+    WHERE m.conv_type = 'group' AND m.conv_id = ? AND m.is_deleted = 0 AND m.type = 'text'
+    ORDER BY m.id DESC LIMIT ?
+  `).all(String(groupId), limit || 24).reverse();
+  return rows.map((r) => ({
+    role: r.sender_id === assistantId ? 'assistant' : 'user',
+    content: (r.username || '某人') + '：' + String(r.content || '')
+  }));
+}
+
+
 function authRequired(req, res, next) {
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
@@ -282,6 +431,12 @@ function authRequired(req, res, next) {
   try {
     const payload = jwt.verify(token, JWT_SECRET);
     req.user = { id: payload.uid, username: payload.username };
+    // The group-assistant toggle lives on the account, so the message
+    // endpoint can honour it without a second lookup.
+    try {
+      const row = db.prepare('SELECT ai_in_groups FROM users WHERE id = ?').get(payload.uid);
+      req.user.aiInGroups = !row || row.ai_in_groups !== 0;
+    } catch (_) { req.user.aiInGroups = true; }
     next();
   } catch (e) {
     return res.status(401).json({ error: 'invalid token' });
@@ -1591,7 +1746,8 @@ app.get('/api/me', authRequired, (req, res) => {
 });
 
 app.put('/api/me', rateLimit('write'), authRequired, (req, res) => {
-  const { bio, username, avatar_color, avatar, avatar_emoji, boot_550c } = req.body || {};
+  const { bio, username, avatar_color, avatar, avatar_emoji, boot_550c,
+    ai_in_groups, density, font_scale, clock24 } = req.body || {};
   const u = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
   if (!u) return res.status(404).json({ error: 'user not found' });
   const updates = [];
@@ -1638,6 +1794,19 @@ app.put('/api/me', rateLimit('write'), authRequired, (req, res) => {
   // boot_550c: 550C startup-animation theme toggle (0 = off, 1 = on)
   if (boot_550c !== undefined) {
     updates.push('boot_550c = ?'); values.push(boot_550c ? 1 : 0);
+  }
+  if (ai_in_groups !== undefined) {
+    updates.push('ai_in_groups = ?'); values.push(ai_in_groups ? 1 : 0);
+  }
+  if (density !== undefined) {
+    updates.push('density = ?'); values.push(['compact', 'normal', 'roomy'].includes(density) ? density : 'normal');
+  }
+  if (font_scale !== undefined) {
+    const f = Number(font_scale);
+    updates.push('font_scale = ?'); values.push(f >= 0.9 && f <= 1.4 ? f : 1);
+  }
+  if (clock24 !== undefined) {
+    updates.push('clock24 = ?'); values.push(clock24 ? 1 : 0);
   }
   if (typeof username === 'string' && username.trim() && username !== u.username) {
     if (username.length < 2 || username.length > 24) return res.status(400).json({ error: '用户名长度需 2-24' });
@@ -2056,6 +2225,36 @@ app.post('/api/messages', rateLimit('write'), authRequired, (req, res) => {
   const msg = buildMessage({ ...row, sender_username: req.user.username });
   broadcastMessage(msg, conv_type, conv_id, req.user.id);
   res.json({ message: msg });
+
+  // ---- the assistant was called by name ----
+  // It answers in the background: the sender gets their message back
+  // straight away, and the reply arrives a moment later.
+  const aiInGroups = req.user.aiInGroups !== false;
+  if (conv_type === 'group' && msgType === 'text' && aiInGroups && mentionsAssistant(content)) {
+    const gid = normalizedConvId;
+    const question = String(content)
+      .replace(/@(qwen|助手|千问)/gi, '')
+      .replace(/^\s*[,，:：]\s*/, '')
+      .trim() || String(content);
+    const context = groupContext(gid, 24);
+    assistantAnswer(question, context).then((answer) => {
+      if (!answer) {
+        // Say so in the group — silence reads like the message was lost.
+        const fInfo = db.prepare(
+          'INSERT INTO messages (conv_type, conv_id, sender_id, content, type, meta, reply_to, is_deleted, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)'
+        ).run('group', gid, assistantId, '我这边暂时连不上，等会儿再叫我一次。', 'text', null, null, now());
+        const fRow = db.prepare('SELECT * FROM messages WHERE id = ?').get(fInfo.lastInsertRowid);
+        broadcastMessage(buildMessage({ ...fRow, sender_username: ASSISTANT_NAME }), 'group', gid, assistantId);
+        return;
+      }
+      const aInfo = db.prepare(
+        'INSERT INTO messages (conv_type, conv_id, sender_id, content, type, meta, reply_to, is_deleted, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)'
+      ).run('group', gid, assistantId, answer.slice(0, 4000), 'text', null, null, now());
+      const aRow = db.prepare('SELECT * FROM messages WHERE id = ?').get(aInfo.lastInsertRowid);
+      const aMsg = buildMessage({ ...aRow, sender_username: ASSISTANT_NAME });
+      broadcastMessage(aMsg, 'group', gid, assistantId);
+    }).catch((e) => console.warn('[VVeChat] assistant reply failed:', e.message));
+  }
 });
 
 // list messages

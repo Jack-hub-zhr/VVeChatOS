@@ -13,6 +13,29 @@
   // ---------- i18n strings (no function calls — safe) ----------
   const STRINGS = {
     zh: {
+      theme_auto: '跟随系统',
+      theme_light: '浅色',
+      theme_dark: '深色',
+      ai_checking: '正在检查中转状态…',
+      think_low: '思考 · 低',
+      think_medium: '思考 · 中',
+      think_high: '思考 · 高',
+      plus_title: '搜索 / 添加',
+      plus_add_user: '添加用户',
+      plus_add_user_desc: '按用户名搜索并发送申请',
+      their_username: '对方的用户名',
+      requests_title: '好友申请',
+      members_title: '群成员',
+      profile_title: '个人资料',
+      confirm_title: '确认',
+      reconnecting: '正在重新连接…',
+      cancel: '取消',
+      cancel_at: '取消 @',
+      tag_official: '官方',
+      ok: '确定',
+      send_request: '发送申请',
+      auth_username: '用户名',
+      auth_password: '密码',
       auth_err_fill: '请填写用户名和密码',
       auth_loading_login: '登录中…',
       auth_loading_register: '注册中…',
@@ -153,8 +176,74 @@
       rename_ok: '已修改',
       members: '成员',
       only_jack_rename_official: '只有 Jack 才能修改官方群名称',
+      nav_chats: '聊天',
+      nav_assistant: '助手',
+      nav_personal: '个性化',
+      pref_look: '外观',
+      pref_550c: '550C 启动动画主题',
+      pref_550c_desc: '重新进入账号时用 550C 开机动画替代欢迎页，并切换为琥珀色终端风格',
+      pref_density: '界面密度',
+      pref_density_desc: '列表和消息的疏密',
+      pref_compact: '紧凑',
+      pref_normal: '标准',
+      pref_roomy: '宽松',
+      pref_font: '字号大小',
+      pref_font_desc: '整个界面的文字大小',
+      pref_small: '小',
+      pref_medium: '标准',
+      pref_large: '大',
+      pref_clock: '时间格式',
+      pref_clock_desc: '消息旁边显示时间的样式',
+      pref_24h: '24 小时',
+      pref_12h: '12 小时',
+      pref_assistant: '助手',
+      pref_ai_groups: '群里可以叫助手',
+      pref_ai_groups_desc: '在群聊里 @Qwen，它会读完上下文再回答',
+      pref_lang: '语言',
+      pref_lang_desc: '界面语言',
+      pref_about: '关于',
+      pref_about_desc: 'VVeChat OS 1',
+      pref_about_credit: '550C 主题移植自 yannicksong0106/dsh-550c-boot（MIT）',
+      list_unread: '未读消息',
+      list_no_unread: '没有未读消息',
+      list_sessions: '会话',
+      list_empty: '还没有群聊或好友',
+      list_search_ph: '搜索好友 / 群聊 / 用户',
+      hint_assistant_call: '叫一下助手，它会看群里的上下文来回答',
+      ai_new_chat: '新对话',
+      ai_welcome: '有什么可以帮你？',
+      ai_input_ph: '给 Qwen 发消息…（Enter 发送，Shift+Enter 换行）',
+      ai_today: '今天',
+      chat_empty_title: '选择一个会话开始聊天',
+      chat_empty_desc: '可以从左侧选一个，或点右上角放大镜添加好友/群聊',
+      chat_input_ph: '输入消息…',
+      send: '发送',
+      attach: '图片',
     },
     en: {
+      theme_auto: 'System',
+      theme_light: 'Light',
+      theme_dark: 'Dark',
+      ai_checking: 'Checking the relay status…',
+      think_low: 'Think · low',
+      think_medium: 'Think · medium',
+      think_high: 'Think · high',
+      plus_title: 'Search / Add',
+      plus_add_user: 'Add a person',
+      plus_add_user_desc: 'Search by username and send a request',
+      their_username: 'Their username',
+      requests_title: 'Friend requests',
+      members_title: 'Members',
+      profile_title: 'Profile',
+      confirm_title: 'Confirm',
+      reconnecting: 'Reconnecting…',
+      cancel: 'Cancel',
+      cancel_at: 'Cancel @',
+      tag_official: 'Official',
+      ok: 'OK',
+      send_request: 'Send request',
+      auth_username: 'Username',
+      auth_password: 'Password',
       auth_err_fill: 'Please fill in username and password',
       auth_loading_login: 'Signing in…',
       auth_loading_register: 'Signing up…',
@@ -295,13 +384,57 @@
       rename_ok: 'Renamed',
       members: 'Members',
       only_jack_rename_official: 'Only Jack can rename the official group',
+      nav_chats: 'Chats',
+      nav_assistant: 'Assistant',
+      nav_personal: 'Personal',
+      pref_look: 'Look & feel',
+      pref_550c: '550C boot animation',
+      pref_550c_desc: 'Show the 550C boot sequence instead of the welcome screen, in amber terminal colours',
+      pref_density: 'Density',
+      pref_density_desc: 'How tight the lists and messages sit',
+      pref_compact: 'Compact',
+      pref_normal: 'Normal',
+      pref_roomy: 'Roomy',
+      pref_font: 'Text size',
+      pref_font_desc: 'The size of the text across the app',
+      pref_small: 'Small',
+      pref_medium: 'Normal',
+      pref_large: 'Large',
+      pref_clock: 'Clock',
+      pref_clock_desc: 'How the time next to a message is written',
+      pref_24h: '24-hour',
+      pref_12h: '12-hour',
+      pref_assistant: 'Assistant',
+      pref_ai_groups: 'Let the assistant join groups',
+      pref_ai_groups_desc: '@Qwen in a group reads the conversation, then answers',
+      pref_lang: 'Language',
+      pref_lang_desc: 'Interface language',
+      pref_about: 'About',
+      pref_about_desc: 'VVeChat OS 1',
+      pref_about_credit: 'The 550C theme is ported from yannicksong0106/dsh-550c-boot (MIT)',
+      list_unread: 'Unread',
+      list_no_unread: 'Nothing unread',
+      list_sessions: 'Conversations',
+      list_empty: 'No groups or friends yet',
+      list_search_ph: 'Search friends / groups / people',
+      hint_assistant_call: 'Call the assistant — it reads the room and answers',
+      ai_new_chat: 'New chat',
+      ai_welcome: 'What can I help with?',
+      ai_input_ph: 'Message Qwen… (Enter to send, Shift+Enter for a newline)',
+      ai_today: 'Today',
+      chat_empty_title: 'Pick a conversation to start',
+      chat_empty_desc: 'Choose one on the left, or use the magnifier to add someone',
+      chat_input_ph: 'Type a message…',
+      send: 'Send',
+      attach: 'Image',
     },
   };
 
   // ---------- state ----------
-  // The UI is Chinese-only (the language toggle was removed on request).
-  // Keep the variable so the existing t()/setLang() plumbing still works.
-  const lang = 'zh';
+  // The language is a real, switchable value again: 中文 / English.
+  let lang = (() => {
+    try { return localStorage.getItem('vve:lang') === 'en' ? 'en' : 'zh'; } catch (_) { return 'zh'; }
+  })();
   let authMode = 'login';
   const state = {
     user: null, token: null, socket: null,
@@ -318,20 +451,48 @@
   };
 
   // ---------- i18n helpers ----------
-  // The UI is Chinese-only: `lang` is a constant and the data-zh /
-  // data-zh-ph attributes have been removed from the markup, so t() just
-  // reads the Chinese table.
   function t(key, ...args) {
-    const s = STRINGS.zh[key] || key;
+    const table = STRINGS[lang] || STRINGS.zh;
+    const s = table[key] || STRINGS.zh[key] || key;
     if (!args.length) return s;
     return s.replace(/\{(\d+)\}/g, (m, i) => args[Number(i)] ?? m);
   }
+  // Walk the markup and swap every translated text node. Elements
+  // carry data-i18n="key"; data-i18n-ph fills a placeholder, and
+  // data-i18n-title / data-i18n-aria set a tooltip or a label.
+  function applyI18n(root) {
+    const scope = root || document;
+    $$('[data-i18n]', scope).forEach((el) => {
+      const key = el.getAttribute('data-i18n');
+      if (!key) return;
+      const val = t(key);
+      if (val !== key) el.textContent = val;
+    });
+    $$('[data-i18n-ph]', scope).forEach((el) => {
+      const key = el.getAttribute('data-i18n-ph');
+      if (key) { const val = t(key); if (val !== key) el.placeholder = val; }
+    });
+    $$('[data-i18n-title]', scope).forEach((el) => {
+      const key = el.getAttribute('data-i18n-title');
+      if (key) { const val = t(key); if (val !== key) el.title = val; }
+    });
+    $$('[data-i18n-aria]', scope).forEach((el) => {
+      const key = el.getAttribute('data-i18n-aria');
+      if (key) { const val = t(key); if (val !== key) el.setAttribute('aria-label', val); }
+    });
+  }
   // Refresh every view after a profile change.
-  function setLang() {
-    document.documentElement.lang = 'zh-CN';
+  function setLang(next) {
+    if (next) {
+      lang = next === 'en' ? 'en' : 'zh';
+      try { localStorage.setItem('vve:lang', lang); } catch (_) {}
+    }
+    document.documentElement.lang = lang === 'en' ? 'en' : 'zh-CN';
+    applyI18n();
     if (state.user) {
       renderAll();
       if (state.currentChat) { renderChatHeader(); renderMessages(); }
+      renderPrefPanel();
     } else {
       const btn = $('#auth-submit');
       if (btn) btn.textContent = authMode === 'login' ? t('btn_login') : t('btn_register');
@@ -355,14 +516,21 @@
     if (!ts) return '';
     const d = new Date(ts);
     const now = new Date();
-    if (d.toDateString() === now.toDateString()) return d.toTimeString().slice(0,5);
+    const clock = () => {
+      if (prefs.clock24) return d.toTimeString().slice(0, 5);
+      let h = d.getHours();
+      const ampm = h >= 12 ? 'PM' : 'AM';
+      h = h % 12; if (h === 0) h = 12;
+      return h + ':' + String(d.getMinutes()).padStart(2, '0') + ' ' + ampm;
+    };
+    if (d.toDateString() === now.toDateString()) return clock();
     return `${d.getMonth()+1}/${d.getDate()}`;
   }
   // Avatar letter for a group: the official group reads「官」, any other
   // group「群」. Falls back to initials() for non-Chinese names.
   function groupLetter(name, isOfficial) {
-    if (isOfficial) return '官';
-    if (/[\u4e00-\u9fa5]/.test(name || '')) return '群';
+    if (isOfficial) return lang === 'en' ? 'O' : '官';
+    if (/[\u4e00-\u9fa5]/.test(name || '')) return lang === 'en' ? 'G' : '群';
     return initials(name);
   }
 
@@ -728,7 +896,7 @@
       : (isGroup
           ? (isOfficial ? t('official_sub') : t('group_sub'))
           : (c.is_new_friend ? (t('friend') || '好友') : t('new_msg')));
-    const officialTag = isOfficial ? `<span class="tag-official">官方</span>` : '';
+    const officialTag = isOfficial ? `<span class="tag-official">${escapeHtml(t('tag_official'))}</span>` : '';
     const avatarBg = isGroup ? '' : avatarStyle(c);
     const dot = (isGroup || isOfficial) ? '' : `<span class="online-dot"></span>`;
     const avatarCls = [ac, online?'online':''].filter(Boolean).join(' ');
@@ -1475,6 +1643,52 @@
 
   // The @ button only makes sense in a group — dim it in a one-to-one
   // chat so nobody wonders why the list is empty.
+  // ---------- personalisation ----------
+  // Three things the account can change about how the app looks and
+  // behaves: how dense it is, how big the text is, and whether the
+  // clock is 12 or 24 hour. All three are applied as body classes /
+  // CSS variables, so nothing has to be re-rendered.
+  const prefs = { density: 'normal', font_scale: 1, clock24: true, ai_in_groups: true };
+
+  function applyPrefs() {
+    const b = document.body;
+    if (!b) return;
+    b.classList.remove('density-compact', 'density-normal', 'density-roomy');
+    b.classList.add('density-' + (prefs.density || 'normal'));
+    b.style.setProperty('--font-scale', String(prefs.font_scale || 1));
+    b.classList.toggle('clock-12', !prefs.clock24);
+  }
+
+  function loadPrefs(user) {
+    if (!user) return;
+    if (user.density) prefs.density = user.density;
+    if (user.font_scale) prefs.font_scale = Number(user.font_scale) || 1;
+    if (user.clock24 !== undefined) prefs.clock24 = !!user.clock24;
+    if (user.ai_in_groups !== undefined) prefs.ai_in_groups = !!user.ai_in_groups;
+    applyPrefs();
+  }
+
+  function savePrefs(patch) {
+    Object.assign(prefs, patch);
+    applyPrefs();
+    try { api('/me', { method: 'PUT', body: patch }).catch(() => {}); } catch (_) {}
+  }
+
+  // Paint the personalisation panel from the current values.
+  function renderPrefPanel() {
+    const sw = $('#toggle-boot-550c');
+    if (sw) sw.checked = !!(window.Boot550C && window.Boot550C.enabled());
+    const aiSw = $('#toggle-ai-in-groups');
+    if (aiSw) aiSw.checked = !!prefs.ai_in_groups;
+    const mark = (sel, val) => {
+      $$(sel + ' button').forEach((b) => b.classList.toggle('on', String(b.dataset.v) === String(val)));
+    };
+    mark('#pref-density', prefs.density);
+    mark('#pref-font', prefs.font_scale);
+    mark('#pref-clock', prefs.clock24 ? 24 : 12);
+    mark('#pref-lang', lang);
+  }
+
   function updateMentionButton() {
     const b = $('#mention-btn');
     if (!b) return;
@@ -1482,6 +1696,9 @@
     const on = !!(c && c.type === 'group');
     b.classList.toggle('disabled', !on);
     b.title = on ? '@ 群成员' : '只有群聊才能 @ 人';
+    // The hint that says the assistant can be called by name.
+    const hint = $('#qwen-hint');
+    if (hint) hint.classList.toggle('hidden', !on);
   }
 
   function renderMessages() {
@@ -2958,7 +3175,7 @@
       if (!msgs.length) {
         const w = document.createElement('div');
         w.className = 'ai-welcome';
-        w.innerHTML = '<p class="ai-welcome-title">有什么可以帮你？</p>';
+        w.innerHTML = '<p class="ai-welcome-title">' + escapeHtml(t('ai_welcome')) + '</p>';
         if (log) { const old = log.querySelector('.ai-welcome'); if (old) old.remove(); log.appendChild(w); }
       }
       if (log) aiAutoScroll(true);
@@ -2975,7 +3192,7 @@
       await aiLoadChats();
       const log = aiLogEl();
       if (log) {
-        log.innerHTML = '<div class="ai-welcome"><p class="ai-welcome-title">有什么可以帮你？</p></div>';
+        log.innerHTML = '<div class="ai-welcome"><p class="ai-welcome-title">' + escapeHtml(t('ai_welcome')) + '</p></div>';
       }
     } catch (e) {
       toast(e.message || '新建对话失败');
@@ -2988,7 +3205,7 @@
       if (String(chatId) === String(_aiChatId)) {
         _aiChatId = null;
         const log = aiLogEl();
-        if (log) log.innerHTML = '<div class="ai-welcome"><p class="ai-welcome-title">有什么可以帮你？</p></div>';
+        if (log) log.innerHTML = '<div class="ai-welcome"><p class="ai-welcome-title">' + escapeHtml(t('ai_welcome')) + '</p></div>';
       }
       await aiLoadChats();
     } catch (e) {
@@ -3494,7 +3711,11 @@
     const lp = $('#list-pane');
     if (lp) lp.dataset.mode = mode;
     const titleEl = $('#list-title');
-    if (titleEl) titleEl.textContent = mode === 'ai' ? 'Qwen' : (mode === 'more' ? '更多' : '聊天');
+    if (titleEl) {
+      titleEl.textContent = mode === 'ai'
+        ? (lang === 'en' ? 'Assistant' : '助手')
+        : (mode === 'more' ? t('nav_personal') : t('nav_chats'));
+    }
   }
 
   function ensureAiPanelBound() {
@@ -3598,6 +3819,9 @@
   // ---------- bootstrap ----------
   function enterApp() {
     showApp();
+    applyI18n();
+    loadPrefs(state.user);
+    setLang();
     // ALWAYS hide the splash overlay on enter — it covers everything
     // (z-index 9999) and otherwise swallows all clicks/visibility.
     const _splash = $('#hello-splash');
@@ -3946,6 +4170,31 @@
         }
       });
     }
+    // 助手在群里应答的开关
+    const tAi = $('#toggle-ai-in-groups');
+    if (tAi) {
+      tAi.checked = !!prefs.ai_in_groups;
+      bindOnce(tAi, 'change', () => {
+        savePrefs({ ai_in_groups: tAi.checked ? 1 : 0 });
+        toast(tAi.checked ? '群里 @Qwen 会有人应答' : '群里不会再呼叫助手');
+      });
+    }
+    // 分段选择器：密度 / 字号 / 时钟 / 语言
+    const segs = [
+      ['#pref-density', (v) => savePrefs({ density: v })],
+      ['#pref-font', (v) => savePrefs({ font_scale: Number(v) })],
+      ['#pref-clock', (v) => savePrefs({ clock24: v === '24' ? 1 : 0 })],
+      ['#pref-lang', (v) => setLang(v)]
+    ];
+    for (const [sel, fn] of segs) {
+      const box = $(sel);
+      if (!box) continue;
+      $$('button', box).forEach((b) => bindOnce(b, 'click', () => {
+        fn(b.dataset.v);
+        renderPrefPanel();
+      }));
+    }
+    renderPrefPanel();
 
     // The rail: 聊天 / Qwen / 更多. It picks the list in the middle
     // pane AND the detail in the content pane.
@@ -3954,10 +4203,26 @@
       const target = btn.dataset.pane;
       $$('.pane').forEach(p => p.classList.toggle('active', p.id === `pane-${target}`));
       setListMode(target);
+      // Switching blocks means "go back to a list". On a phone the
+      // chat view had hidden both the list and the tab bar, so without
+      // clearing `chat-open` the user would land on an empty screen
+      // with no way out.
+      $('.app-body')?.classList.remove('chat-open');
       closeListPane();
       if (target === 'ai') openAiView();
       else closeAiView();
     }));
+    // The hint above the composer: tapping it calls the assistant by
+    // name. It only makes sense inside a group.
+    bindOnce($('#qwen-hint'), 'click', () => {
+      const input = $('#chat-input');
+      if (!input) return;
+      input.focus();
+      const pos = input.value.length;
+      input.value = input.value.slice(0, pos) + '@Qwen ';
+      input.setSelectionRange(pos + 6, pos + 6);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
     // The chat header carries the same list switch as the AI header —
     // and so does the empty state, which has no header at all.
     bindOnce($('#list-toggle'), 'click', (e) => { e.stopPropagation(); toggleListPane(); });
@@ -4255,6 +4520,7 @@
           // The account owns the 550C flag — adopt it on sign-in so the
           // next visit boots the animation the way this account wants.
           applyBoot550cFromUser(data.user);
+          loadPrefs(data.user);
           msgEl.classList.add('ok');
           msgEl.textContent = authMode === 'login' ? t('auth_ok_login') : t('auth_ok_register');
           btn.textContent = '✓';

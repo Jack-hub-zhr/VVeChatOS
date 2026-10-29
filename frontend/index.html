@@ -32,21 +32,21 @@
       <p class="brand-tagline" id="hello-cycler" aria-live="polite">你好</p>
 
       <div class="tabs" role="tablist">
-        <button class="tab active" data-tab="login" role="tab">登录</button>
-        <button class="tab" data-tab="register" role="tab">注册</button>
+        <button class="tab active" data-tab="login" role="tab" data-i18n="btn_login">登录</button>
+        <button class="tab" data-tab="register" role="tab" data-i18n="btn_register">注册</button>
       </div>
 
       <form id="auth-form" autocomplete="off">
         <label class="field">
-          <span class="field-label">用户名</span>
+          <span class="field-label" data-i18n="auth_username">用户名</span>
           <input id="auth-username" name="username" type="text" required minlength="2" maxlength="24" placeholder="2-24 位字符" />
         </label>
         <label class="field">
-          <span class="field-label">密码</span>
+          <span class="field-label" data-i18n="auth_password">密码</span>
           <input id="auth-password" name="password" type="password" required minlength="4" placeholder="至少 4 位" />
         </label>
         <div class="auth-msg" id="auth-msg"></div>
-        <button id="auth-submit" class="btn btn-primary btn-lg" type="submit">登录</button>
+        <button id="auth-submit" class="btn btn-primary btn-lg" type="submit" data-i18n="btn_login">登录</button>
       </form>
     </section>
   </main>
@@ -130,7 +130,7 @@
         <rect x="3" y="4" width="18" height="14" rx="2"/>
         <path d="M8 21h8M12 18v3"/>
         </svg>
-        <span>跟随系统</span>
+        <span data-i18n="theme_auto">跟随系统</span>
         <span class="theme-check" data-check="auto">✓</span>
         </button>
         <button class="theme-menu-item" data-theme="light" role="menuitem">
@@ -138,14 +138,14 @@
         <circle cx="12" cy="12" r="4"/>
         <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
         </svg>
-        <span>浅色</span>
+        <span data-i18n="theme_light">浅色</span>
         <span class="theme-check" data-check="light">✓</span>
         </button>
         <button class="theme-menu-item" data-theme="dark" role="menuitem">
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
         </svg>
-        <span>深色</span>
+        <span data-i18n="theme_dark">深色</span>
         <span class="theme-check" data-check="dark">✓</span>
         </button>
         </div>
@@ -169,9 +169,9 @@
                   <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
                 </svg>
               </span>
-              <span class="side-nav-label">聊天</span>
+              <span class="side-nav-label" data-i18n="nav_chats">聊天</span>
             </button>
-            <button class="side-nav-item" data-pane="ai" role="tab" title="Qwen">
+            <button class="side-nav-item" data-pane="ai" role="tab" title="助手">
               <span class="side-nav-ic side-nav-ic-qwen">
                 <!-- 黑色圆环 + 白色光晕。底色跟其他入口一样透明，选中时才变蓝。 -->
                 <svg class="qwen-ring" viewBox="0 0 32 32" width="19" height="19" aria-hidden="true">
@@ -185,9 +185,9 @@
                   <circle cx="16" cy="16" r="8" fill="none" stroke="var(--qwen-ring, #0f172a)" stroke-width="2.6"/>
                 </svg>
               </span>
-              <span class="side-nav-label">Qwen</span>
+              <span class="side-nav-label" data-i18n="nav_assistant">助手</span>
             </button>
-            <button class="side-nav-item" data-pane="more" role="tab" title="更多">
+            <button class="side-nav-item" data-pane="more" role="tab" title="个性化">
               <span class="side-nav-ic">
                 <svg viewBox="0 0 24 24" width="19" height="19" fill="currentColor" aria-hidden="true">
                   <circle cx="5"  cy="12" r="1.9"/>
@@ -195,7 +195,7 @@
                   <circle cx="19" cy="12" r="1.9"/>
                 </svg>
               </span>
-              <span class="side-nav-label">更多</span>
+              <span class="side-nav-label" data-i18n="nav_personal">个性化</span>
             </button>
           </nav>
         </aside>
@@ -217,29 +217,29 @@
             <span class="list-me-arrow">›</span>
           </button>
           <div class="list-head">
-            <div class="list-title" id="list-title">聊天</div>
+            <div class="list-title" id="list-title" data-i18n="nav_chats">聊天</div>
             <div class="search">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
               </svg>
-              <input id="search-input" type="text" placeholder="搜索好友 / 群聊 / 用户" />
+              <input id="search-input" type="text" placeholder="搜索好友 / 群聊 / 用户" data-i18n-ph="list_search_ph" />
             </div>
           </div>
 
           <!-- ============ 聊天：未读消息 + 会话（群聊与好友同列） ============ -->
           <div id="pane-chats" class="pane active">
             <div class="side-section">
-              <span class="side-section-title">未读消息</span>
+              <span class="side-section-title" data-i18n="list_unread">未读消息</span>
               <span class="side-badge hidden" id="unread-count">0</span>
             </div>
             <ul id="unread-list" class="list"></ul>
-            <div class="side-empty hidden" id="unread-empty">没有未读消息</div>
+            <div class="side-empty hidden" id="unread-empty" data-i18n="list_no_unread">没有未读消息</div>
 
             <div class="side-section">
-              <span class="side-section-title">会话</span>
+              <span class="side-section-title" data-i18n="list_sessions">会话</span>
             </div>
             <ul id="chats-list" class="list"></ul>
-            <div class="side-empty hidden" id="chats-empty">还没有群聊或好友</div>
+            <div class="side-empty hidden" id="chats-empty" data-i18n="list_empty">还没有群聊或好友</div>
           </div>
 
           <!-- ============ Qwen：AI 会话列表 ============ -->
@@ -249,7 +249,7 @@
                 <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <circle cx="12" cy="12" r="9"/><line x1="12" y1="8.5" x2="12" y2="15.5"/><line x1="8.5" y1="12" x2="15.5" y2="12"/>
                 </svg>
-                <span>新对话</span>
+                <span data-i18n="ai_new_chat">新对话</span>
               </button>
             </div>
             <div class="ai-chat-list" id="ai-chat-list"></div>
@@ -262,28 +262,91 @@
           <!-- ============ 更多：主题与外观设置 ============ -->
           <div id="pane-more" class="pane">
             <div class="side-section">
-              <span class="side-section-title">外观</span>
+              <span class="side-section-title" data-i18n="pref_look">外观</span>
             </div>
             <div class="more-list">
               <label class="more-row" for="toggle-boot-550c">
                 <span class="more-row-main">
-                  <span class="more-row-title">550C 启动动画主题</span>
-                  <span class="more-row-desc">重新进入账号时用 550C 开机动画替代欢迎页，并切换为琥珀色终端风格</span>
+                  <span class="more-row-title" data-i18n="pref_550c">550C 启动动画主题</span>
+                  <span class="more-row-desc" data-i18n="pref_550c_desc">重新进入账号时用 550C 开机动画替代欢迎页，并切换为琥珀色终端风格</span>
                 </span>
                 <span class="more-switch">
                   <input type="checkbox" id="toggle-boot-550c" />
                   <span class="more-switch-track"><span class="more-switch-knob"></span></span>
                 </span>
               </label>
+              <div class="more-row static">
+                <span class="more-row-main">
+                  <span class="more-row-title" data-i18n="pref_density">界面密度</span>
+                  <span class="more-row-desc" data-i18n="pref_density_desc">列表和消息的疏密</span>
+                </span>
+                <span class="seg" id="pref-density">
+                  <button type="button" data-v="compact" data-i18n="pref_compact">紧凑</button>
+                  <button type="button" data-v="normal" data-i18n="pref_normal">标准</button>
+                  <button type="button" data-v="roomy" data-i18n="pref_roomy">宽松</button>
+                </span>
+              </div>
+              <div class="more-row static">
+                <span class="more-row-main">
+                  <span class="more-row-title" data-i18n="pref_font">字号大小</span>
+                  <span class="more-row-desc" data-i18n="pref_font_desc">整个界面的文字大小</span>
+                </span>
+                <span class="seg" id="pref-font">
+                  <button type="button" data-v="0.9" data-i18n="pref_small">小</button>
+                  <button type="button" data-v="1" data-i18n="pref_medium">标准</button>
+                  <button type="button" data-v="1.15" data-i18n="pref_large">大</button>
+                </span>
+              </div>
+              <div class="more-row static">
+                <span class="more-row-main">
+                  <span class="more-row-title" data-i18n="pref_clock">时间格式</span>
+                  <span class="more-row-desc" data-i18n="pref_clock_desc">消息旁边显示时间的样式</span>
+                </span>
+                <span class="seg" id="pref-clock">
+                  <button type="button" data-v="24" data-i18n="pref_24h">24 小时</button>
+                  <button type="button" data-v="12" data-i18n="pref_12h">12 小时</button>
+                </span>
+              </div>
             </div>
+
             <div class="side-section">
-              <span class="side-section-title">关于</span>
+              <span class="side-section-title" data-i18n="pref_assistant">助手</span>
+            </div>
+            <div class="more-list">
+              <label class="more-row" for="toggle-ai-in-groups">
+                <span class="more-row-main">
+                  <span class="more-row-title" data-i18n="pref_ai_groups">群里可以叫助手</span>
+                  <span class="more-row-desc" data-i18n="pref_ai_groups_desc">在群聊里 @Qwen，它会读完上下文再回答</span>
+                </span>
+                <span class="more-switch">
+                  <input type="checkbox" id="toggle-ai-in-groups" />
+                  <span class="more-switch-track"><span class="more-switch-knob"></span></span>
+                </span>
+              </label>
+            </div>
+
+            <div class="side-section">
+              <span class="side-section-title" data-i18n="pref_lang">语言</span>
             </div>
             <div class="more-list">
               <div class="more-row static">
                 <span class="more-row-main">
-                  <span class="more-row-title">VVeChat OS</span>
-                  <span class="more-row-desc">550C 主题移植自 yannicksong0106/dsh-550c-boot（MIT）</span>
+                  <span class="more-row-title" data-i18n="pref_lang_desc">界面语言</span>
+                </span>
+                <span class="seg" id="pref-lang">
+                  <button type="button" data-v="zh">中文</button>
+                  <button type="button" data-v="en">English</button>
+                </span>
+              </div>
+            </div>
+            <div class="side-section">
+              <span class="side-section-title" data-i18n="pref_about">关于</span>
+            </div>
+            <div class="more-list">
+              <div class="more-row static">
+                <span class="more-row-main">
+                  <span class="more-row-title" data-i18n="pref_about_desc">VVeChat OS</span>
+                  <span class="more-row-desc" data-i18n="pref_about_credit">550C 主题移植自 yannicksong0106/dsh-550c-boot（MIT）</span>
                 </span>
               </div>
             </div>
@@ -324,7 +387,7 @@
                 </div>
                 <div class="ai-head-text">
                   <div class="ai-head-title">Qwen</div>
-                  <div class="ai-head-sub" id="ai-status">正在检查中转状态…</div>
+                  <div class="ai-head-sub" id="ai-status" data-i18n="ai_checking">正在检查中转状态…</div>
                 </div>
               </div>
               <button class="icon-btn icon-btn-sm" id="ai-close" title="返回聊天">
@@ -335,11 +398,11 @@
             </header>
             <div class="ai-log" id="ai-log">
               <div class="ai-welcome">
-                <p class="ai-welcome-title">有什么可以帮你？</p>
+                <p class="ai-welcome-title" data-i18n="ai_welcome">有什么可以帮你？</p>
               </div>
             </div>
             <form class="ai-composer" id="ai-form">
-              <textarea id="ai-input" rows="1" placeholder="给 Qwen 发消息…（Enter 发送，Shift+Enter 换行）" autocomplete="off"></textarea>
+              <textarea id="ai-input" rows="1" placeholder="给 Qwen 发消息…（Enter 发送，Shift+Enter 换行）" data-i18n-ph="ai_input_ph" autocomplete="off"></textarea>
               <div class="ai-tools">
                 <div class="ai-tools-group">
                   <!-- 模型：每一项都是一个具体的 Qwen 模型，选哪个就回哪个 -->
@@ -349,9 +412,9 @@
                   <!-- 思考档位：只有支持分档思考的模型才会显示 -->
                   <div class="ai-select-wrap hidden" id="ai-level-wrap">
                     <select id="ai-level" class="ai-select" title="思考档位">
-                      <option value="low">思考 · 低</option>
-                      <option value="medium" selected>思考 · 中</option>
-                      <option value="high">思考 · 高</option>
+                      <option value="low" data-i18n="think_low">思考 · 低</option>
+                      <option value="medium" selected data-i18n="think_medium">思考 · 中</option>
+                      <option value="high" data-i18n="think_high">思考 · 高</option>
                     </select>
                   </div>
                 </div>
@@ -382,8 +445,8 @@
               </svg>
             </button>
             <div class="chat-empty-mark">💬</div>
-            <h2>选择一个会话开始聊天</h2>
-            <p>可以从左侧选一个，或点右上角放大镜添加好友/群聊</p>
+            <h2 data-i18n="chat_empty_title">选择一个会话开始聊天</h2>
+            <p data-i18n="chat_empty_desc">可以从左侧选一个，或点右上角放大镜添加好友/群聊</p>
           </div>
 
           <div class="chat-window hidden" id="chat-window">
@@ -434,16 +497,22 @@
                   <div class="name" id="reply-preview-name"></div>
                   <div class="text" id="reply-preview-text"></div>
                 </div>
-                <button type="button" class="cancel" id="reply-preview-cancel" aria-label="取消">×</button>
+                <button type="button" class="cancel" id="reply-preview-cancel" aria-label="取消" data-i18n-aria="cancel">×</button>
               </div>
               <!-- @ someone — the strip above the input box, so it is always
                    obvious who the next message will call out. -->
+              <!-- The hint that the assistant can be called into a group
+                   by name. Tapping it drops the @ in for you. -->
+              <button type="button" class="mention-hint-bar hidden" id="qwen-hint">
+                <span class="mention-hint-dot">@</span>
+                <span class="mention-hint-text" data-i18n="hint_assistant_call">叫一下助手，它会看群里的上下文来回答</span>
+              </button>
               <div id="mention-preview" class="mention-preview hidden">
                 <div class="info">
                   <div class="name" id="mention-preview-name"></div>
                   <div class="text" id="mention-preview-text"></div>
                 </div>
-                <button type="button" class="cancel" id="mention-preview-cancel" aria-label="取消 @">×</button>
+                <button type="button" class="cancel" id="mention-preview-cancel" aria-label="取消 @" data-i18n-aria="cancel_at">×</button>
               </div>
               <div id="img-preview" class="img-preview hidden">
                 <img id="img-preview-img" alt="" />
@@ -461,8 +530,8 @@
                 <!-- @ someone in a group chat -->
                 <button type="button" class="mention-btn" id="mention-btn" title="@ 群成员" aria-label="@ 群成员">@</button>
                 <input type="file" id="img-input" accept="image/*" class="hidden" />
-                <input id="chat-input" type="text" placeholder="输入消息…" autocomplete="off" />
-                <button class="btn btn-primary" type="submit" id="send-btn">发送</button>
+                <input id="chat-input" type="text" placeholder="输入消息…" data-i18n-ph="chat_input_ph" autocomplete="off" />
+                <button class="btn btn-primary" type="submit" id="send-btn" data-i18n="send">发送</button>
               </div>
               <!-- The @ picker. It floats above the composer and is only
                    ever shown inside a group chat. -->
@@ -485,7 +554,7 @@
     <div class="modal-mask"></div>
     <div class="modal-card modal-card-sm modal-plus-card">
       <div class="modal-head">
-        <h3>搜索 / 添加</h3>
+        <h3 data-i18n="plus_title">搜索 / 添加</h3>
         <button class="icon-btn icon-btn-sm modal-close" data-close="modal-plus">×</button>
       </div>
       <div class="modal-body modal-plus-body">
@@ -505,8 +574,8 @@
             </svg>
           </div>
           <div>
-            <div class="plus-action-title">添加用户</div>
-            <div class="plus-action-sub">按用户名搜索并发送申请</div>
+            <div class="plus-action-title" data-i18n="plus_add_user">添加用户</div>
+            <div class="plus-action-sub" data-i18n="plus_add_user_desc">按用户名搜索并发送申请</div>
           </div>
         </button>
       </div>
@@ -518,18 +587,18 @@
     <div class="modal-mask"></div>
     <div class="modal-card modal-card-sm">
       <div class="modal-head">
-        <h3>添加用户</h3>
+        <h3 data-i18n="plus_add_user">添加用户</h3>
         <button class="icon-btn icon-btn-sm modal-close" data-close="modal-add-friend">×</button>
       </div>
       <form class="modal-body" id="form-add-friend">
         <label class="field">
-          <span class="field-label">对方的用户名</span>
+          <span class="field-label" data-i18n="their_username">对方的用户名</span>
           <input id="add-friend-username" type="text" required maxlength="24" placeholder="输入任何部分即可" />
         </label>
         <div class="modal-msg" id="add-friend-msg"></div>
         <div class="modal-actions">
-          <button type="button" class="btn btn-ghost" data-close="modal-add-friend">取消</button>
-          <button type="submit" class="btn btn-primary">发送申请</button>
+          <button type="button" class="btn btn-ghost" data-close="modal-add-friend" data-i18n="cancel">取消</button>
+          <button type="submit" class="btn btn-primary" data-i18n="send_request">发送申请</button>
         </div>
       </form>
     </div>
@@ -540,7 +609,7 @@
     <div class="modal-mask"></div>
     <div class="modal-card">
       <div class="modal-head">
-        <h3>好友申请</h3>
+        <h3 data-i18n="requests_title">好友申请</h3>
         <button class="icon-btn icon-btn-sm modal-close" data-close="modal-bell">×</button>
       </div>
       <div class="modal-body" id="bell-list">
@@ -554,7 +623,7 @@
     <div class="modal-mask"></div>
     <div class="modal-card">
       <div class="modal-head">
-        <h3>群成员</h3>
+        <h3 data-i18n="members_title">群成员</h3>
         <button class="icon-btn icon-btn-sm modal-close" data-close="modal-group-info">×</button>
       </div>
       <div class="modal-body" id="group-info-list"></div>
@@ -566,7 +635,7 @@
     <div class="modal-mask"></div>
     <div class="modal-card" id="profile-card">
       <div class="modal-head">
-        <h3 id="profile-title">个人资料</h3>
+        <h3 id="profile-title" data-i18n="profile_title">个人资料</h3>
         <button class="icon-btn icon-btn-sm modal-close" data-close="modal-profile">×</button>
       </div>
       <div class="modal-body" id="profile-body"></div>
@@ -578,14 +647,14 @@
     <div class="modal-mask"></div>
     <div class="modal-card modal-card-sm">
       <div class="modal-head">
-        <h3>确认</h3>
+        <h3 data-i18n="confirm_title">确认</h3>
         <button class="icon-btn icon-btn-sm modal-close" data-close="modal-confirm">×</button>
       </div>
       <div class="modal-body">
         <p id="confirm-msg" style="margin:0;color:var(--ink-2);line-height:1.6;"></p>
         <div class="modal-actions">
-          <button type="button" class="btn btn-ghost" data-close="modal-confirm" id="confirm-cancel">取消</button>
-          <button type="button" class="btn btn-danger" id="confirm-ok">确定</button>
+          <button type="button" class="btn btn-ghost" data-close="modal-confirm" id="confirm-cancel" data-i18n="cancel">取消</button>
+          <button type="button" class="btn btn-danger" id="confirm-ok" data-i18n="ok">确定</button>
         </div>
       </div>
     </div>
@@ -593,7 +662,7 @@
 
   <div id="lightbox" class="lightbox hidden"></div>
   <div id="toast" class="toast hidden"></div>
-  <div id="offline-banner" class="offline-banner hidden"><span class="dot"></span> <span>正在重新连接…</span></div>
+  <div id="offline-banner" class="offline-banner hidden"><span class="dot"></span> <span data-i18n="reconnecting">正在重新连接…</span></div>
 
   <!-- Socket.io client is served by this same Express app at /socket.io/socket.io.js,
        so there is no third-party CDN to fail (or be blocked). -->
