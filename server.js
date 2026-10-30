@@ -121,6 +121,20 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_friend_requests_to ON friend_requests(to_user_id, status);
 
+  -- Joining a group someone else created is an application, not a
+  -- one-tap action: the owner (or Jack) has to say yes first.
+  CREATE TABLE IF NOT EXISTS group_join_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    group_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    message TEXT,
+    status TEXT NOT NULL DEFAULT 'pending', -- 'pending' | 'accepted' | 'rejected'
+    created_at INTEGER NOT NULL,
+    FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_group_requests ON group_join_requests(group_id, status);
+
   CREATE TABLE IF NOT EXISTS read_receipts (
     conv_type TEXT NOT NULL,
     conv_id    TEXT NOT NULL,        -- user chat: normalized u_x_y ; group: numeric group id as text
@@ -1870,7 +1884,134 @@ app.get('/api/groups', authRequired, (req, res) => {
   res.json({ groups: rows });
 });
 
-// create group
+// ------------------------------------------------------------
+// Creating a group.
+//
+// Whoever creates it owns it: the owner gets the same powers inside
+// their own group that Jack has everywhere — rename it, remove
+// members, set the announcement, turn the discover switch on and
+// off, and approve join requests. Jack can do all of that to every
+// group in the system.
+// ------------------------------------------------------------
+app.post('/api/groups', rateLimit('write'), authRequired, (req, res) => {
+  const name = String((req.body || {}).name || '').trim();
+  if (!name) return res.status(400).json({ error: '群名称不能为空' });
+  if (name.length > 40) return res.status(400).json({ error: '群名称太长了' });
+  const iconColor = String((req.body || {}).icon_color || '') || null;
+  const recommended = (req.body || {}).recommended ? 1 : 0;
+  const info = db.prepare(
+    'INSERT INTO groups (name, owner_id, is_official, icon_color, recommended, created_at) VALUES (?, ?, 0, ?, ?, ?)'
+  ).run(name, req.user.id, iconColor, recommended, now());
+  const gid = info.lastInsertRowid;
+  db.prepare('INSERT OR IGNORE INTO group_members (group_id, user_id, joined_at) VALUES (?, ?, ?)')
+    .run(gid, req.user.id, now());
+  const g = db.prepare('SELECT * FROM groups WHERE id = ?').get(gid);
+  res.json({ ok: true, group: groupPublic(g, req.user.id) });
+});
+
+// ------------------------------------------------------------
+// Discover: the groups other people made and chose to recommend.
+// Only groups whose owner flipped the switch are listed.
+// ------------------------------------------------------------
+app.get('/api/groups/recommended', authRequired, (req, res) => {
+  const rows = db.prepare(`
+    SELECT g.id, g.name, g.is_official, g.owner_id, g.icon_color, g.recommended, g.pinned, g.announcement,
+           (SELECT COUNT(*) FROM group_members m WHERE m.group_id = g.id) AS member_count,
+           (SELECT username FROM users u WHERE u.id = g.owner_id) AS owner_name,
+           (SELECT COUNT(*) FROM group_members m WHERE m.group_id = g.id AND m.user_id = ?) AS joined
+    FROM groups g
+    WHERE g.recommended = 1 AND g.is_official = 0
+      AND g.id NOT IN (SELECT group_id FROM group_members WHERE user_id = ?)
+    ORDER BY g.created_at DESC
+  `).all(req.user.id, req.user.id);
+  // A pending request is worth telling the user about, so the button
+  // can say "已申请" instead of pretending nothing happened.
+  const pending = new Set(
+    db.prepare("SELECT group_id FROM group_join_requests WHERE user_id = ? AND status = 'pending'")
+      .all(req.user.id).map(r => r.group_id)
+  );
+  res.json({
+    groups: rows.map(g => ({ ...groupPublic(g, req.user.id), requested: pending.has(g.id) }))
+  });
+});
+
+// ------------------------------------------------------------
+// Apply to join a group. The owner approves it — same shape as a
+// friend request.
+// ------------------------------------------------------------
+app.post('/api/groups/:id/requests', rateLimit('write'), authRequired, (req, res) => {
+  const gid = Number(req.params.id);
+  const g = db.prepare('SELECT * FROM groups WHERE id = ?').get(gid);
+  if (!g) return res.status(404).json({ error: '群不存在' });
+  const already = db.prepare('SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?').get(gid, req.user.id);
+  if (already) return res.status(400).json({ error: '你已经在群里了' });
+  const pending = db.prepare(
+    "SELECT id FROM group_join_requests WHERE group_id = ? AND user_id = ? AND status = 'pending'"
+  ).get(gid, req.user.id);
+  if (pending) return res.status(400).json({ error: '已发送过申请，等待群主处理' });
+  const message = String((req.body || {}).message || '').slice(0, 200);
+  const info = db.prepare(
+    'INSERT INTO group_join_requests (group_id, user_id, message, status, created_at) VALUES (?, ?, ?, ?, ?)'
+  ).run(gid, req.user.id, message || null, 'pending', now());
+  // Tell the owner (and Jack) that somebody wants in.
+  const targets = db.prepare(`
+    SELECT user_id FROM group_members WHERE group_id = ? AND user_id != ?
+  `).all(gid, req.user.id);
+  const owner = g.owner_id ? Number(g.owner_id) : null;
+  const notify = new Set(targets.map(t => t.user_id));
+  if (owner) notify.add(owner);
+  if (isAdmin(req.user)) notify.add(req.user.id);
+  for (const uid of notify) {
+    try {
+      io.to(`user:${uid}`).emit('group:join-request', {
+        id: info.lastInsertRowid, group_id: gid, group_name: g.name,
+        user_id: req.user.id, username: req.user.username, message: message || null
+      });
+    } catch (e) { }
+  }
+  res.json({ ok: true });
+});
+
+// The owner's inbox of pending applications.
+app.get('/api/groups/:id/requests', authRequired, (req, res) => {
+  const gid = Number(req.params.id);
+  const g = db.prepare('SELECT * FROM groups WHERE id = ?').get(gid);
+  if (!g) return res.status(404).json({ error: '群不存在' });
+  if (!canManageGroup(req.user, g)) return res.status(403).json({ error: '只有群主或管理员可以查看申请' });
+  const rows = db.prepare(`
+    SELECT r.id, r.user_id, r.message, r.created_at, u.username, u.avatar, u.avatar_color, u.avatar_emoji
+    FROM group_join_requests r
+    JOIN users u ON u.id = r.user_id
+    WHERE r.group_id = ? AND r.status = 'pending'
+    ORDER BY r.created_at ASC
+  `).all(gid);
+  res.json({ requests: rows });
+});
+
+// Approve or reject an application.
+app.post('/api/groups/:id/requests/:rid', rateLimit('write'), authRequired, (req, res) => {
+  const gid = Number(req.params.id);
+  const rid = Number(req.params.rid);
+  const g = db.prepare('SELECT * FROM groups WHERE id = ?').get(gid);
+  if (!g) return res.status(404).json({ error: '群不存在' });
+  if (!canManageGroup(req.user, g)) return res.status(403).json({ error: '只有群主或管理员可以处理申请' });
+  const r = db.prepare("SELECT * FROM group_join_requests WHERE id = ? AND group_id = ?").get(rid, gid);
+  if (!r) return res.status(404).json({ error: '申请不存在' });
+  if (r.status !== 'pending') return res.status(400).json({ error: '该申请已处理' });
+  const accept = (req.body || {}).accept ? 1 : 0;
+  db.prepare('UPDATE group_join_requests SET status = ? WHERE id = ?').run(accept ? 'accepted' : 'rejected', rid);
+  if (accept) {
+    db.prepare('INSERT OR IGNORE INTO group_members (group_id, user_id, joined_at) VALUES (?, ?, ?)')
+      .run(gid, r.user_id, now());
+    try { io.to(`group:${gid}`).emit('group:member-added', { group_id: gid, user_id: r.user_id }); } catch (e) { }
+  }
+  try {
+    io.to(`user:${r.user_id}`).emit('group:request-resolved', {
+      id: rid, group_id: gid, group_name: g.name, accepted: !!accept
+    });
+  } catch (e) { }
+  res.json({ ok: true, accepted: !!accept });
+});
 
 // group members
 // Can `user` manage this group's membership? Owner or the built-in admin (Jack).
@@ -1878,6 +2019,25 @@ function canManageGroup(user, group) {
   if (!user || !group) return false;
   if (isAdmin(user)) return true;
   return Number(group.owner_id) === Number(user.id);
+}
+
+// The shape of a group as the client wants it.
+function groupPublic(g, userId) {
+  if (!g) return null;
+  return {
+    id: g.id,
+    name: g.name,
+    is_official: g.is_official ? 1 : 0,
+    owner_id: g.owner_id == null ? null : Number(g.owner_id),
+    icon_color: g.icon_color || null,
+    recommended: g.recommended ? 1 : 0,
+    pinned: g.pinned ? 1 : 0,
+    announcement: g.announcement || null,
+    member_count: g.member_count == null ? undefined : g.member_count,
+    owner_name: g.owner_name || undefined,
+    joined: g.joined == null ? undefined : (g.joined ? 1 : 0),
+    requested: g.requested ? 1 : 0
+  };
 }
 
 app.get('/api/groups/:id/members', authRequired, (req, res) => {
@@ -1910,7 +2070,7 @@ function isOfficialGroup(gid) {
 // Pull a member in. Owner or Jack only.
 app.post('/api/groups/:id/members', rateLimit('write'), authRequired, (req, res) => {
   const gid = Number(req.params.id);
-  if (!isOfficialGroup(gid)) return res.status(404).json({ error: '群不存在' });
+  if (!db.prepare('SELECT 1 FROM groups WHERE id = ?').get(gid)) return res.status(404).json({ error: '群不存在' });
   if (!canManageGroup(req.user, db.prepare('SELECT * FROM groups WHERE id = ?').get(gid))) {
     return res.status(403).json({ error: '只有群主或管理员可以添加成员' });
   }
@@ -1932,7 +2092,7 @@ app.delete('/api/groups/:id/members/:uid', rateLimit('write'), authRequired, (re
   // (the socket room is cleaned up below, right after the row is deleted)
   const gid = Number(req.params.id);
   const uid = Number(req.params.uid);
-  if (!isOfficialGroup(gid)) return res.status(404).json({ error: '群不存在' });
+  if (!db.prepare('SELECT 1 FROM groups WHERE id = ?').get(gid)) return res.status(404).json({ error: '群不存在' });
   if (!canManageGroup(req.user, db.prepare('SELECT * FROM groups WHERE id = ?').get(gid))) {
     return res.status(403).json({ error: '只有群主或管理员可以移除成员' });
   }
@@ -1945,7 +2105,7 @@ app.delete('/api/groups/:id/members/:uid', rateLimit('write'), authRequired, (re
 // Members that are NOT in this group yet — powers the "添加成员" picker.
 app.get('/api/groups/:gid/candidates', authRequired, (req, res) => {
   const gid = Number(req.params.gid);
-  if (!isOfficialGroup(gid)) return res.status(404).json({ error: '群不存在' });
+  if (!db.prepare('SELECT 1 FROM groups WHERE id = ?').get(gid)) return res.status(404).json({ error: '群不存在' });
   const rows = db.prepare(`
     SELECT u.id, u.username, u.avatar_color FROM users u
     WHERE u.id != ? AND u.id NOT IN (SELECT user_id FROM group_members WHERE group_id = ?)
@@ -1955,21 +2115,37 @@ app.get('/api/groups/:gid/candidates', authRequired, (req, res) => {
 });
 
 // Rename the official group. Jack only (the name is a shared label).
-app.put('/api/groups/:id', rateLimit('write'), authRequired, requireAdmin, (req, res) => {
+app.put('/api/groups/:id', rateLimit('write'), authRequired, (req, res) => {
   const gid = Number(req.params.id);
-  if (!isOfficialGroup(gid)) return res.status(404).json({ error: '群不存在' });
-  const name = String((req.body || {}).name || '').trim();
-  if (!name) return res.status(400).json({ error: '群名称不能为空' });
-  if (name.length > 40) return res.status(400).json({ error: '群名称不超过 40 字' });
-  db.prepare('UPDATE groups SET name = ? WHERE id = ?').run(name, gid);
-  try { if (io) io.emit('group:renamed', { groupId: gid, name }); } catch {}
-  res.json({ ok: true, group: { id: gid, name } });
+  const g = db.prepare('SELECT * FROM groups WHERE id = ?').get(gid);
+  if (!g) return res.status(404).json({ error: '群不存在' });
+  if (!canManageGroup(req.user, g)) return res.status(403).json({ error: '只有群主或管理员可以修改群聊' });
+  const body = req.body || {};
+  const name = String(body.name || '').trim();
+  if (name) {
+    if (name.length > 40) return res.status(400).json({ error: '群名称不超过 40 字' });
+    db.prepare('UPDATE groups SET name = ? WHERE id = ?').run(name, gid);
+    try { if (io) io.emit('group:renamed', { groupId: gid, name }); } catch {}
+  }
+  // The discover switch lives here too — the owner decides whether the
+  // group shows up in Discover.
+  if (body.recommended !== undefined) {
+    const on = body.recommended ? 1 : 0;
+    db.prepare('UPDATE groups SET recommended = ? WHERE id = ?').run(on, gid);
+  }
+  if (body.icon_color !== undefined) {
+    db.prepare('UPDATE groups SET icon_color = ? WHERE id = ?').run(body.icon_color || null, gid);
+  }
+  const fresh = db.prepare('SELECT * FROM groups WHERE id = ?').get(gid);
+  res.json({ ok: true, group: groupPublic(fresh) });
 });
 
 // Announcement. Jack only.
-app.post('/api/groups/:id/announcement', rateLimit('write'), authRequired, requireAdmin, (req, res) => {
+app.post('/api/groups/:id/announcement', rateLimit('write'), authRequired, (req, res) => {
   const gid = Number(req.params.id);
-  if (!isOfficialGroup(gid)) return res.status(404).json({ error: '群不存在' });
+  const g = db.prepare('SELECT * FROM groups WHERE id = ?').get(gid);
+  if (!g) return res.status(404).json({ error: '群不存在' });
+  if (!canManageGroup(req.user, g)) return res.status(403).json({ error: '只有群主或管理员可以设置公告' });
   const text = String((req.body || {}).text || '').trim();
   if (text.length > 500) return res.status(400).json({ error: '公告不超过 500 字' });
   db.prepare('UPDATE groups SET announcement = ? WHERE id = ?').run(text || null, gid);
@@ -1980,14 +2156,44 @@ app.post('/api/groups/:id/announcement', rateLimit('write'), authRequired, requi
 // Re-join the official group (self-service, used by the empty-state CTA).
 app.post('/api/groups/:id/join', rateLimit('write'), authRequired, (req, res) => {
   const gid = Number(req.params.id);
-  if (!isOfficialGroup(gid)) return res.status(404).json({ error: '群不存在' });
+  const g = db.prepare('SELECT * FROM groups WHERE id = ?').get(gid);
+  if (!g) return res.status(404).json({ error: '群不存在' });
+  const already = db.prepare('SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?').get(gid, req.user.id);
+  if (already) return res.json({ ok: true, joined: true });
+  // The official group is open to everyone. For a group somebody made,
+  // joining means asking the owner — unless you are Jack, who runs
+  // every group in the system and simply walks in.
+  if (!isOfficialGroup(gid) && !isAdmin(req.user)) {
+    const pending = db.prepare(
+      "SELECT id FROM group_join_requests WHERE group_id = ? AND user_id = ? AND status = 'pending'"
+    ).get(gid, req.user.id);
+    if (pending) return res.status(400).json({ error: '已发送过申请，等待群主处理' });
+    const message = String((req.body || {}).message || '').slice(0, 200);
+    const info = db.prepare(
+      'INSERT INTO group_join_requests (group_id, user_id, message, status, created_at) VALUES (?, ?, ?, ?, ?)'
+    ).run(gid, req.user.id, message || null, 'pending', now());
+    const owner = g.owner_id ? Number(g.owner_id) : null;
+    const targets = new Set(db.prepare(
+      'SELECT user_id FROM group_members WHERE group_id = ? AND user_id != ?'
+    ).all(gid, req.user.id).map(t => t.user_id));
+    if (owner) targets.add(owner);
+    for (const uid of targets) {
+      try {
+        io.to(`user:${uid}`).emit('group:join-request', {
+          id: info.lastInsertRowid, group_id: gid, group_name: g.name,
+          user_id: req.user.id, username: req.user.username, message: message || null
+        });
+      } catch (e) { }
+    }
+    return res.json({ ok: true, requested: true });
+  }
   db.prepare('INSERT OR IGNORE INTO group_members (group_id, user_id, joined_at) VALUES (?, ?, ?)')
     .run(gid, req.user.id, now());
   // The socket joined its group rooms when it connected; a group joined
   // after that needs the room added now, or the live messages stay out
   // of reach until the next reconnect.
   try { if (io) io.in(`user:${req.user.id}`).socketsJoin(`group:${gid}`); } catch (e) { }
-  res.json({ ok: true });
+  res.json({ ok: true, joined: true });
 });
 
 // Add a member to a group. Owner or Jack only.

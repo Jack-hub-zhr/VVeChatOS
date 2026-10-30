@@ -178,6 +178,20 @@
       only_jack_rename_official: '只有 Jack 才能修改官方群名称',
       nav_chats: '聊天',
       nav_assistant: '助手',
+      nav_discover: '发现',
+      discover_title: '发现',
+      discover_sub: '看看大家在聊什么',
+      discover_create: '建个群',
+      discover_empty: '还没有人推荐群聊',
+      discover_empty_sub: '你可以自己建一个',
+      cg_title: '建个群聊',
+      cg_name: '群名称',
+      cg_name_ph: '给群起个名字',
+      cg_recommend: '在 发现页 里推荐',
+      cg_recommend_note: '此开关将在群聊的设置里显示',
+      cg_create: '创建',
+      pref_discover: '发现',
+      pref_discover_desc: '看看别人建的群聊，申请加入就能一起聊',
       nav_personal: '个性化',
       pref_look: '外观',
       pref_550c: '550C 启动动画主题',
@@ -386,6 +400,20 @@
       only_jack_rename_official: 'Only Jack can rename the official group',
       nav_chats: 'Chats',
       nav_assistant: 'Assistant',
+      nav_discover: 'Discover',
+      discover_title: 'Discover',
+      discover_sub: 'See what people are talking about',
+      discover_create: 'New group',
+      discover_empty: 'No groups recommended yet',
+      discover_empty_sub: 'You can make one yourself',
+      cg_title: 'Create a group',
+      cg_name: 'Group name',
+      cg_name_ph: 'Give the group a name',
+      cg_recommend: 'Recommend it in Discover',
+      cg_recommend_note: 'This switch also shows in the group settings',
+      cg_create: 'Create',
+      pref_discover: 'Discover',
+      pref_discover_desc: 'See the groups other people made and apply to join',
       nav_personal: 'Personal',
       pref_look: 'Look & feel',
       pref_550c: '550C boot animation',
@@ -1049,46 +1077,38 @@
   }
   function renderRecommended() {
     const list = $('#discover-list');
+    if (!list) return;
     list.innerHTML = '';
     if (!state.recommended.length) {
-      $('#discover-empty').classList.remove('hidden');
+      $('#discover-empty')?.classList.remove('hidden');
       return;
     }
-    $('#discover-empty').classList.add('hidden');
+    $('#discover-empty')?.classList.add('hidden');
     for (const g of state.recommended) {
-      const li = document.createElement('li'); li.className = 'list-item';
+      const card = document.createElement('div');
+      card.className = 'discover-card';
       const color = g.icon_color || '#8b5cf6';
       const bg = `background:linear-gradient(135deg, ${color}, ${shade(color, -25)});`;
-      li.innerHTML = `<div class="avatar sm" style="${bg}">${escapeHtml((g.name || '?').slice(0,1))}</div>
-        <div class="meta">
-          <div class="name">${escapeHtml(g.name)}</div>
-          <div class="preview">${escapeHtml(g.description || '')} · ${g.member_count || 0} ${lang==='zh'?'人':'members'}</div>
+      const owner = g.owner_name ? (lang === 'en' ? 'by ' + g.owner_name : g.owner_name + ' 建的') : '';
+      card.innerHTML = `<div class="avatar" style="${bg}">${escapeHtml((g.name || '?').slice(0, 1))}</div>
+        <div class="discover-card-main">
+          <div class="discover-card-name">${escapeHtml(g.name)}</div>
+          <div class="discover-card-meta">${escapeHtml(owner)} · ${g.member_count || 0} ${lang === 'en' ? 'members' : '人'}</div>
         </div>
-        <button class="settings-action" data-gid="${g.id}" data-act="${g.joined ? 'open' : 'join'}" style="color:#3b82f6;">${g.joined ? (lang==='zh'?'打开':'Open') : (lang==='zh'?'加入':'Join')}</button>`;
-      const act = li.querySelector('[data-act]');
-      act.addEventListener('click', async (e) => {
+        <button class="discover-join${g.requested ? ' pending' : ''}" data-gid="${g.id}">${
+          g.requested ? (lang === 'en' ? 'Applied' : '已申请') : (lang === 'en' ? 'Apply' : '申请加入')
+        }</button>`;
+      const btn = card.querySelector('.discover-join');
+      btn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        if (g.joined) {
-          openChat('group', g.id, g.name, 0);
-          state.currentChat = { type: 'group', id: g.id, title: g.name, isOfficial: 0 };
-          $$('.pane').forEach(p => p.classList.toggle('active', p.id === 'pane-chats'));
-        } else {
-          try {
-            await api(`/groups/${g.id}/join`, { method: 'POST' });
-            toast(lang==='zh'?'已加入群聊':'Joined group');
-            refreshGroups(); refreshRecommended();
-          } catch (e) { toast(e.message); }
-        }
+        if (g.requested) { toast(lang === 'en' ? 'Waiting for the owner' : '已申请，等待群主处理'); return; }
+        try {
+          await api(`/groups/${g.id}/join`, { method: 'POST', body: {} });
+          toast(lang === 'en' ? 'Request sent' : '已发送申请，等群主同意');
+          refreshRecommended();
+        } catch (e) { toast(e.message); }
       });
-      // clicking the row itself opens the group (if already joined)
-      li.addEventListener('click', () => {
-        if (g.joined) {
-          $$('.pane').forEach(p => p.classList.toggle('active', p.id === 'pane-chats'));
-          $$('.side-nav-item').forEach(b => b.classList.toggle('active', b.dataset.pane === 'chats'));
-          openChat('group', g.id, g.name, 0);
-        }
-      });
-      list.appendChild(li);
+      list.appendChild(card);
     }
   }
   // ---- In-app confirm dialog ----
@@ -1208,10 +1228,23 @@
       addRow.className = 'settings-row';
       addRow.id = 'gi-add-member';
       addRow.innerHTML = `<div class="avatar sm" style="background:linear-gradient(135deg,#34d399,#10b981);color:#fff;">+</div>
-        <div class="settings-label" style="color:#10b981;font-weight:600;">添加成员</div>
+        <div class="settings-label" style="color:#10b981;font-weight:600;">${lang==='zh'?'添加成员':'Add member'}</div>
         <div class="settings-trailing"><span class="settings-chevron">›</span></div>`;
       addRow.addEventListener('click', () => openAddMemberModal(g));
       wrap.appendChild(addRow);
+
+      // Pending join requests — the owner approves them here.
+      const reqRow = document.createElement('div');
+      reqRow.className = 'settings-row';
+      reqRow.id = 'gi-join-requests';
+      const pendingCount = (state.pendingGroupRequests || {})[gid] || 0;
+      reqRow.innerHTML = `<div class="avatar sm" style="background:linear-gradient(135deg,#f59e0b,#f97316);color:#fff;">?</div>
+        <div class="settings-label" style="color:#f59e0b;font-weight:600;">${lang==='zh'?'入群申请':'Join requests'}</div>
+        <div class="settings-trailing">${pendingCount
+          ? `<span class="badge" style="background:#f59e0b;color:#fff;">${pendingCount}</span>`
+          : `<span class="settings-chevron">›</span>`}</div>`;
+      reqRow.addEventListener('click', () => openGroupRequestsModal(g));
+      wrap.appendChild(reqRow);
     }
 
     // Members section header
@@ -2281,6 +2314,70 @@
   }
 
   // ---- Add member to a group (owner / Jack) ----
+  // The owner's inbox: people who asked to join this group.
+  async function openGroupRequestsModal(g) {
+    const gid = g.id;
+    const mask = document.createElement('div');
+    mask.className = 'modal';
+    mask.innerHTML = `
+      <div class="modal-mask"></div>
+      <div class="modal-card">
+        <div class="modal-head">
+          <h3>${lang === 'en' ? 'Join requests' : '入群申请'} · ${escapeHtml(g.name || '')}</h3>
+          <button class="icon-btn icon-btn-sm" data-x="0">×</button>
+        </div>
+        <div class="modal-body">
+          <div id="gr-list" style="max-height:320px;overflow-y:auto;">
+            <div class="empty-hint"><p>${lang === 'en' ? 'Loading…' : '正在加载…'}</p></div>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(mask);
+    const close = () => mask.remove();
+    mask.addEventListener('click', (e) => {
+      if (e.target.closest('[data-x]') || e.target.classList.contains('modal-mask')) close();
+    });
+    const list = mask.querySelector('#gr-list');
+    const load = async () => {
+      try {
+        const r = await api(`/groups/${gid}/requests`);
+        const reqs = r.requests || [];
+        if (!reqs.length) {
+          list.innerHTML = `<div class="empty-hint"><p>${lang === 'en' ? 'No requests yet' : '暂时没有申请'}</p></div>`;
+          return;
+        }
+        list.innerHTML = '';
+        for (const q of reqs) {
+          const row = document.createElement('div');
+          row.className = 'settings-row';
+          const bg = q.avatar_color ? `background:linear-gradient(135deg, ${q.avatar_color}, ${shade(q.avatar_color, -25)})` : '';
+          row.innerHTML = `<div class="avatar sm" style="${bg}">${escapeHtml(initials(q.username))}</div>
+            <div class="settings-label">${escapeHtml(q.username)}${q.message ? `<div style="font-size:11px;color:var(--muted);font-weight:400;margin-top:2px;">${escapeHtml(q.message)}</div>` : ''}</div>
+            <div class="settings-trailing">
+              <span class="settings-action" data-ok="${q.id}" style="color:#10b981;">${lang === 'en' ? 'Accept' : '同意'}</span>
+              <span class="settings-action" data-no="${q.id}" style="color:#ef4444;margin-left:10px;">${lang === 'en' ? 'Decline' : '拒绝'}</span>
+            </div>`;
+          const decide = async (id, accept) => {
+            try {
+              await api(`/groups/${gid}/requests/${id}`, { method: 'POST', body: { accept } });
+              toast(accept ? (lang === 'en' ? 'Added' : '已加入群聊') : (lang === 'en' ? 'Declined' : '已拒绝'));
+              if (state.pendingGroupRequests) delete state.pendingGroupRequests[gid];
+              renderGroupRequestBadge();
+              load();
+              refreshGroups();
+            } catch (e) { toast(e.message); }
+          };
+          row.querySelector('[data-ok]').addEventListener('click', () => decide(q.id, true));
+          row.querySelector('[data-no]').addEventListener('click', () => decide(q.id, false));
+          list.appendChild(row);
+        }
+      } catch (e) {
+        list.innerHTML = `<div class="empty-hint"><p>${escapeHtml(e.message || '')}</p></div>`;
+      }
+    };
+    load();
+  }
+
   async function openAddMemberModal(g) {
     const gid = g.id;
     const mask = document.createElement('div');
@@ -2485,6 +2582,8 @@
     s.on('friend:request:resolved', onRequestResolved);
     s.on('friend:added', onFriendAdded);
     s.on('group:added', onGroupAdded);
+    s.on('group:join-request', onGroupJoinRequest);
+    s.on('group:request-resolved', onGroupRequestResolved);
     // Jack wiped every message in a group. The server broadcasts this, but
     // nobody was listening — so the other users' clients kept showing the
     // old messages until they refreshed. Clear the local cache and repaint.
@@ -2536,6 +2635,35 @@
       refreshConversations();
     }
   }
+  // Somebody wants into one of my groups. Show it — the owner (and Jack)
+  // approve it from the group's settings.
+  function onGroupJoinRequest(req) {
+    if (!req || !req.group_id) return;
+    const who = req.username || (lang === 'en' ? 'Somebody' : '有人');
+    toast(lang === 'en'
+      ? `${who} wants to join “${req.group_name}”`
+      : `${who} 申请加入「${req.group_name}」`);
+    state.pendingGroupRequests = state.pendingGroupRequests || {};
+    state.pendingGroupRequests[req.group_id] = (state.pendingGroupRequests[req.group_id] || 0) + 1;
+    renderGroupRequestBadge();
+    refreshGroups();
+  }
+  function onGroupRequestResolved(r) {
+    if (!r) return;
+    toast(r.accepted
+      ? (lang === 'en' ? `You joined “${r.group_name}”` : `你加入了「${r.group_name}」`)
+      : (lang === 'en' ? `The request for “${r.group_name}” was declined` : `「${r.group_name}」的申请被拒绝`));
+    refreshGroups();
+    refreshRecommended();
+  }
+  function renderGroupRequestBadge() {
+    const badge = $('#group-request-badge');
+    if (!badge) return;
+    const n = Object.values(state.pendingGroupRequests || {}).reduce((a, b) => a + b, 0);
+    badge.textContent = n > 9 ? '9+' : String(n);
+    badge.classList.toggle('hidden', !n);
+  }
+
   function onMessageDeleted({ id, conv_type, conv_id }) {
     const peerId = currentPeerId({conv_id});
     const key = convKey(conv_type, conv_type==='user' ? peerId : conv_id);
@@ -3028,6 +3156,11 @@
       el.appendChild(node);
       const scroll = () => aiAutoScroll();
       let i = 0;
+      // The upstream likes to open with a newline or two. Writing them
+      // one by one would show a blank first line that grows as the
+      // answer types — skip them before the first character lands.
+      while (i < text.length && /\s/.test(text.charAt(i)) && text.charAt(i) !== '\n') i++;
+      while (i < text.length && text.charAt(i) === '\n') i++;
       const step = () => {
         if (i >= text.length) return resolve();
         node.appendData(text.charAt(i));
@@ -3208,6 +3341,9 @@
             const body = row && row.querySelector('.ai-think-body');
             const title = row && row.querySelector('.ai-think-title');
             if (title) title.textContent = '思考过程';
+            // A trace that is already finished must not look like it is
+            // still going: freeze the three dots.
+            if (row) row.classList.add('think-done');
             if (body) body.textContent = m.reasoning;
           }
           const row = aiAppendBlock('bot');
@@ -3764,6 +3900,7 @@
     if (titleEl) {
       titleEl.textContent = mode === 'ai'
         ? (lang === 'en' ? 'Assistant' : '助手')
+        : mode === 'discover' ? t('nav_discover')
         : (mode === 'more' ? t('nav_personal') : t('nav_chats'));
     }
   }
@@ -4253,6 +4390,8 @@
       const target = btn.dataset.pane;
       $$('.pane').forEach(p => p.classList.toggle('active', p.id === `pane-${target}`));
       setListMode(target);
+      // Discover is a list of groups other people made — pull it fresh.
+      if (target === 'discover') refreshRecommended();
       // Switching blocks means "go back to a list". On a phone the
       // chat view had hidden both the list and the tab bar, so without
       // clearing `chat-open` the user would land on an empty screen
@@ -4262,6 +4401,47 @@
       if (target === 'ai') openAiView();
       else closeAiView();
     }));
+    // The Personalisation panel also carries a Discover entry.
+    const prefDiscover = $('#pref-discover-row');
+    if (prefDiscover) {
+      const go = () => {
+        $$('.side-nav-item').forEach(b => b.classList.toggle('active', b.dataset.pane === 'discover'));
+        $$('.pane').forEach(p => p.classList.toggle('active', p.id === 'pane-discover'));
+        setListMode('discover');
+        $('.app-body')?.classList.remove('chat-open');
+        closeListPane();
+        refreshRecommended();
+      };
+      bindOnce(prefDiscover, 'click', go);
+      bindOnce(prefDiscover, 'keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+    }
+
+    // Discover: create a group. The switch in the dialog decides whether
+    // the group is listed in Discover — the owner can flip it later.
+    bindOnce($('#btn-create-group'), 'click', (e) => {
+      e.stopPropagation();
+      const name = $('#cg-name');
+      if (name) { name.value = ''; name.focus(); }
+      openModal('modal-create-group');
+    });
+    bindOnce($('#create-group-form'), 'submit', async (e) => {
+      e.preventDefault();
+      const name = ($('#cg-name')?.value || '').trim();
+      if (!name) { toast(lang === 'en' ? 'Give the group a name' : '给群起个名字'); return; }
+      const recommended = !!$('#cg-recommend')?.checked;
+      try {
+        const r = await api('/groups', { method: 'POST', body: { name, recommended } });
+        closeModal('modal-create-group');
+        toast(lang === 'en' ? 'Group created' : '群建好了');
+        await refreshGroups();
+        refreshRecommended();
+        if (r && r.group) {
+          state.currentChat = { type: 'group', id: r.group.id, title: r.group.name, isOfficial: 0 };
+          openChat('group', r.group.id, r.group.name, 0);
+        }
+      } catch (err) { toast(err.message); }
+    });
+
     // The hint above the composer: tapping it calls the assistant by
     // name. It only makes sense inside a group.
     bindOnce($('#qwen-hint'), 'click', () => {

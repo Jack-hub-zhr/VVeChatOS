@@ -192,6 +192,16 @@
               </span>
               <span class="side-nav-label" data-i18n="nav_assistant">助手</span>
             </button>
+            <button class="side-nav-item" data-pane="discover" role="tab" title="发现">
+              <span class="side-nav-ic">
+                <!-- A compass — the needle points at the groups out there. -->
+                <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="9"/>
+                  <path d="M15.5 8.5l-2.2 5.3-5.3 2.2 2.2-5.3z"/>
+                </svg>
+              </span>
+              <span class="side-nav-label" data-i18n="nav_discover">发现</span>
+            </button>
             <button class="side-nav-item" data-pane="more" role="tab" title="个性化">
               <span class="side-nav-ic">
                 <svg viewBox="0 0 24 24" width="19" height="19" fill="currentColor" aria-hidden="true">
@@ -265,7 +275,45 @@
           </div>
 
           <!-- ============ 更多：主题与外观设置 ============ -->
+          <!-- Discover: the groups other people made. You apply to join,
+               the owner says yes — same as a friend request. -->
+          <div id="pane-discover" class="pane">
+            <div class="discover-head">
+              <div class="discover-sub" data-i18n="discover_sub">看看大家在聊什么</div>
+              <button type="button" class="btn btn-primary btn-sm discover-new" id="btn-create-group">
+                <span data-i18n="discover_create">建个群</span>
+              </button>
+            </div>
+            <div class="discover-list" id="discover-list"></div>
+            <div class="discover-empty hidden" id="discover-empty">
+              <div class="discover-empty-icon">
+                <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2.2 5.3-5.3 2.2 2.2-5.3z"/>
+                </svg>
+              </div>
+              <div class="discover-empty-text" data-i18n="discover_empty">还没有人推荐群聊</div>
+              <div class="discover-empty-sub" data-i18n="discover_empty_sub">你可以自己建一个</div>
+            </div>
+          </div>
           <div id="pane-more" class="pane">
+            <!-- Discover sits at the top of Personalisation too, so the
+                 compass is reachable from either place. -->
+            <div class="side-section">
+              <span class="side-section-title" data-i18n="nav_discover">发现</span>
+            </div>
+            <div class="more-list">
+              <div class="more-row pref-discover-row" id="pref-discover-row" role="button" tabindex="0">
+                <span class="more-row-main">
+                  <span class="more-row-title" data-i18n="pref_discover">发现</span>
+                  <span class="more-row-desc" data-i18n="pref_discover_desc">看看别人建的群聊，申请加入就能一起聊</span>
+                </span>
+                <span class="more-row-trailing">
+                  <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2.2 5.3-5.3 2.2 2.2-5.3z"/>
+                  </svg>
+                </span>
+              </div>
+            </div>
             <div class="side-section">
               <span class="side-section-title" data-i18n="pref_look">外观</span>
             </div>
@@ -652,6 +700,35 @@
   </div>
 
   <!-- MODAL: confirm -->
+  <!-- Create a group. The discover switch lives here, and the owner can
+       flip it later from the group's own settings. -->
+  <div class="modal hidden" id="modal-create-group" role="dialog">
+    <div class="modal-mask"></div>
+    <div class="modal-card modal-card-sm">
+      <div class="modal-head">
+        <h3 data-i18n="cg_title">建个群聊</h3>
+        <button class="icon-btn icon-btn-sm modal-close" data-close="modal-create-group">×</button>
+      </div>
+      <form id="create-group-form">
+        <div class="modal-body">
+          <label class="field-label" for="cg-name" data-i18n="cg_name">群名称</label>
+          <input class="field-input" id="cg-name" type="text" maxlength="40" placeholder="给群起个名字" data-i18n-ph="cg_name_ph" autocomplete="off" />
+          <label class="cg-recommend">
+            <input type="checkbox" id="cg-recommend" checked />
+            <span class="cg-recommend-box"></span>
+            <span class="cg-recommend-text">
+              <span class="cg-recommend-title" data-i18n="cg_recommend">在 发现页 里推荐</span>
+              <span class="cg-recommend-note" data-i18n="cg_recommend_note">此开关将在群聊的设置里显示</span>
+            </span>
+          </label>
+        </div>
+        <div class="modal-foot">
+          <button type="button" class="btn btn-ghost" data-close="modal-create-group" data-i18n="cancel">取消</button>
+          <button type="submit" class="btn btn-primary" data-i18n="cg_create">创建</button>
+        </div>
+      </form>
+    </div>
+  </div>
   <div class="modal hidden" id="modal-confirm" role="dialog">
     <div class="modal-mask"></div>
     <div class="modal-card modal-card-sm">
