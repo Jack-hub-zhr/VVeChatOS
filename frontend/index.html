@@ -8,8 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="theme-color" content="#8b5cf6" />
   <title>VVeChat</title>
-  <link rel="stylesheet" href="style.css" />
-  <link rel="stylesheet" href="boot550c.css" />
+  <link rel="stylesheet" href="style.css?v=20261030b" />
   <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><text x='32' y='44' font-family='system-ui' font-size='40' font-weight='800' text-anchor='middle' fill='%238b5cf6'>V</text></svg>" />
 </head>
 <body>
@@ -753,8 +752,26 @@
   <!-- Socket.io client is served by this same Express app at /socket.io/socket.io.js,
        so there is no third-party CDN to fail (or be blocked). -->
   <script src="/socket.io/socket.io.js"></script>
-  <script src="config.js"></script>
-  <script src="boot550c.js"></script>
-  <script src="app.js"></script>
+  <script src="config.js?v=20261030b"></script>
+  <!-- The 550C theme is ~60 KB. Only fetch it when it is actually on:
+       localStorage says so right now, and app.js re-checks after login
+       for the case where the account has it on but this browser does
+       not. -->
+  <script>
+  (function () {
+    try {
+      window.__VV_ASSET_V = '20261030b';
+      if (localStorage.getItem('vve:boot550c') !== '1') return;
+      var css = document.createElement('link');
+      css.rel = 'stylesheet'; css.href = 'boot550c.css?v=20261030b';
+      document.head.appendChild(css);
+      var js = document.createElement('script');
+      js.src = 'boot550c.js?v=20261030b';
+      js.async = false;
+      document.head.appendChild(js);
+    } catch (e) { }
+  })();
+  </script>
+  <script src="app.js?v=20261030b"></script>
 </body>
 </html>

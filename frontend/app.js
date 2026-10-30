@@ -710,6 +710,26 @@
     try { return localStorage.getItem('vve:theme') || 'auto'; } catch (_) { return 'auto'; }
   }
   function boot550cOn() { return !!(window.Boot550C && window.Boot550C.enabled()); }
+
+  // The 550C theme is ~60 KB and only fetched when it is actually used.
+  // This loads it on demand and resolves once it is ready.
+  var _boot550cLoading = null;
+  function ensureBoot550cLoaded() {
+    if (window.Boot550C) return Promise.resolve();
+    if (_boot550cLoading) return _boot550cLoading;
+    _boot550cLoading = new Promise((resolve) => {
+      var css = document.createElement('link');
+      css.rel = 'stylesheet';
+      css.href = 'boot550c.css?v=' + (window.__VV_ASSET_V || '');
+      document.head.appendChild(css);
+      var js = document.createElement('script');
+      js.src = 'boot550c.js?v=' + (window.__VV_ASSET_V || '');
+      js.onload = () => resolve();
+      js.onerror = () => resolve();   // a missing theme must not break the app
+      document.head.appendChild(js);
+    });
+    return _boot550cLoading;
+  }
   function applyTheme(mode) {
     const mql = window.matchMedia('(prefers-color-scheme: dark)');
     const systemDark = mql.matches;
@@ -739,7 +759,7 @@
       }
     } catch (e) { console.warn('[VVeChat] boot_550c save failed:', e); }
   }
-  function applyBoot550cFromUser(user) {
+  async function applyBoot550cFromUser(user) {
     if (!user || user.boot_550c === undefined || user.boot_550c === null) return false;
     // Once the user has made the choice on this device, the local
     // value wins — the server copy is a backup for other devices, not
@@ -748,6 +768,10 @@
     try { touched = localStorage.getItem('vve:boot550c') !== null; } catch (_) {}
     const wantOn = touched ? boot550cOn() : !!user.boot_550c;
     if (wantOn === boot550cOn()) return false;
+    // The theme files may not be on this device yet — the account has
+    // it on but this browser never downloaded it. Fetch them first.
+    if (wantOn) await ensureBoot550cLoaded();
+    if (!window.Boot550C) return false;
     window.Boot550C.setEnabled(wantOn);
     applyTheme(currentThemeMode());
     const t = $('#toggle-boot-550c');
@@ -4280,14 +4304,14 @@
     if (t && u) {
       try {
         state.token = t; state.user = JSON.parse(u);
-        applyBoot550cFromUser(state.user);
+        applyBoot550cFromUser(state.user).catch(() => {});
         enterApp();
         // Pull the account-level flag so the setting follows the user
         // to other devices.  Failure here is harmless — the local
         // value already decided this session's boot animation.
         api('/me').then(r => {
           if (r && r.user) {
-            applyBoot550cFromUser(r.user);
+            applyBoot550cFromUser(r.user).catch(() => {});
             state.user = r.user;
             try { localStorage.setItem('vve:user', JSON.stringify(state.user)); } catch (_) {}
           }
@@ -4757,7 +4781,7 @@
           localStorage.setItem('vve:user', JSON.stringify(state.user));
           // The account owns the 550C flag — adopt it on sign-in so the
           // next visit boots the animation the way this account wants.
-          applyBoot550cFromUser(data.user);
+          await applyBoot550cFromUser(data.user);
           loadPrefs(data.user);
           msgEl.classList.add('ok');
           msgEl.textContent = authMode === 'login' ? t('auth_ok_login') : t('auth_ok_register');

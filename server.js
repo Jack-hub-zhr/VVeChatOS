@@ -2907,10 +2907,70 @@ setInterval(cleanupOldMessages, 60 * 60 * 1000); // every hour
 // ============================================================
 const FRONTEND_DIR = path.join(__dirname, 'frontend');
 if (fs.existsSync(FRONTEND_DIR)) {
-  app.use(express.static(FRONTEND_DIR, {
-    maxAge: 0, etag: false, lastModified: false,
-    setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0'),
-  }));
+  // A gzip middleware for the static files only. The API and the
+  // streaming endpoints (SSE, socket.io) must NOT be compressed — a
+  // buffered stream would defeat the whole point of streaming.
+  const gzipStatic = require('zlib');
+  // Static assets are served by hand rather than by express.static, so
+  // the response can be gzipped AND cached for a year. The two matter:
+  // app.js is 210 KB raw, and the browser was told "no-store" before,
+  // so every single visit re-downloaded everything.
+  const zlib = require('zlib');
+  const STATIC_MIME = {
+    '.js': 'text/javascript; charset=utf-8',
+    '.css': 'text/css; charset=utf-8',
+    '.svg': 'image/svg+xml',
+    '.json': 'application/json; charset=utf-8',
+    '.png': 'image/png', '.jpg': 'image/jpeg', '.ico': 'image/x-icon',
+    '.woff2': 'font/woff2', '.txt': 'text/plain; charset=utf-8',
+  };
+  const staticCache = new Map();   // path -> { body, gz, etag, mtime }
+  const STATIC_RE = /^\/[A-Za-z0-9._\-\/]*(\.(js|css|svg|json|png|jpg|ico|woff2|txt)|index\.html)$/;
+  app.get(STATIC_RE, (req, res, next) => {
+    const rel = decodeURIComponent(req.path).replace(/^\/+/, '');
+    const file = path.join(FRONTEND_DIR, rel);
+    if (!file.startsWith(FRONTEND_DIR)) return next();
+    let st;
+    try { st = fs.statSync(file); } catch (e) { return next(); }
+    if (!st.isFile()) return next();
+
+    const key = rel;
+    let entry = staticCache.get(key);
+    if (!entry || entry.mtime !== st.mtimeMs) {
+      const raw = fs.readFileSync(file);
+      entry = {
+        mtime: st.mtimeMs,
+        raw,
+        gz: zlib.gzipSync(raw, { level: 6 }),
+        etag: 'W/"' + st.size.toString(16) + '-' + st.mtimeMs.toString(16) + '"',
+      };
+      staticCache.set(key, entry);
+    }
+
+    // The shell points at the versioned assets, so it must always be
+    // revalidated; everything else can live in the cache for a year.
+    const isShell = rel === 'index.html' || rel === 'config.js';
+    res.setHeader('ETag', entry.etag);
+    res.setHeader('Vary', 'Accept-Encoding');
+    res.setHeader('Cache-Control', isShell
+      ? 'no-cache'
+      : 'public, max-age=31536000, immutable');
+    res.setHeader('Content-Type', STATIC_MIME[path.extname(file).toLowerCase()] || 'application/octet-stream');
+
+    if (req.headers['if-none-match'] === entry.etag) {
+      res.status(304).end();
+      return;
+    }
+    const wantsGzip = /\bgzip\b/.test(String(req.headers['accept-encoding'] || ''));
+    if (wantsGzip) {
+      res.setHeader('Content-Encoding', 'gzip');
+      res.setHeader('Content-Length', entry.gz.length);
+      res.end(entry.gz);
+    } else {
+      res.setHeader('Content-Length', entry.raw.length);
+      res.end(entry.raw);
+    }
+  });
 
 // ============================================================
 // Control panel (/control) — the Jack-only admin console.
@@ -2935,7 +2995,25 @@ if (fs.existsSync(CONTROL_DIR)) {
     const p = req.path || '';
     if (p.startsWith('/api/') || p.startsWith('/socket.io/')) return next();
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
-    res.sendFile(path.join(FRONTEND_DIR, 'index.html'));
+    // The SPA shell: gzip it, but always revalidate it — it points at
+    // the versioned assets.
+    try {
+      const raw = fs.readFileSync(path.join(FRONTEND_DIR, 'index.html'));
+      const gz = zlib.gzipSync(raw, { level: 6 });
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Vary', 'Accept-Encoding');
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      if (/\bgzip\b/.test(String(req.headers['accept-encoding'] || ''))) {
+        res.setHeader('Content-Encoding', 'gzip');
+        res.setHeader('Content-Length', gz.length);
+        res.end(gz);
+      } else {
+        res.setHeader('Content-Length', raw.length);
+        res.end(raw);
+      }
+    } catch (e) {
+      res.sendFile(path.join(FRONTEND_DIR, 'index.html'));
+    }
   });
   console.log('[VVeChat] serving frontend from', FRONTEND_DIR);
 } else {
