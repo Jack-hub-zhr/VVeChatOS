@@ -2647,6 +2647,7 @@ app.post('/api/messages/read', rateLimit('write'), authRequired, (req, res) => {
 
 // ---------- http + socket.io ----------
 const server = http.createServer(app);
+
 const io = new SocketIOServer(server, { cors: { origin: '*' } });
 
 // online presence
