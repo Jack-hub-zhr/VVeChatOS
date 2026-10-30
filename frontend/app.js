@@ -2715,7 +2715,7 @@
     'btn-profile': '我的资料',
     'btn-bell': '好友申请',
     'btn-plus': '搜索 / 添加',
-    'btn-lang': '中文 / English',
+    'btn-lang': '切换语言',
     'btn-logout': '退出登录',
     'theme-menu-wrap': '切换主题'
   };
@@ -3639,7 +3639,10 @@
     state.aiHadChat = !!state.currentChat;
     if (window.innerWidth <= 820) {
       $('.right-pane')?.classList.add('mobile-show');
-      $('.app-body')?.classList.add('chat-open');
+      // NOT `chat-open` here: that class hides the floating tab bar, and
+      // on a phone the tab bar is the only way to leave this view.
+      // `ai-active` folds the conversation list away instead.
+      $('.app-body')?.classList.add('ai-active');
       $('#chat-back')?.classList.add('mobile-show');
     }
     ensureAiPanelBound();
@@ -3685,6 +3688,10 @@
     // the back arrow must return to the SIDEBAR — not to the empty chat
     // screen. Leaving `chat-open` on kept the sidebar hidden and the user
     // landed on "选择一个会话开始聊天" instead of the conversation list.
+    if (window.innerWidth <= 820) {
+      $('.app-body')?.classList.remove('ai-active');
+      $('.app-body')?.classList.remove('list-open');
+    }
     if (window.innerWidth <= 820 && !state.aiHadChat) {
       $('.right-pane')?.classList.remove('mobile-show');
       $('.app-body')?.classList.remove('chat-open');

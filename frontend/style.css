@@ -2861,7 +2861,12 @@ body.dark .msg-dots:hover { background: rgba(255, 255, 255, 0.10); }
        the sheet never becomes visible at all. */
     display: flex !important;
     width: 168px;
-    height: 272px;
+    /* The menu grew rows (theme, language, …), so a fixed height clipped
+       the last one. Let it size to its content and scroll only if the
+       screen is really short. */
+    height: auto;
+    max-height: calc(100vh - 140px);
+    overflow-y: auto;
     border-radius: 26px;
     opacity: 1;
     pointer-events: auto;
@@ -2887,6 +2892,60 @@ body.dark .msg-dots:hover { background: rgba(255, 255, 255, 0.10); }
   }
   .mobile-menu-sheet > .icon-btn { color: var(--ink); }
   .mobile-menu-sheet > .icon-btn svg { color: var(--ink-2); }
+  /* Inside the sheet the topbar buttons become list rows: icon on the
+     left, label next to it. Without this they keep their 40px round
+     shape, the label squeezes the icon to zero width and the row ends
+     up as an empty white disc. */
+  .mobile-menu-sheet > .icon-btn,
+  .mobile-menu-sheet .theme-toggle {
+    width: 100%;
+    height: 42px;
+    min-width: 0;
+    border-radius: 12px;
+    justify-content: flex-start;
+    gap: 12px;
+    padding: 0 12px;
+    font-size: 14px;
+  }
+  .mobile-menu-sheet > .icon-btn svg,
+  .mobile-menu-sheet .theme-toggle svg {
+    width: 20px; height: 20px;
+    flex: 0 0 20px;
+  }
+  .mobile-menu-sheet .theme-toggle svg { width: 16px; height: 16px; flex-basis: 16px; }
+  /* The theme row lives inside its wrap, so it needs the same row
+     treatment — otherwise it collapses to a bare 22px button. */
+  .mobile-menu-sheet .theme-menu-wrap {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  /* Inside the sheet the theme control is just the icon plus its label,
+     not a round button of its own. */
+  .mobile-menu-sheet .theme-toggle {
+    width: 100%; height: 42px;
+    padding: 0 12px;
+    border-radius: 12px !important;
+    background: rgba(255, 255, 255, 0.55) !important;
+    box-shadow: var(--glass-highlight);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    flex: 0 0 auto;
+    display: inline-flex;
+    justify-content: flex-start;
+    gap: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  /* The labels are hidden by default; inside the sheet they are the whole
+     point of the row. */
+  .mobile-menu-sheet .mm-label { display: inline !important; }
+  /* The theme row sits first in the menu, and its dropdown opens below
+     the row instead of at the topbar's old offset. */
+  .mobile-menu-sheet .theme-menu-wrap { order: -1; }
+  .mobile-menu-sheet .theme-menu { top: 100%; right: auto; left: 0; }
   .mobile-menu-sheet > .theme-toggle { color: var(--ink); }
   /* The panel is a solid 94% surface now, so the buttons do not need their
      own backdrop-filter. Keeping it would nest two blurs, which iOS Safari
@@ -3218,6 +3277,11 @@ body .msg-bubble,
 body .side-section-title {
   font-size: calc(1em * var(--font-scale));
 }
+/* The preview sits inside .meta, whose own font-size was the browser
+   default — so "1em" resolved to 16px and the grey line came out BIGGER
+   than the conversation name above it. Pin the wrapper to the name's
+   size first, then let the scale apply on top of that. */
+body .list-item .meta { font-size: 13px; }
 body .list-item .preview,
 body .list-item .sub,
 body .msg-meta,
@@ -4303,6 +4367,23 @@ body.dark .mobile-menu-scrim { background: rgba(0, 0, 0, 0.34); }
   /* Inside a conversation the tab bar has nothing to switch to — it
      only gets in the way of the transcript. It comes back when the
      user goes back to the list. */
+  /* The middle-column fold switch is a desktop affordance. On a phone
+     the tab bar does the same job, and the back arrow already gets
+     you out of a conversation — so the extra buttons were just taking
+     up room in the header. */
+  .list-toggle { display: none !important; }
+  /* …except the assistant's, which is the ONLY way to open the list of
+     Qwen conversations. Hide the chat one and the empty-state one (the
+     back arrow and the tab bar cover those) but keep this, tucked in
+     next to the title instead of sitting alone on the far left. */
+  #ai-sidebar-toggle { display: flex !important; order: 99; }
+  /* On a phone the assistant view fills the screen; its conversation
+     list is pulled in with the switch next to the title. (The list pane
+     is a SIBLING of the content pane, not a child, so the rule has to
+     hang off .app-body.) */
+  .app-body.ai-active .list-pane { display: none; }
+  .app-body.list-open .list-pane { display: flex !important; }
+
   .app-body.chat-open .rail-pane {
     transform: translateY(160%);
     opacity: 0;
