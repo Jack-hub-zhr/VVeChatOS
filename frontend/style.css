@@ -4704,3 +4704,76 @@ body.theme-dark .mention-preview .cancel:hover {
   font-family: inherit;
 }
 .field-input:focus { outline: none; border-color: var(--accent); }
+
+/* ============================================================
+   AVATAR ACTION MENU (头像二级菜单)
+   ------------------------------------------------------------
+   The ONE menu that opens from every user avatar in the app —
+   查看资料 / 添加好友 / 发消息.  Positioned by JS next to the
+   avatar that was tapped.
+
+   It is styled with the glass variables only, so it inherits the
+   light / dark / 550C-terminal look without a single extra rule.
+   ============================================================ */
+.user-menu {
+  position: fixed;
+  /* Above the modals (1400) — plenty of avatars live inside modals
+     (group member list, join-request inbox, search dropdown). */
+  z-index: 1600;
+  min-width: 194px;
+  max-width: 268px;
+  padding: 8px;
+  border-radius: 20px;
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(var(--glass-blur)) saturate(200%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(200%);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow-lg), var(--glass-highlight);
+  animation: userMenuIn 0.16s cubic-bezier(0.22, 1, 0.36, 1) both;
+  transform-origin: top center;
+  user-select: none;
+  -webkit-user-select: none;
+}
+@keyframes userMenuIn {
+  from { opacity: 0; transform: translateY(-6px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.user-menu-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 8px 10px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--glass-border-soft);
+}
+.user-menu-head .avatar { flex-shrink: 0; }
+.user-menu-head .um-meta { min-width: 0; }
+.user-menu-head .um-name {
+  font-size: 14px; font-weight: 700; color: var(--ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.user-menu-head .um-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.user-menu-items { display: flex; flex-direction: column; gap: 2px; }
+.user-menu-item {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0; border-radius: 12px;
+  background: transparent;
+  color: var(--ink-2);
+  font-family: inherit;
+  font-size: 13.5px; font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.14s, color 0.14s;
+}
+.user-menu-item:hover { background: var(--accent-soft); color: var(--accent); }
+.user-menu-item:disabled { opacity: 0.6; cursor: default; }
+.user-menu-item:disabled:hover { background: transparent; color: var(--ink-2); }
+.user-menu-primary { color: var(--accent); }
+.user-menu-danger { color: var(--danger); }
+.user-menu-danger:hover { background: rgba(255, 59, 48, 0.12); color: var(--danger); }
+
+/* On a phone the menu must not be wider than the screen. */
+@media (max-width: 520px) {
+  .user-menu { min-width: 170px; max-width: 76vw; }
+  .user-menu-item { padding: 11px 10px; font-size: 14px; }
+}

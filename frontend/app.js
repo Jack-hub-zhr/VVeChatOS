@@ -709,7 +709,18 @@
   function currentThemeMode() {
     try { return localStorage.getItem('vve:theme') || 'auto'; } catch (_) { return 'auto'; }
   }
-  function boot550cOn() { return !!(window.Boot550C && window.Boot550C.enabled()); }
+  // The 550C flag lives in localStorage, so it can be read BEFORE the
+  // theme script has finished loading.  Deciding on window.Boot550C
+  // alone was the bug: the theme lands ~300ms after app.js, so
+  // initSplash() always saw "no theme" and the boot animation never
+  // played — even with the switch turned on.
+  function boot550cFlag() {
+    try { return localStorage.getItem('vve:boot550c') === '1'; } catch (_) { return false; }
+  }
+  function boot550cOn() {
+    if (window.Boot550C) { try { return !!window.Boot550C.enabled(); } catch (_) {} }
+    return boot550cFlag();
+  }
 
   // The 550C theme is ~60 KB and only fetched when it is actually used.
   // This loads it on demand and resolves once it is ready.
@@ -717,6 +728,12 @@
   function ensureBoot550cLoaded() {
     if (window.Boot550C) return Promise.resolve();
     if (_boot550cLoading) return _boot550cLoading;
+    // The inline loader in index.html may already be fetching the theme —
+    // share that promise instead of starting a second download.
+    if (window.__VV_BOOT_READY) {
+      _boot550cLoading = window.__VV_BOOT_READY.then(function () { return null; });
+      return _boot550cLoading;
+    }
     _boot550cLoading = new Promise((resolve) => {
       var css = document.createElement('link');
       css.rel = 'stylesheet';
@@ -724,6 +741,7 @@
       document.head.appendChild(css);
       var js = document.createElement('script');
       js.src = 'boot550c.js?v=' + (window.__VV_ASSET_V || '');
+      js.async = true;
       js.onload = () => resolve();
       js.onerror = () => resolve();   // a missing theme must not break the app
       document.head.appendChild(js);
@@ -951,7 +969,11 @@
           ? (isOfficial ? t('official_sub') : t('group_sub'))
           : (c.is_new_friend ? (t('friend') || '好友') : t('new_msg')));
     const officialTag = isOfficial ? `<span class="tag-official">${escapeHtml(t('tag_official'))}</span>` : '';
-    const avatarBg = isGroup ? '' : avatarStyle(c);
+    // avatarStyle() returns a bare CSS declaration list, so it has to be
+    // wrapped in style="..." — dropping that produced broken markup like
+    // <div class="avatar" background:linear-gradient(...)> and the
+    // conversation avatars lost their colour.
+    const avatarBg = isGroup ? '' : (() => { const st = avatarStyle(c); return st ? ` style="${st}"` : ''; })();
     const dot = (isGroup || isOfficial) ? '' : `<span class="online-dot"></span>`;
     const avatarCls = [ac, online?'online':''].filter(Boolean).join(' ');
     const senderPrefix = c.last_sender_id && c.last_sender_id !== state.user.id && isGroup
@@ -964,7 +986,7 @@
     const inner = isGroup
       ? escapeHtml(groupLetter(c.username, isOfficial))
       : avatarInner(c);
-    li.innerHTML = `<div class="${avatarCls}"${avatarBg} data-peer="${isGroup ? '' : c.id}">${inner}${dot}</div>
+    li.innerHTML = `<div class="${avatarCls}"${avatarBg} data-user-avatar="${isGroup ? '' : c.id}">${inner}${dot}</div>
       <div class="meta"><div class="name">${escapeHtml(c.username)} ${officialTag}</div>
       <div class="preview">${atMePrefix}${senderPrefix}${escapeHtml(preview)}</div></div>
       <div class="time">${fmtTime(c.last_at)}</div>${unreadHtml}`;
@@ -1056,13 +1078,17 @@
           ? (isOfficial ? t('official_sub') : t('group_sub'))
           : (c.is_new_friend ? (t('friend') || '好友') : t('new_msg')));
       const officialTag = isOfficial ? `<span style="font-size:10px;background:rgba(245,158,11,0.14);color:#b45309;padding:2px 7px;border-radius:6px;border:1px solid rgba(245,158,11,0.30);font-weight:600;">${t('group_sub')==='群聊'?'官方':'Off'}</span>` : '';
-      const avatarBg = isGroup ? '' : avatarStyle(c);
+      // avatarStyle() returns a bare CSS declaration list, so it has to be
+      // wrapped in style="..." — dropping that produced broken markup like
+      // <div class="avatar" background:linear-gradient(...)> and the
+      // conversation avatars lost their colour.
+      const avatarBg = isGroup ? '' : (() => { const st = avatarStyle(c); return st ? ` style="${st}"` : ''; })();
       const dot = (isGroup || isOfficial) ? '' : `<span class="online-dot"></span>`;
       const avatarCls = [ac, online?'online':''].filter(Boolean).join(' ');
       const senderPrefix = c.last_sender_id && c.last_sender_id !== state.user.id && isGroup
         ? `<span style="color:var(--accent);font-weight:600;">${escapeHtml(userInfo(c.last_sender_id).username)}:</span> ` : '';
       const unreadHtml = c.unread > 0 ? `<span class="unread">${c.unread>99?'99+':c.unread}</span>` : '';
-      li.innerHTML = `<div class="${avatarCls}"${avatarBg} data-peer="${isGroup ? '' : c.id}">${escapeHtml(isGroup ? groupLetter(c.username, isOfficial) : initials(c.username))}${dot}</div>
+      li.innerHTML = `<div class="${avatarCls}"${avatarBg} data-user-avatar="${isGroup ? '' : c.id}">${escapeHtml(isGroup ? groupLetter(c.username, isOfficial) : initials(c.username))}${dot}</div>
         <div class="meta"><div class="name">${escapeHtml(c.username)} ${officialTag}</div>
         <div class="preview">${senderPrefix}${escapeHtml(preview)}</div></div>
         <div class="time">${fmtTime(c.last_at)}</div>${unreadHtml}`;
@@ -1080,7 +1106,7 @@
     list.innerHTML = '';
     for (const r of pending) {
       const div = document.createElement('div'); div.className='req-item';
-      div.innerHTML = `<div class="avatar sm">${escapeHtml(initials(r.from_username))}</div>
+      div.innerHTML = `<div class="avatar sm" data-user-avatar="${r.from_id}">${escapeHtml(initials(r.from_username))}</div>
         <div class="meta"><div class="name">${escapeHtml(r.from_username)}</div>
         <div class="sub">${t('req_want')}${fmtTime(r.created_at)}</div></div>
         <div class="actions">
@@ -1296,7 +1322,7 @@
         if (canManage && m.id !== state.user.id) {
           right.push(`<span class="settings-action danger" data-act="kick" data-uid="${m.id}">${lang==='zh'?'移除':'Remove'}</span>`);
         }
-        row.innerHTML = `<div class="avatar sm" style="${bg}">${escapeHtml(initials(m.username))}</div>
+        row.innerHTML = `<div class="avatar sm" style="${bg}" data-user-avatar="${m.id}">${escapeHtml(initials(m.username))}</div>
           <div class="settings-label">${escapeHtml(m.username)}${m.is_admin?` <span class="admin-pill admin-pill-xs"></span>`:''}</div>
           <div class="settings-trailing">${right.join('')}</div>`;
         const kick = row.querySelector('[data-act="kick"]');
@@ -1476,7 +1502,10 @@
       avatar.className = `avatar sm ${online?'online':''}`;
       avatar.style.display = 'flex';
       avatar.textContent = f && f.avatar ? '' : initials(title);
-      avatar.onclick = () => f && openProfileModal(f);
+      // The header avatar opens the same action menu as every other
+      // avatar in the app (查看资料 / 添加好友 / 发消息).
+      avatar.setAttribute('data-user-avatar', String(id));
+      avatar.onclick = null;
     } else {
       sub.textContent = '';   // no subtitle — the group name is enough
       avatar.className = 'avatar sm group';
@@ -1488,6 +1517,7 @@
         : '';
       avatar.style.display = 'flex';
       avatar.textContent = groupLetter(title, isOfficial);
+      avatar.removeAttribute('data-user-avatar');
       avatar.onclick = null;
     }
     // No admin badge in the chat header — the shield under the group name
@@ -1629,12 +1659,15 @@
       const isBot = String(m.username || '').toLowerCase() === 'qwen';
       const bot = isBot ? '<div class="tag tag-bot">' + escapeHtml(lang === 'en' ? 'Assistant' : '助手') + '</div>' : '';
       return `<div class="mention-item${i === 0 ? ' active' : ''}" data-i="${i}">
-        <div class="avatar sm" style="${bg}">${em ? `<span class="avatar-emoji">${escapeHtml(em)}</span>` : escapeHtml(initials(m.username))}</div>
+        <div class="avatar sm" style="${bg}" data-user-avatar="${m.id}">${em ? `<span class="avatar-emoji">${escapeHtml(em)}</span>` : escapeHtml(initials(m.username))}</div>
         <div class="name">${escapeHtml(m.username)}</div>${who}${bot}
       </div>`;
     }).join('');
     menu.classList.remove('hidden');
     menu.onmousedown = (e) => {
+      // The avatar opens the shared action menu (查看资料 / 添加好友);
+      // the rest of the row still inserts the @mention.
+      if (e.target.closest('[data-user-avatar]')) return;
       const it = e.target.closest('.mention-item');
       if (!it) return;
       e.preventDefault();   // don't let the input lose focus before we patch it
@@ -1741,7 +1774,7 @@
   // Paint the personalisation panel from the current values.
   function renderPrefPanel() {
     const sw = $('#toggle-boot-550c');
-    if (sw) sw.checked = !!(window.Boot550C && window.Boot550C.enabled());
+    if (sw) sw.checked = boot550cOn();
     const aiSw = $('#toggle-ai-in-groups');
     if (aiSw) aiSw.checked = !!prefs.ai_in_groups;
     const mark = (sel, val) => {
@@ -1798,7 +1831,7 @@
     const glowCls = isJackAvatar ? ' avatar-jack-glow' : '';
     // Task: tap a group member's avatar to open their profile and add them.
     const msgEmoji = emojiOf(u);
-    const avatarHtml = `<div class="msg-avatar avatar sm${glowCls}" style="${bgStyle}" data-uid="${m.sender_id}" role="button" title="查看资料">${msgEmoji ? `<span class="avatar-emoji">${escapeHtml(msgEmoji)}</span>` : escapeHtml(initials(u.username))}</div>`;
+    const avatarHtml = `<div class="msg-avatar avatar sm${glowCls}" style="${bgStyle}" data-uid="${m.sender_id}" data-user-avatar="${m.sender_id}" role="button" title="查看资料">${msgEmoji ? `<span class="avatar-emoji">${escapeHtml(msgEmoji)}</span>` : escapeHtml(initials(u.username))}</div>`;
     // sender name — show for group chats when message is from someone else
     const senderName = ctype === 'group' && !mine
       ? `<div class="msg-meta"><span class="sender">${escapeHtml(m.sender_username)}</span></div>`
@@ -1852,17 +1885,10 @@
       }
     }
     row.querySelectorAll('.chat-img').forEach(img => img.addEventListener('click', () => openLightbox(img.dataset.img)));
-    // Tap an avatar to open that person's profile (works for non-friends too,
-    // which is how you discover people inside a group).
-    const avEl = row.querySelector('.msg-avatar[data-uid]');
-    if (avEl) {
-      avEl.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const uid = Number(avEl.dataset.uid);
-        if (!uid || uid === state.user.id) return;
-        openUserProfileById(uid);
-      });
-    }
+    // Tapping an avatar opens the shared action menu (查看资料 / 添加好友 /
+    // 发消息) — see the delegated listener in ensureAvatarBound().  It
+    // works for non-friends too, which is how you discover people inside
+    // a group.
     return row;
   }
 
@@ -2037,7 +2063,7 @@
     const friendsHtml = (state.friends || []).map(f => {
       const bg = avatarStyle(f);
       return `<div class="req-item" data-fid="${f.id}">
-        <div class="avatar sm"${bg ? ` style="${bg}"` : ''}>${avatarInner(f)}</div>
+        <div class="avatar sm" data-user-avatar="${f.id}"${bg ? ` style="${bg}"` : ''}>${avatarInner(f)}</div>
         <div class="meta"><div class="name">${escapeHtml(f.username)}</div></div>
       </div>`;
     }).join('') || `<div class="empty-hint small"><p>${t('no_friends_yet') || '还没有好友'}</p></div>`;
@@ -2222,7 +2248,7 @@
       const bg = avatarStyle(u);
       const item = document.createElement('div');
       item.className = 'suggestion-item';
-      item.innerHTML = `<div class="avatar sm"${bg ? ` style="${bg}"` : ''}>${avatarInner(u)}</div>
+      item.innerHTML = `<div class="avatar sm" data-user-avatar="${u.id}"${bg ? ` style="${bg}"` : ''}>${avatarInner(u)}</div>
         <div class="meta"><div class="name">${escapeHtml(u.username)}</div></div>
         <div class="action-tag ${isFriend?'friend':''}">${isFriend?t('btn_msg'):t('new_msg')}</div>`;
       item.addEventListener('click', () => {
@@ -2265,20 +2291,11 @@
       $('#btn-msg-friend')?.addEventListener('click', () => { closeModal('modal-profile'); openChat('user', user.id, user.username, 0); });
       const addBtn = $('#btn-add-friend');
       if (addBtn) addBtn.addEventListener('click', async () => {
+        const r = await doAddFriend(user.id, user.username, addBtn);
+        if (!r) return;                       // doAddFriend already reported the error
+        addBtn.textContent = r.autoAccepted ? '已成为好友 ✓' : '申请已发送 ✓';
         addBtn.disabled = true;
-        const orig = addBtn.textContent;
-        addBtn.textContent = '发送中…';
-        try {
-          const r = await api('/friend/request/' + user.id, { method: 'POST', body: {} });
-          addBtn.textContent = r.autoAccepted ? '已成为好友 ✓' : '申请已发送 ✓';
-          await refreshFriends();
-          await refreshConversations();
-          if (r.autoAccepted) setTimeout(() => closeModal('modal-profile'), 900);
-        } catch (e) {
-          addBtn.disabled = false;
-          addBtn.textContent = orig;
-          toast(e.message || '添加失败');
-        }
+        if (r.autoAccepted) setTimeout(() => closeModal('modal-profile'), 900);
       });
       const rmBtn = $('#btn-remove-friend');
       if (rmBtn) rmBtn.addEventListener('click', async () => {
@@ -2310,17 +2327,19 @@
     }
     openModal('modal-profile');
   }
-  // Open someone's profile by id — works for people who are not friends yet
-  // (e.g. another member of a group). Shows a "加好友" button when appropriate.
-  async function openUserProfileById(uid) {
-    let u = state.friends.find(f => Number(f.id) === Number(uid))
-         || state.groups.find(g => Number(g.id) === Number(uid));
+  // Resolve a user id into a user object. Works for people who are not
+  // friends yet (e.g. another member of a group): friends first, then
+  // the people in the current conversation, then the API.
+  async function resolveUser(uid) {
+    uid = Number(uid);
+    let u = state.friends.find(f => Number(f.id) === uid)
+         || state.groups.find(g => Number(g.id) === uid);
     // Also try to resolve from the currently loaded message list.
     if (!u) {
       const key = state.currentChat && convKey(state.currentChat.type, state.currentChat.id);
       const arr = (key && state.messagesByConv[key]) || [];
       for (const m of arr) {
-        if (Number(m.sender_id) === Number(uid)) {
+        if (Number(m.sender_id) === uid) {
           u = { id: uid, username: m.sender_username, avatar_color: null };
           break;
         }
@@ -2333,8 +2352,147 @@
         u = r.user;
       } catch (_) {}
     }
+    return u || null;
+  }
+  // Open someone's profile by id — works for people who are not friends yet
+  // (e.g. another member of a group). Shows a "加好友" button when appropriate.
+  async function openUserProfileById(uid) {
+    const u = await resolveUser(uid);
     if (!u) { toast('找不到该用户'); return; }
     openProfileModal(u, { allowAdd: true });
+  }
+
+  // ============================================================
+  // Avatar action menu (头像二级菜单)
+  // ------------------------------------------------------------
+  // ONE menu, opened from EVERY user avatar in the app: the
+  // conversation list, the search dropdown, the group member list,
+  // the group join-request inbox, the chat header and every message
+  // bubble.  "加好友" is therefore reachable from wherever you can
+  // see a face — no need to hunt for the magnifying glass first.
+  // ============================================================
+  let _userMenuEl = null;
+  function closeUserMenu() {
+    if (_userMenuEl) { _userMenuEl.remove(); _userMenuEl = null; }
+    document.removeEventListener('click', _userMenuOutside, true);
+    document.removeEventListener('keydown', _userMenuEsc, true);
+    window.removeEventListener('resize', closeUserMenu);
+  }
+  function _userMenuOutside(e) {
+    if (_userMenuEl && !_userMenuEl.contains(e.target)) closeUserMenu();
+  }
+  function _userMenuEsc(e) { if (e.key === 'Escape') closeUserMenu(); }
+
+  // Keep the menu on screen — flip it above the avatar when there is
+  // not enough room below, and clamp it to the viewport both ways.
+  function positionUserMenu(menu, anchor) {
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const M = 10;
+    // A avatar that sits near the bottom of a scrollable modal would
+    // push the menu off-screen, so bring it into view first.
+    try { anchor.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (_) {}
+    const r = anchor.getBoundingClientRect();
+    const mw = menu.offsetWidth || 190;
+    const mh = menu.offsetHeight || 155;
+    let top = r.bottom + M;
+    if (top + mh > vh - M) {
+      const above = r.top - mh - M;
+      // No room above either -> pin it to the bottom of the viewport.
+      top = above >= M ? above : Math.max(M, vh - mh - M);
+    }
+    let left = r.left + r.width / 2 - mw / 2;
+    left = Math.max(M, Math.min(left, vw - mw - M));
+    menu.style.left = left + 'px';
+    menu.style.top = top + 'px';
+  }
+
+  // Send the friend request. Shared by the menu and the profile modal.
+  async function doAddFriend(uid, name, btn) {
+    if (btn) { btn.disabled = true; }
+    const orig = btn ? btn.textContent : '';
+    if (btn) btn.textContent = (lang === 'en' ? 'Sending…' : '发送中…');
+    try {
+      const r = await api('/friend/request/' + uid, { method: 'POST', body: {} });
+      if (btn) btn.textContent = '✓';
+      // Close the menu and confirm RIGHT AWAY. The list refresh below
+      // can take a beat (it re-runs the conversation query), and a menu
+      // that stays open for a second after the request went through
+      // reads as "nothing happened".
+      closeUserMenu();
+      toast(r.autoAccepted
+        ? (lang === 'en' ? `Added ${name}` : `已添加 ${name}`)
+        : (lang === 'en' ? `Friend request sent to ${name}` : `好友申请已发送给 ${name}`));
+      // Refresh the lists in the background — a failure here must not
+      // turn a successful request into an error message.
+      try {
+        await refreshFriends();
+        await refreshConversations();
+        renderAll();
+      } catch (e) { console.warn('[VVeChat] refresh after add friend failed:', e); }
+      return r;
+    } catch (e) {
+      if (btn) { btn.disabled = false; btn.textContent = orig; }
+      toast(e.message || (lang === 'en' ? 'Failed' : '添加失败'));
+      return null;
+    }
+  }
+
+  async function openUserActionMenu(uid, anchor) {
+    uid = Number(uid);
+    if (!Number.isFinite(uid) || !state.user) return;
+    if (uid === Number(state.user.id)) return;   // your own face needs no menu
+    closeUserMenu();
+    const u = await resolveUser(uid);
+    if (!u) { toast('找不到该用户'); return; }
+    const isFriend = state.friends.some(f => Number(f.id) === uid);
+    const online = isOnline(uid);
+    const bg = avatarStyle(u);
+    const menu = document.createElement('div');
+    menu.id = 'user-action-menu';
+    menu.className = 'user-menu';
+    menu.setAttribute('role', 'menu');
+    menu.innerHTML = `
+      <div class="user-menu-head">
+        <div class="avatar sm"${bg ? ` style="${bg}"` : ''}>${avatarInner(u)}</div>
+        <div class="um-meta">
+          <div class="um-name">${escapeHtml(u.username)}</div>
+          <div class="um-sub">${online
+            ? (lang === 'en' ? 'Online' : '在线')
+            : (lang === 'en' ? 'Offline' : '离线')}</div>
+        </div>
+      </div>
+      <div class="user-menu-items">
+        <button type="button" class="user-menu-item" data-act="profile">${lang === 'en' ? 'View profile' : '查看资料'}</button>
+        ${isFriend
+          ? `<button type="button" class="user-menu-item" data-act="msg">${lang === 'en' ? 'Send message' : '发消息'}</button>`
+          : `<button type="button" class="user-menu-item user-menu-primary" data-act="add">${lang === 'en' ? '+ Add friend' : '＋ 添加好友'}</button>`}
+        ${isFriend
+          ? `<button type="button" class="user-menu-item user-menu-danger" data-act="remove">${lang === 'en' ? 'Remove friend' : '删除好友'}</button>`
+          : ''}
+      </div>`;
+    document.body.appendChild(menu);
+    _userMenuEl = menu;
+    positionUserMenu(menu, anchor);
+    menu.addEventListener('click', async (e) => {
+      const btn = e.target.closest('[data-act]');
+      if (!btn) return;
+      e.stopPropagation();
+      const act = btn.dataset.act;
+      if (act === 'profile') { closeUserMenu(); openProfileModal(u, { allowAdd: true }); }
+      else if (act === 'add') { await doAddFriend(uid, u.username, btn); }
+      else if (act === 'msg') { closeUserMenu(); openChat('user', uid, u.username, 0); }
+      else if (act === 'remove') {
+        closeUserMenu();
+        openProfileModal(u, { allowAdd: true });
+      }
+    });
+    // Dismiss on outside click / Escape / resize. Registered on the next
+    // tick so the click that opened the menu does not close it again.
+    setTimeout(() => {
+      document.addEventListener('click', _userMenuOutside, true);
+      document.addEventListener('keydown', _userMenuEsc, true);
+      window.addEventListener('resize', closeUserMenu);
+    }, 0);
   }
 
   // ---- Add member to a group (owner / Jack) ----
@@ -2375,7 +2533,7 @@
           const row = document.createElement('div');
           row.className = 'settings-row';
           const bg = q.avatar_color ? `background:linear-gradient(135deg, ${q.avatar_color}, ${shade(q.avatar_color, -25)})` : '';
-          row.innerHTML = `<div class="avatar sm" style="${bg}">${escapeHtml(initials(q.username))}</div>
+          row.innerHTML = `<div class="avatar sm" style="${bg}" data-user-avatar="${q.user_id}">${escapeHtml(initials(q.username))}</div>
             <div class="settings-label">${escapeHtml(q.username)}${q.message ? `<div style="font-size:11px;color:var(--muted);font-weight:400;margin-top:2px;">${escapeHtml(q.message)}</div>` : ''}</div>
             <div class="settings-trailing">
               <span class="settings-action" data-ok="${q.id}" style="color:#10b981;">${lang === 'en' ? 'Accept' : '同意'}</span>
@@ -2440,7 +2598,7 @@
           const row = document.createElement('div');
           row.className = 'settings-row';
           const bg = u.avatar_color ? `background:linear-gradient(135deg, ${u.avatar_color}, ${shade(u.avatar_color, -25)})` : '';
-          row.innerHTML = `<div class="avatar sm" style="${bg}">${escapeHtml(initials(u.username))}</div>
+          row.innerHTML = `<div class="avatar sm" style="${bg}" data-user-avatar="${u.id}">${escapeHtml(initials(u.username))}</div>
             <div class="settings-label">${escapeHtml(u.username)}</div>
             <div class="settings-trailing"><span class="settings-action" data-add="${u.id}">添加</span></div>`;
           const btn = row.querySelector('[data-add]');
@@ -4269,24 +4427,29 @@
     }, true);
   }
 
-  // ---- Tap any user avatar -> profile (with + 加好友 when not friends) ----
-  // One delegated listener so it works in the sidebar, the contacts list and
-  // the chat header, and cannot be lost to an unrelated bind error.
+  // ---- Tap any user avatar -> the shared action menu (二级菜单) ----
+  // One delegated listener, bound once at startup, so it works in the
+  // sidebar, the search dropdown, the group member list, the group
+  // request inbox, the chat header and every message bubble — and it
+  // cannot be lost to an unrelated bind error.
+  //
+  // Every user avatar carries data-user-avatar="<uid>"; the same menu
+  // (查看资料 / 添加好友 / 发消息) opens from all of them.
   let _avatarBound = false;
   function ensureAvatarBound() {
     if (_avatarBound) return;
     _avatarBound = true;
     document.addEventListener('click', (e) => {
-      const av = e.target.closest('[data-peer]');
+      const av = e.target.closest('[data-user-avatar]');
       if (!av) return;
-      // Already handled by a more specific handler (message rows etc).
-      if (e.defaultPrevented) return;
-      const raw = av.dataset.peer;
+      const raw = av.getAttribute('data-user-avatar');
       if (!raw) return;                       // group avatar: nothing to add
       const uid = Number(raw);
       if (!Number.isFinite(uid) || uid === state.user?.id) return;
+      // Take the click over: the avatar opens the menu, the row around
+      // it keeps whatever it did before (open the chat, pick a member…).
       e.preventDefault(); e.stopPropagation();
-      openUserProfileById(uid);
+      openUserActionMenu(uid, av);
     }, true);
   }
 
@@ -4370,7 +4533,13 @@
       t550.checked = boot550cOn();
       bindOnce(t550, 'change', async () => {
         const isOn = t550.checked;
-        window.Boot550C.setEnabled(isOn);
+        // The theme script is only pre-loaded when the theme was ALREADY
+        // on.  Turning it on for the first time on a device has to fetch
+        // it first — without this the handler threw a TypeError and the
+        // switch did nothing at all.
+        await ensureBoot550cLoaded();
+        if (window.Boot550C) window.Boot550C.setEnabled(isOn);
+        else { try { localStorage.setItem('vve:boot550c', isOn ? '1' : '0'); } catch (_) {} }
         applyTheme(currentThemeMode());
         if (window.toast) toast(isOn ? '已开启 550C 启动动画主题' : '已关闭 550C 启动动画主题');
         saveBoot550cToServer(isOn);
@@ -4759,6 +4928,7 @@
     try {
       setLang(lang);
       switchAuthTab('login');
+      ensureAvatarBound();   // every avatar opens the add-friend menu
       initSplash();         // show full-screen Hello before auth (skipped if logged in)
       startHelloCycler();   // animate the auth tagline across languages
       $$('.lang-toggle, .lang-btn').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); setLang(lang === 'zh' ? 'en' : 'zh'); }));
@@ -4790,8 +4960,11 @@
           // whole point of the theme is the boot sequence. Play it once
           // more on the way in, then drop the user into the app.
           setTimeout(async () => {
-            if (boot550cOn() && window.Boot550C) {
-              try { await window.Boot550C.play(); } catch (_) {}
+            if (boot550cOn()) {
+              await ensureBoot550cLoaded();
+              if (window.Boot550C) {
+                try { await window.Boot550C.play(); } catch (_) {}
+              }
             }
             enterApp();
           }, 300);
@@ -4866,12 +5039,22 @@
     // 550C theme — the boot animation replaces the Hello splash entirely.
     // It plays on top of the login screen / restored session and fades
     // out on its own, so the user lands straight in the app.
-    if (boot550cOn() && window.Boot550C) {
+    //
+    // The decision is made from the localStorage flag, NOT from
+    // window.Boot550C: the theme script may still be in flight here,
+    // and using it as the gate made the animation never play.
+    if (boot550cOn()) {
       splash.classList.add('hidden');
       splash.style.display = 'none';
       splash.style.pointerEvents = 'none';
       splashDismissed = true;
-      window.Boot550C.play();
+      // Wait for the theme to arrive, THEN play. The overlay covers the
+      // screen from the first frame, so there is no flash of the login
+      // form in between.
+      ensureBoot550cLoaded().then(function () {
+        if (!window.Boot550C) return;
+        try { window.Boot550C.play(); } catch (_) {}
+      });
       return;
     }
 
@@ -4891,10 +5074,13 @@
     // Called on logout — re-create the splash overlay
     splashDismissed = false;
     // 550C theme — play the boot animation instead of the Hello splash.
-    if (boot550cOn() && window.Boot550C) {
+    if (boot550cOn()) {
       const old = $('#hello-splash');
       if (old) old.remove();
-      window.Boot550C.play();
+      ensureBoot550cLoaded().then(function () {
+        if (!window.Boot550C) return;
+        try { window.Boot550C.play(); } catch (_) {}
+      });
       return;
     }
     let splash = $('#hello-splash');
