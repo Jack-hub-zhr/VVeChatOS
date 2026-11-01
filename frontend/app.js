@@ -640,10 +640,40 @@
     return null;
   }
 
+  // 助手(Qwen)是个真实账号,但它在群里不是「人」——
+  // 不列进成员名册、不计入人数;可它出现的地方(会话列表、聊天气泡、
+  // @ 选择器)要用跟侧边栏「助手」按钮一样的发光圆环当头像。
+  const ASSISTANT_NAME = 'Qwen';
+  function isAssistant(name) {
+    return String(name || '').trim().toLowerCase() === ASSISTANT_NAME.toLowerCase();
+  }
+  // 发光圆环:白晕 + 细白环 + 主色环。滤镜 #qwenGlow 定义在 index.html
+  // 里那一处隐藏的 <svg>,所以随便内联多少次都不会撞 id。
+  function qwenRing(size) {
+    const s = size || 18;
+    return `<svg class="qwen-ring" viewBox="0 0 32 32" width="${s}" height="${s}" aria-hidden="true">
+      <circle class="qwen-halo" cx="16" cy="16" r="8" fill="none" stroke="#fff" stroke-width="4.5" opacity="0.9" filter="url(#qwenGlow)"/>
+      <circle cx="16" cy="16" r="8" fill="none" stroke="#fff" stroke-width="1.4" opacity="0.5"/>
+      <circle cx="16" cy="16" r="8" fill="none" stroke="var(--qwen-ring, #0f172a)" stroke-width="2.6"/>
+    </svg>`;
+  }
+  // 头像位上的版本:环更大(r=11),撑满一个 32px 的头像格子。
+  function qwenAvatarRing(size) {
+    const s = size || 26;
+    return `<svg class="qwen-ring qwen-ring-avatar" viewBox="0 0 32 32" width="${s}" height="${s}" aria-hidden="true">
+      <circle class="qwen-halo" cx="16" cy="16" r="11" fill="none" stroke="#fff" stroke-width="5" opacity="0.9" filter="url(#qwenGlow)"/>
+      <circle cx="16" cy="16" r="11" fill="none" stroke="#fff" stroke-width="1.4" opacity="0.5"/>
+      <circle cx="16" cy="16" r="11" fill="none" stroke="var(--qwen-ring, #0f172a)" stroke-width="3.2"/>
+    </svg>`;
+  }
+  // 头像里的内容:助手 → 发光圆环;emoji 头像优先;否则首字母
+  function avatarContent(username, emoji, size) {
+    if (isAssistant(username)) return qwenAvatarRing(size || 26);
+    if (emoji) return `<span class="avatar-emoji">${escapeHtml(emoji)}</span>`;
+    return escapeHtml(initials(username || '?'));
+  }
   function avatarInner(u) {
-    const e = emojiOf(u);
-    if (e) return `<span class="avatar-emoji">${escapeHtml(e)}</span>`;
-    return escapeHtml(initials(u && u.username || '?'));
+    return avatarContent(u && u.username, emojiOf(u), 26);
   }
   function isOnline(uid) { return uid && state.online.has(uid); }
   function showOffline() { $('#offline-banner')?.classList.remove('hidden'); }
@@ -1165,7 +1195,7 @@
     list.innerHTML = '';
     for (const r of pending) {
       const div = document.createElement('div'); div.className='req-item';
-      div.innerHTML = `<div class="avatar sm" data-user-avatar="${r.from_id}">${escapeHtml(initials(r.from_username))}</div>
+      div.innerHTML = `<div class="avatar sm" data-user-avatar="${r.from_id}">${avatarContent(r.from_username, null, 26)}</div>
         <div class="meta"><div class="name">${escapeHtml(r.from_username)}</div>
         <div class="sub">${t('req_want')}${fmtTime(r.created_at)}</div></div>
         <div class="actions">
@@ -1359,6 +1389,8 @@
     // Members section header
     const mTitle = document.createElement('div');
     mTitle.className = 'section-title';
+    // 人数先按 group 对象里的值垫着,成员列表拉回来之后会按实际名册改写。
+    // (之前用的是登录时缓存的 member_count,和列表对不上,会出现「16 人」但只有 2 行)
     mTitle.textContent = lang==='zh'?'群成员（' + (g.member_count||0) + '）':`Members (${g.member_count||0})`;
     wrap.appendChild(mTitle);
 
@@ -1370,7 +1402,14 @@
     try {
       const r = await api(`/groups/${gid}/members`);
       memberWrap.innerHTML = '';
-      for (const m of r.members) {
+      // 助手不算群成员 —— 名册里不列它,人数也不含它。
+      const roster = (r.members || []).filter(m => !m.is_assistant && !isAssistant(m.username));
+      // 标题和头部的人数都按这份名册实时算,保证「写着几个就是几个」。
+      mTitle.textContent = lang==='zh'?'群成员（' + roster.length + '）':`Members (${roster.length})`;
+      g.member_count = roster.length;
+      const giMeta = wrap.querySelector('.gi-meta');
+      if (giMeta) giMeta.textContent = roster.length + (lang==='zh'?' 人':' members');
+      for (const m of roster) {
         const row = document.createElement('div'); row.className = 'settings-row';
         const bg = m.avatar_color ? `background:linear-gradient(135deg, ${m.avatar_color}, ${shade(m.avatar_color, -25)})` : '';
         const role = m.is_admin ? (lang==='zh'?'群主':'Owner') : (m.role === 1 ? (lang==='zh'?'群管':'Admin') : '');
@@ -1381,7 +1420,7 @@
         if (canManage && m.id !== state.user.id) {
           right.push(`<span class="settings-action danger" data-act="kick" data-uid="${m.id}">${lang==='zh'?'移除':'Remove'}</span>`);
         }
-        row.innerHTML = `<div class="avatar sm" style="${bg}" data-user-avatar="${m.id}">${escapeHtml(initials(m.username))}</div>
+        row.innerHTML = `<div class="avatar sm" style="${bg}" data-user-avatar="${m.id}">${avatarContent(m.username, null, 26)}</div>
           <div class="settings-label">${escapeHtml(m.username)}${m.is_admin?` <span class="admin-pill admin-pill-xs"></span>`:''}</div>
           <div class="settings-trailing">${right.join('')}</div>`;
         const kick = row.querySelector('[data-act="kick"]');
@@ -1747,7 +1786,7 @@
       const isBot = String(m.username || '').toLowerCase() === 'qwen';
       const bot = isBot ? '<div class="tag tag-bot">' + escapeHtml(lang === 'en' ? 'Assistant' : '助手') + '</div>' : '';
       return `<div class="mention-item${i === 0 ? ' active' : ''}" data-i="${i}">
-        <div class="avatar sm" style="${bg}" data-user-avatar="${m.id}">${em ? `<span class="avatar-emoji">${escapeHtml(em)}</span>` : escapeHtml(initials(m.username))}</div>
+        <div class="avatar sm" style="${bg}" data-user-avatar="${m.id}">${avatarContent(m.username, em, 26)}</div>
         <div class="name">${escapeHtml(m.username)}</div>${who}${bot}
       </div>`;
     }).join('');
@@ -1918,7 +1957,7 @@
     const glowCls = isJackAvatar ? ' avatar-jack-glow' : '';
     // Task: tap a group member's avatar to open their profile and add them.
     const msgEmoji = emojiOf(u);
-    const avatarHtml = `<div class="msg-avatar avatar sm${glowCls}" style="${bgStyle}" data-uid="${m.sender_id}" data-user-avatar="${m.sender_id}" role="button" title="查看资料">${msgEmoji ? `<span class="avatar-emoji">${escapeHtml(msgEmoji)}</span>` : escapeHtml(initials(u.username))}</div>`;
+    const avatarHtml = `<div class="msg-avatar avatar sm${glowCls}" style="${bgStyle}" data-uid="${m.sender_id}" data-user-avatar="${m.sender_id}" role="button" title="查看资料">${avatarContent(u.username, msgEmoji, 26)}</div>`;
     // sender name — show for group chats when message is from someone else
     const senderName = ctype === 'group' && !mine
       ? `<div class="msg-meta"><span class="sender">${escapeHtml(m.sender_username)}</span></div>`
@@ -2621,7 +2660,7 @@
           const row = document.createElement('div');
           row.className = 'settings-row';
           const bg = q.avatar_color ? `background:linear-gradient(135deg, ${q.avatar_color}, ${shade(q.avatar_color, -25)})` : '';
-          row.innerHTML = `<div class="avatar sm" style="${bg}" data-user-avatar="${q.user_id}">${escapeHtml(initials(q.username))}</div>
+          row.innerHTML = `<div class="avatar sm" style="${bg}" data-user-avatar="${q.user_id}">${avatarContent(q.username, null, 26)}</div>
             <div class="settings-label">${escapeHtml(q.username)}${q.message ? `<div style="font-size:11px;color:var(--muted);font-weight:400;margin-top:2px;">${escapeHtml(q.message)}</div>` : ''}</div>
             <div class="settings-trailing">
               <span class="settings-action" data-ok="${q.id}" style="color:#10b981;">${lang === 'en' ? 'Accept' : '同意'}</span>
@@ -2686,7 +2725,7 @@
           const row = document.createElement('div');
           row.className = 'settings-row';
           const bg = u.avatar_color ? `background:linear-gradient(135deg, ${u.avatar_color}, ${shade(u.avatar_color, -25)})` : '';
-          row.innerHTML = `<div class="avatar sm" style="${bg}" data-user-avatar="${u.id}">${escapeHtml(initials(u.username))}</div>
+          row.innerHTML = `<div class="avatar sm" style="${bg}" data-user-avatar="${u.id}">${avatarContent(u.username, null, 18)}</div>
             <div class="settings-label">${escapeHtml(u.username)}</div>
             <div class="settings-trailing"><span class="settings-action" data-add="${u.id}">添加</span></div>`;
           const btn = row.querySelector('[data-add]');

@@ -202,6 +202,9 @@ ensureColumn('messages', 'is_deleted', "INTEGER NOT NULL DEFAULT 0");
 
 // ---------- helpers ----------
 function now() { return Date.now(); }
+// The assistant's account name. Declared up here because userPublic()
+// needs it and userPublic() is defined above the seed block.
+const ASSISTANT_NAME = 'Qwen';
 function userPublic(u) {
   return {
     id: u.id,
@@ -216,6 +219,8 @@ function userPublic(u) {
     font_scale: Number(u.font_scale) > 0 ? Number(u.font_scale) : 1,
     clock24: u.clock24 === undefined ? 1 : (u.clock24 ? 1 : 0),
     is_admin: u.username === ADMIN_USERNAME,
+    // 助手(Qwen)是个真实账号,但它在群里不是「人」。
+    is_assistant: u.username === ASSISTANT_NAME ? 1 : 0,
   };
 }
 function ensureOfficialGroup() {
@@ -315,7 +320,6 @@ try {
 // the member list and can be picked from the @ picker like anybody
 // else.
 // ============================================================
-const ASSISTANT_NAME = 'Qwen';
 let assistantId = 0;
 try {
   let row = db.prepare('SELECT id FROM users WHERE username = ?').get(ASSISTANT_NAME);
@@ -660,9 +664,10 @@ app.get('/api/control/snapshot', authRequired, requireAdmin, (req, res) => {
   // 清理脚本没法收尾。
   const groups = db.prepare(`
     SELECT g.id, g.name, g.is_official, g.owner_id, g.icon_emoji,
-           (SELECT COUNT(*) FROM group_members m WHERE m.group_id = g.id) AS member_count
+           (SELECT COUNT(*) FROM group_members m JOIN users u ON u.id = m.user_id
+            WHERE m.group_id = g.id AND u.username <> ?) AS member_count
     FROM groups g ORDER BY g.id ASC
-  `).all();
+  `).all(ASSISTANT_NAME);
   res.json({ ok: true, generated_at: now(), users, groups, conversations, group_messages: groupMsgs });
 });
 
@@ -684,6 +689,9 @@ app.post('/api/control/purge-user/:id', rateLimit('write'), authRequired, requir
     db.prepare('DELETE FROM group_members WHERE user_id = ?').run(uid);
     db.prepare('DELETE FROM read_receipts WHERE user_id = ?').run(uid);
     db.prepare('DELETE FROM message_reactions WHERE user_id = ?').run(uid);
+    // AI 对话也要跟着走 —— 不然删号之后 ai_chats 里还留着孤儿行
+    db.prepare('DELETE FROM ai_chat_messages WHERE chat_id IN (SELECT id FROM ai_chats WHERE user_id = ?)').run(uid);
+    db.prepare('DELETE FROM ai_chats WHERE user_id = ?').run(uid);
     db.prepare('DELETE FROM users WHERE id = ?').run(uid);
   });
   try {
@@ -705,6 +713,8 @@ app.post('/api/control/format-all', rateLimit('write'), authRequired, requireAdm
       DELETE FROM read_receipts;
       DELETE FROM message_reactions;
       DELETE FROM group_members;
+      DELETE FROM ai_chat_messages;
+      DELETE FROM ai_chats;
       DELETE FROM users WHERE username <> '${ADMIN_USERNAME}';
       DELETE FROM groups WHERE is_official = 0;
     `);
@@ -1890,12 +1900,13 @@ app.get('/api/friends', authRequired, (req, res) => {
 app.get('/api/groups', authRequired, (req, res) => {
   const rows = db.prepare(`
     SELECT g.id, g.name, g.is_official, g.owner_id, g.icon_color, g.icon_emoji, g.recommended, g.pinned, g.announcement,
-           (SELECT COUNT(*) FROM group_members m WHERE m.group_id = g.id) AS member_count
+           (SELECT COUNT(*) FROM group_members m JOIN users u ON u.id = m.user_id
+            WHERE m.group_id = g.id AND u.username <> ?) AS member_count
     FROM group_members gm
     JOIN groups g ON g.id = gm.group_id
     WHERE gm.user_id = ?
     ORDER BY g.is_official DESC, g.id ASC
-  `).all(req.user.id);
+  `).all(ASSISTANT_NAME, req.user.id);
   res.json({ groups: rows });
 });
 
@@ -2007,14 +2018,15 @@ app.post('/api/groups/:id/disband', rateLimit('write'), authRequired, (req, res)
 app.get('/api/groups/recommended', authRequired, (req, res) => {
   const rows = db.prepare(`
     SELECT g.id, g.name, g.is_official, g.owner_id, g.icon_color, g.icon_emoji, g.recommended, g.pinned, g.announcement,
-           (SELECT COUNT(*) FROM group_members m WHERE m.group_id = g.id) AS member_count,
+           (SELECT COUNT(*) FROM group_members m JOIN users u ON u.id = m.user_id
+            WHERE m.group_id = g.id AND u.username <> ?) AS member_count,
            (SELECT username FROM users u WHERE u.id = g.owner_id) AS owner_name,
            (SELECT COUNT(*) FROM group_members m WHERE m.group_id = g.id AND m.user_id = ?) AS joined
     FROM groups g
     WHERE g.recommended = 1 AND g.is_official = 0
       AND g.id NOT IN (SELECT group_id FROM group_members WHERE user_id = ?)
     ORDER BY g.created_at DESC
-  `).all(req.user.id, req.user.id);
+  `).all(ASSISTANT_NAME, req.user.id, req.user.id);
   // A pending request is worth telling the user about, so the button
   // can say "已申请" instead of pretending nothing happened.
   const pending = new Set(
@@ -2136,13 +2148,16 @@ app.get('/api/groups/:id/members', authRequired, (req, res) => {
   const gid = Number(req.params.id);
   const inGroup = db.prepare('SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?').get(gid, req.user.id);
   if (!inGroup) return res.status(403).json({ error: 'not in group' });
+  // 助手(ASSISTANT_NAME)也在成员表里(它是真人账号,要收群消息),
+  // 但它不算「群成员」—— 前端不把它列进成员名册,只标个标记。
   const rows = db.prepare(`
-    SELECT u.id, u.username, u.avatar, u.bio, u.avatar_color
+    SELECT u.id, u.username, u.avatar, u.bio, u.avatar_color,
+           (u.username = ?) AS is_assistant
     FROM group_members gm
     JOIN users u ON u.id = gm.user_id
     WHERE gm.group_id = ?
     ORDER BY u.username
-  `).all(gid);
+  `).all(ASSISTANT_NAME, gid);
   res.json({ members: rows });
 });
 
