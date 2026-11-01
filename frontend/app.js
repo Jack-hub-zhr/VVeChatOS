@@ -1470,25 +1470,52 @@
       toast(lang==='zh'?'已设置':'Saved');
     } catch (e) { toast(e.message); }
   }
+  // 群没了之后，本地把这个会话从各处清掉
+  function dropGroupLocally(gid) {
+    const key = convKey('group', gid);
+    delete state.messagesByConv[key];
+    state.conversations = (state.conversations || []).filter(c => !(c.type === 'group' && Number(c.id) === Number(gid)));
+    state.groups = (state.groups || []).filter(g => Number(g.id) !== Number(gid));
+    if (state.currentChat && state.currentChat.type === 'group' && Number(state.currentChat.id) === Number(gid)) {
+      state.currentChat = null;
+      const cw = $('#chat-window'); const ce = $('#chat-empty');
+      if (cw) cw.classList.add('hidden');
+      if (ce) ce.classList.remove('hidden');
+    }
+    renderChats(); renderUnread();
+  }
+
   async function doDisband(gid) {
-    if (!confirm(lang==='zh'?'确定解散这个群聊？此操作不可撤销':'Disband this group? Cannot undo.')) return;
+    // 原生 confirm() 在 PWA / 独立窗口里经常不弹，用项目自己的确认框
+    const ok = await askConfirm({
+      title: lang === 'zh' ? '解散群聊' : 'Disband group',
+      message: lang === 'zh'
+        ? '确定解散这个群聊？群里的消息会一起清掉，此操作不可撤销。'
+        : 'Disband this group? All messages will be removed. This cannot be undone.',
+      okText: lang === 'zh' ? '解散' : 'Disband',
+    });
+    if (!ok) return;
     try {
-      await jackDisbandGroup(gid);
+      const r = await api(`/groups/${gid}/disband`, { method: 'POST' });
       closeModal('modal-group-info');
+      dropGroupLocally(gid);
       refreshGroups(); refreshConversations();
-      toast(lang==='zh'?'已解散':'Disbanded');
+      toast(lang === 'zh' ? '已解散' : 'Disbanded');
     } catch (e) { toast(e.message); }
   }
   async function doLeaveGroup(gid) {
-    if (!confirm(lang==='zh'?'确定退出这个群聊？':'Leave this group?')) return;
+    const ok = await askConfirm({
+      title: lang === 'zh' ? '退出群聊' : 'Leave group',
+      message: lang === 'zh' ? '确定退出这个群聊？' : 'Leave this group?',
+      okText: lang === 'zh' ? '退出' : 'Leave',
+    });
+    if (!ok) return;
     try {
       await api(`/groups/${gid}/leave`, { method: 'POST' });
       closeModal('modal-group-info');
-      state.currentChat = null;
-      $('#chat-window').classList.add('hidden');
-      $('#chat-empty').classList.remove('hidden');
+      dropGroupLocally(gid);
       refreshGroups(); refreshConversations();
-      toast(lang==='zh'?'已退出':'Left');
+      toast(lang === 'zh' ? '已退出' : 'Left');
     } catch (e) { toast(e.message); }
   }
 
@@ -2852,6 +2879,23 @@
         renderChatHeader();
       }
       refreshGroups(); refreshConversations();
+    });
+    // 群里有人退出了 —— 成员列表和人数要跟着变
+    s.on('group:member-left', ({ group_id, user_id }) => {
+      refreshGroups(); refreshConversations();
+      if (state.currentChat && state.currentChat.type === 'group' && Number(state.currentChat.id) === Number(group_id)) {
+        renderMessages();
+      }
+    });
+    s.on('group:owner-changed', ({ group_id, owner_id }) => {
+      const g = state.groups.find(x => Number(x.id) === Number(group_id));
+      if (g) g.owner_id = owner_id;
+    });
+    // 群被解散了 —— 把对话收起来
+    s.on('group:disbanded', ({ group_id, name }) => {
+      dropGroupLocally(group_id);
+      refreshGroups(); refreshConversations();
+      toast(lang === 'en' ? `Group “${name}” was disbanded` : `群「${name}」已解散`);
     });
   }
   function onSocketMessage(msg) {
@@ -4530,8 +4574,10 @@
   }
   // Pull the latest /me record and merge it into state.user + localStorage.
   async function fetchMe() {
+    const gen = _sessionGen;
     try {
       const r = await api('/me');
+      if (gen !== _sessionGen) return;   // 期间换账号了，别覆盖
       if (r && r.user) {
         Object.assign(state.user, r.user);
         try { localStorage.setItem('vve:user', JSON.stringify(state.user)); } catch (_) {}
@@ -4811,7 +4857,14 @@
     }, true);
   }
 
+  // 清掉本地存的会话（token + 用户），但不触发整套登出流程
+  function clearStoredSession() {
+    try { localStorage.removeItem('vve:token'); localStorage.removeItem('vve:user'); } catch (_) {}
+    state.token = null;
+  }
+
   function logout() {
+    _sessionGen++;
     state.user=null; state.token=null; state.conversations=[]; state.friends=[]; state.groups=[]; state.requests=[];
     state.currentChat=null; state.messagesByConv={}; state.online.clear();
     localStorage.removeItem('vve:token'); localStorage.removeItem('vve:user');
@@ -4819,7 +4872,18 @@
     showAuth();
     showSplashAgain();   // bring back the big-Hello splash on logout
   }
+  // ---------- 会话代号 ----------
+  // 登录 / 登出都会把它 +1。
+  //
+  // tryRestore() 在页面加载时就发出了 api('/me')，那个请求带的是
+  // **旧 token**。如果用户在这份响应回来之前登录了别的账号，它就会
+  // 把 state.user 和 localStorage 一起改回旧账号 —— 表现就是
+  // 「明明登录了自己的号，一进去却是另一个号（测试号）」。
+  // 过期响应直接丢弃。
+  let _sessionGen = 0;
+
   function tryRestore() {
+    const gen = _sessionGen;
     const t = localStorage.getItem('vve:token');
     const u = localStorage.getItem('vve:user');
     if (t && u) {
@@ -4831,12 +4895,22 @@
         // to other devices.  Failure here is harmless — the local
         // value already decided this session's boot animation.
         api('/me').then(r => {
+          if (gen !== _sessionGen) return;   // 期间登录/登出过，这份响应作废
           if (r && r.user) {
             applyBoot550cFromUser(r.user).catch(() => {});
             state.user = r.user;
             try { localStorage.setItem('vve:user', JSON.stringify(state.user)); } catch (_) {}
           }
-        }).catch(() => {});
+        }).catch((e) => {
+          if (gen !== _sessionGen) return;
+          // token 已经失效（比如那个号被删了）—— 不能就这么以「幽灵身份」
+          // 留在应用里，必须回到登录页。
+          const msg = String((e && e.message) || '');
+          if (/401|missing token|invalid token|未登录/i.test(msg)) {
+            clearStoredSession();
+            showAuth();
+          }
+        });
       } catch (e) { showAuth(); }
     }
     else showAuth();
@@ -5303,6 +5377,9 @@
           state.user = data.user; state.token = data.token;
           localStorage.setItem('vve:token', state.token);
           localStorage.setItem('vve:user', JSON.stringify(state.user));
+          // 换了账号 —— 之前那次会话恢复发出的 /me 响应就作废了，
+          // 不然它回来会把 state.user 改回上一个账号。
+          _sessionGen++;
           // The account owns the 550C flag — adopt it on sign-in so the
           // next visit boots the animation the way this account wants.
           await applyBoot550cFromUser(data.user);

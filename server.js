@@ -656,7 +656,14 @@ app.get('/api/control/snapshot', authRequired, requireAdmin, (req, res) => {
     ORDER BY m.id ASC
   `).all();
 
-  res.json({ ok: true, generated_at: now(), users, conversations, group_messages: groupMsgs });
+  // 群列表也带上 —— 否则没人认领的群（owner 被删了）在管理台里找不到，
+  // 清理脚本没法收尾。
+  const groups = db.prepare(`
+    SELECT g.id, g.name, g.is_official, g.owner_id, g.icon_emoji,
+           (SELECT COUNT(*) FROM group_members m WHERE m.group_id = g.id) AS member_count
+    FROM groups g ORDER BY g.id ASC
+  `).all();
+  res.json({ ok: true, generated_at: now(), users, groups, conversations, group_messages: groupMsgs });
 });
 
 // Delete one account and every trace of it (messages, friendships, requests).
@@ -1936,6 +1943,61 @@ app.post('/api/groups', rateLimit('write'), authRequired, (req, res) => {
     .run(gid, req.user.id, now());
   const g = db.prepare('SELECT * FROM groups WHERE id = ?').get(gid);
   res.json({ ok: true, group: groupPublic(g, req.user.id) });
+});
+
+// ------------------------------------------------------------
+// 退出群聊 / 解散群聊
+// ------------------------------------------------------------
+// 这两条路由之前根本不存在 —— 前端点了「退出群聊」是 404，
+// 「解散群聊」调的甚至是个不存在的函数，所以两个按钮都是死的。
+
+// 退出群聊：把自己从成员表里摘掉。
+app.post('/api/groups/:id/leave', rateLimit('write'), authRequired, (req, res) => {
+  const gid = Number(req.params.id);
+  const g = db.prepare('SELECT * FROM groups WHERE id = ?').get(gid);
+  if (!g) return res.status(404).json({ error: '群不存在' });
+  const isMember = db.prepare('SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?').get(gid, req.user.id);
+  if (!isMember) return res.status(400).json({ error: '你不是这个群的成员' });
+
+  const others = db.prepare('SELECT user_id FROM group_members WHERE group_id = ? AND user_id != ? ORDER BY joined_at ASC').all(gid, req.user.id);
+
+  db.prepare('DELETE FROM group_members WHERE group_id = ? AND user_id = ?').run(gid, req.user.id);
+
+  // 群主走了：如果还有人，就把群主转给最早加入的那个；
+  // 没人了就等于群自然消失了，一并清掉。
+  if (Number(g.owner_id) === Number(req.user.id)) {
+    if (others.length) {
+      db.prepare('UPDATE groups SET owner_id = ? WHERE id = ?').run(others[0].user_id, gid);
+      try { io.to(`group:${gid}`).emit('group:owner-changed', { group_id: gid, owner_id: others[0].user_id }); } catch (_) {}
+    } else {
+      db.prepare('DELETE FROM group_members WHERE group_id = ?').run(gid);
+      db.prepare('DELETE FROM groups WHERE id = ?').run(gid);
+    }
+  }
+  try { io.to(`group:${gid}`).emit('group:member-left', { group_id: gid, user_id: req.user.id }); } catch (_) {}
+  res.json({ ok: true, left: g.name, dissolved: !others.length && Number(g.owner_id) === Number(req.user.id) });
+});
+
+// 解散群聊：群主或管理员(Jack)可以，整群连消息一起清掉。
+app.post('/api/groups/:id/disband', rateLimit('write'), authRequired, (req, res) => {
+  const gid = Number(req.params.id);
+  const g = db.prepare('SELECT * FROM groups WHERE id = ?').get(gid);
+  if (!g) return res.status(404).json({ error: '群不存在' });
+  if (!canManageGroup(req.user, g)) return res.status(403).json({ error: '只有群主或管理员可以解散群聊' });
+  if (g.is_official) return res.status(400).json({ error: '官方群不能解散' });
+
+  const members = db.prepare('SELECT user_id FROM group_members WHERE group_id = ?').all(gid).map(r => r.user_id);
+  db.prepare("DELETE FROM messages WHERE conv_type = 'group' AND conv_id = ?").run(String(gid));
+  db.prepare('DELETE FROM group_members WHERE group_id = ?').run(gid);
+  db.prepare('DELETE FROM group_join_requests WHERE group_id = ?').run(gid);
+  db.prepare('DELETE FROM groups WHERE id = ?').run(gid);
+
+  // 告诉群里所有人：群没了，收起对话
+  for (const uid of members) {
+    try { io.to(`user:${uid}`).emit('group:disbanded', { group_id: gid, name: g.name }); } catch (_) {}
+  }
+  try { io.emit('group:disbanded', { group_id: gid, name: g.name }); } catch (_) {}
+  res.json({ ok: true, disbanded: g.name });
 });
 
 // ------------------------------------------------------------
