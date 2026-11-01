@@ -4417,14 +4417,15 @@ body.dark .mobile-menu-scrim { background: rgba(0, 0, 0, 0.34); }
     border-right: 1px solid var(--glass-border);
     border-left: 0; border-top: 0; border-bottom: 0;
     border-radius: 0;
-    /* 不透明 —— 半透明的话底下的助手界面会整个透出来,一片糊 */
-    background: var(--glass-bg-strong);
+    /* 真的不透明 —— 用玻璃变量(0.62)的话底下的助手界面照样透出来,
+       一片糊。这里给到 97%,底下几乎看不穿,但边缘还留着玻璃感。 */
+    background: rgba(255, 255, 255, 0.97);
     backdrop-filter: blur(34px) saturate(190%);
     -webkit-backdrop-filter: blur(34px) saturate(190%);
     box-shadow: 6px 0 28px rgba(30, 80, 150, 0.20);
   }
   body.dark .app-body.ai-active.list-open .list-pane {
-    background: rgba(20, 24, 32, 0.97);
+    background: rgba(20, 24, 32, 0.985);
     border-right-color: rgba(255, 255, 255, 0.10);
   }
   /* 抽屉打开时,后面的助手界面压暗一点,层次才分得开；
