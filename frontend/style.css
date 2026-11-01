@@ -4398,9 +4398,17 @@ body.dark .mobile-menu-scrim { background: rgba(0, 0, 0, 0.34); }
   .app-body.list-open .list-pane { display: flex !important; }
 
   /* 助手界面里展开的对话列表只占屏幕的 1/3。
-     剩下 2/3 留给对话本身 —— 一边看列表一边看聊天,不用来回切。 */
+     剩下 2/3 留给对话本身 —— 一边看列表一边看聊天,不用来回切。
+
+     它必须是一层「抽屉」,浮在 .right-pane 上面：
+     手机上 .right-pane 是 position:absolute; inset:0 (z-index:10),
+     整个盖在屏幕上的 —— 列表要是老老实实待在 flex 流里,会被助手
+     的头部压上去,半透明的底还会把底下的东西全透出来。 */
   .app-body.ai-active.list-open .list-pane {
-    flex: 0 0 33.33%;
+    position: absolute;
+    inset: 0 auto 0 0;
+    z-index: 70;              /* 高于 .right-pane(10),低于底部标签栏(80) */
+    flex: none;
     width: 33.33%;
     max-width: 33.33%;
     min-width: 0;
@@ -4409,12 +4417,26 @@ body.dark .mobile-menu-scrim { background: rgba(0, 0, 0, 0.34); }
     border-right: 1px solid var(--glass-border);
     border-left: 0; border-top: 0; border-bottom: 0;
     border-radius: 0;
-    background: rgba(255, 255, 255, 0.88);
-    backdrop-filter: blur(22px) saturate(180%);
-    -webkit-backdrop-filter: blur(22px) saturate(180%);
-    box-shadow: 6px 0 24px rgba(30, 80, 150, 0.16);
+    /* 不透明 —— 半透明的话底下的助手界面会整个透出来,一片糊 */
+    background: var(--glass-bg-strong);
+    backdrop-filter: blur(34px) saturate(190%);
+    -webkit-backdrop-filter: blur(34px) saturate(190%);
+    box-shadow: 6px 0 28px rgba(30, 80, 150, 0.20);
   }
-  body.dark .app-body.ai-active.list-open .list-pane { background: rgba(18, 22, 30, 0.94); }
+  body.dark .app-body.ai-active.list-open .list-pane {
+    background: rgba(20, 24, 32, 0.97);
+    border-right-color: rgba(255, 255, 255, 0.10);
+  }
+  /* 抽屉打开时,后面的助手界面压暗一点,层次才分得开；
+     同时把内容整体推到右边 2/3 去 —— 不然居中的问候语会被抽屉盖掉一半。 */
+  .app-body.ai-active.list-open .right-pane {
+    filter: brightness(.88);
+    padding-left: 33.33%;
+  }
+  body.dark .app-body.ai-active.list-open .right-pane {
+    filter: brightness(.78);
+    padding-left: 33.33%;
+  }
   /* 1/3 的宽度很窄，标题挤成竖排就难看了 —— 强制单行省略。 */
   .app-body.ai-active.list-open .ai-chat-item,
   .app-body.ai-active.list-open .ai-chat-title {
@@ -4866,9 +4888,10 @@ body.theme-dark .mention-preview .cancel:hover {
 }
 
 /* ============================================================
-   新消息弹窗
+   新消息弹窗 —— mini 聊天窗口
    ------------------------------------------------------------
-   屏幕中央的 1:1 小窗 + 背景虚化。5 秒后自动收起。
+   屏幕中央的一个「缩小版聊天窗口」：整段聊天记录都在里面，
+   底部直接快速回复。背景整屏虚化，5 秒后自动收起。
    ============================================================ */
 .msg-popup {
   position: fixed;
@@ -4877,6 +4900,7 @@ body.theme-dark .mention-preview .cancel:hover {
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 16px;
   pointer-events: none;
 }
 .msg-popup.hidden { display: none !important; }
@@ -4885,25 +4909,24 @@ body.theme-dark .mention-preview .cancel:hover {
   position: absolute;
   inset: 0;
   pointer-events: auto;
-  background: rgba(16, 24, 40, 0.16);
-  backdrop-filter: blur(14px) saturate(140%);
-  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  background: rgba(16, 24, 40, 0.18);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
   opacity: 0;
   transition: opacity .22s ease;
 }
 .msg-popup.show .msg-popup-scrim { opacity: 1; }
 
-/* 1:1 的方窗 */
+/* mini 聊天窗口：竖着的，跟真聊天窗口一个比例 */
 .msg-popup-card {
   position: relative;
   pointer-events: auto;
-  width: min(76vw, 330px);
-  aspect-ratio: 1 / 1;
-  max-height: 78vh;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px;
+  width: min(92vw, 400px);
+  height: min(76vh, 560px);
+  max-height: calc(100vh - 40px);
+  padding: 12px 12px 10px;
   border-radius: 26px;
   background: var(--glass-bg-strong);
   backdrop-filter: blur(var(--glass-blur-strong)) saturate(200%);
@@ -4911,18 +4934,42 @@ body.theme-dark .mention-preview .cancel:hover {
   border: 1px solid var(--glass-border);
   box-shadow: var(--glass-shadow-lg), var(--glass-highlight);
   opacity: 0;
-  transform: translateY(14px) scale(.94);
+  transform: translateY(16px) scale(.95);
   transition: opacity .26s cubic-bezier(.22,1,.36,1), transform .26s cubic-bezier(.22,1,.36,1);
 }
 .msg-popup.show .msg-popup-card { opacity: 1; transform: translateY(0) scale(1); }
 
-.msg-popup-top {
+/* ---- 顶部：头像 + 名字 + 倒计时 ---- */
+.msg-popup-head {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  gap: 9px;
+  flex-shrink: 0;
 }
+.msg-popup-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  box-shadow: 0 4px 12px rgba(76,111,255,.28);
+  flex-shrink: 0;
+}
+.msg-popup-who { flex: 1; min-width: 0; }
+.msg-popup-from {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.msg-popup-sub { font-size: 11px; color: var(--muted); margin-top: 1px; }
 .msg-popup-badge {
+  flex-shrink: 0;
   padding: 3px 9px;
   border-radius: 999px;
   font-size: 11px;
@@ -4932,16 +4979,10 @@ body.theme-dark .mention-preview .cancel:hover {
   box-shadow: 0 2px 8px rgba(76,111,255,.32);
   white-space: nowrap;
 }
-.msg-popup-hint {
-  flex: 1;
-  min-width: 0;
-  font-size: 11.5px;
-  color: var(--muted);
-  line-height: 1.35;
-}
 .msg-popup-count {
+  flex-shrink: 0;
   font-size: 12px;
-  font-weight: 700;
+  font-weight:700;
   color: var(--muted-2);
   font-variant-numeric: tabular-nums;
   min-width: 14px;
@@ -4953,6 +4994,8 @@ body.theme-dark .mention-preview .cancel:hover {
   border-radius: 3px;
   background: var(--glass-bg-frost);
   overflow: hidden;
+  margin-top: 9px;
+  flex-shrink: 0;
 }
 .msg-popup-progress > span {
   display: block;
@@ -4962,55 +5005,62 @@ body.theme-dark .mention-preview .cancel:hover {
   background: var(--accent-grad);
   transition: width .1s linear;
 }
+.msg-popup-hint {
+  flex-shrink: 0;
+  margin: 7px 2px 2px;
+  font-size: 11.5px;
+  color: var(--muted);
+  line-height: 1.35;
+}
 
-.msg-popup-body {
+/* ---- 中间：聊天记录 ---- */
+.msg-popup-log {
   flex: 1;
   min-height: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  margin: 6px -4px 4px;
+  padding: 6px 4px 2px;
+  border-radius: 16px;
+  background: var(--glass-bg-soft);
+}
+.msg-popup-log::-webkit-scrollbar { width: 5px; }
+.msg-popup-log::-webkit-scrollbar-thumb {
+  background: var(--glass-border);
+  border-radius: 5px;
+}
+.msg-popup-empty {
+  padding: 18px 8px;
   text-align: center;
-  padding: 4px 0;
+  font-size: 12.5px;
+  color: var(--muted-2);
 }
-.msg-popup-avatar {
-  width: 58px;
-  height: 58px;
+/* mini 窗口里的气泡比主聊天小一号，不然塞不下 */
+.msg-popup-log .msg-row { gap: 6px; margin-bottom: 5px; }
+.msg-popup-log .msg-avatar,
+.msg-popup-log .avatar {
+  width: 26px; height: 26px;
+  font-size: 11px;
   border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 22px;
-  font-weight: 700;
-  color: #fff;
-  background: linear-gradient(135deg, var(--accent), var(--accent2));
-  box-shadow: 0 6px 18px rgba(76,111,255,.30);
-  flex-shrink: 0;
 }
-.msg-popup-main { min-width: 0; max-width: 100%; }
-.msg-popup-from {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--ink);
-  margin-bottom: 4px;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+.msg-popup-log .msg-bubble {
+  padding: 7px 11px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  border-radius: 12px;
+  max-width: 82%;
 }
-.msg-popup-text {
-  font-size: 14px;
-  line-height: 1.55;
-  color: var(--ink-2);
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 4;
-  -webkit-box-orient: vertical;
-  word-break: break-word;
-}
+.msg-popup-log .msg-bubble.image-bubble { padding: 4px; }
+.msg-popup-log .msg-bubble.image-bubble img { max-height: 120px; }
 
+/* ---- 底部：快速回复 ---- */
 .msg-popup-reply {
   display: flex;
   gap: 7px;
   align-items: center;
+  flex-shrink: 0;
+  padding-top: 8px;
 }
 .msg-popup-input {
   flex: 1;
@@ -5048,6 +5098,12 @@ body.theme-dark .mention-preview .cancel:hover {
 .msg-popup-send:active { transform: scale(.95); }
 
 @media (max-width: 520px) {
-  .msg-popup-card { width: min(82vw, 300px); padding: 12px; border-radius: 22px; }
-  .msg-popup-avatar { width: 48px; height: 48px; font-size: 19px; }
+  .msg-popup { padding: 10px; }
+  .msg-popup-card {
+    width: min(94vw, 360px);
+    height: min(74vh, 480px);
+    padding: 10px 10px 8px;
+    border-radius: 22px;
+  }
+  .msg-popup-avatar { width: 32px; height: 32px; font-size: 13px; }
 }

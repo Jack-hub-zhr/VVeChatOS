@@ -2903,7 +2903,53 @@
     _msgPopupData = null;
   }
 
-  function showMessagePopup(msg, peerId) {
+  // mini 聊天窗口里渲染整段聊天记录。
+  // 复用主聊天的 .msg-row / .msg-bubble 样式，所以看起来就是聊天窗口
+  // 的缩小版，而不是另做的一套。
+  function renderPopupLog(log, msgs) {
+    if (!log) return;
+    log.innerHTML = '';
+    if (!msgs || !msgs.length) {
+      const empty = document.createElement('div');
+      empty.className = 'msg-popup-empty';
+      empty.textContent = lang === 'en' ? 'No messages yet' : '还没有消息';
+      log.appendChild(empty);
+      return;
+    }
+    for (const m of msgs) {
+      const mine = m.sender_id === state.user.id;
+      const row = document.createElement('div');
+      row.className = 'msg-row ' + (mine ? 'me' : '');
+      const u = mine
+        ? state.user
+        : { id: m.sender_id, username: m.sender_username, avatar_color: m.sender_avatar_color };
+      const bg = u && u.avatar_color
+        ? `background:linear-gradient(135deg, ${u.avatar_color}, ${shade(u.avatar_color, -25)});`
+        : '';
+      const av = document.createElement('div');
+      av.className = 'msg-avatar avatar sm';
+      av.style.cssText = bg;
+      av.textContent = initials(u && u.username || '?');
+      const content = document.createElement('div');
+      content.className = 'msg-content';
+      const bub = document.createElement('div');
+      bub.className = 'msg-bubble' + (m.is_deleted ? ' deleted' : '');
+      if (m.type === 'image') {
+        bub.classList.add('image-bubble');
+        bub.innerHTML = `<img class="chat-img" src="${escapeHtml(m.content)}" alt="${t('img_alt')}" loading="lazy" />`;
+      } else {
+        bub.textContent = m.is_deleted ? t('msg_deleted') : String(m.content || '');
+      }
+      content.appendChild(bub);
+      row.appendChild(av);
+      row.appendChild(content);
+      log.appendChild(row);
+    }
+    // 滚到最后一条
+    requestAnimationFrame(() => { log.scrollTop = log.scrollHeight; });
+  }
+
+  async function showMessagePopup(msg, peerId) {
     const box = $('#msg-popup');
     if (!box) return;
     const convType = msg.conv_type;
@@ -2925,11 +2971,10 @@
     }
 
     const from = $('#msg-popup-from'); if (from) from.textContent = title;
-    const text = $('#msg-popup-text');
-    if (text) {
-      const raw = msg.type === 'image' ? (lang === 'en' ? '[image]' : '[图片]') : String(msg.content || '');
-      text.textContent = raw.length > 120 ? raw.slice(0, 120) + '…' : raw;
-    }
+    const sub = $('#msg-popup-sub');
+    if (sub) sub.textContent = isGroup
+      ? (lang === 'en' ? 'Group chat' : '群聊')
+      : (lang === 'en' ? 'Private chat' : '私聊');
     const av = $('#msg-popup-avatar');
     if (av) { av.textContent = avatarText; av.style.cssText = avatarBg; }
     const badge = $('#msg-popup-badge');
@@ -2940,6 +2985,19 @@
       : '点击打开对话 · 5 秒后自动关闭';
 
     _msgPopupData = { convType, convId, title, isGroup };
+
+    // 整段聊天记录 —— 小窗口就是聊天窗口的缩小版
+    const log = $('#msg-popup-log');
+    if (log) {
+      log.innerHTML = '<div class="msg-popup-empty">' + (lang === 'en' ? 'Loading…' : '加载中…') + '</div>';
+      try {
+        const r = await api('/messages?conv_type=' + encodeURIComponent(convType) + '&conv_id=' + encodeURIComponent(convId) + '&limit=50');
+        renderPopupLog(log, r.messages || []);
+      } catch (e) {
+        // 拉不到历史也别把弹窗搞崩，至少把刚才那条显示出来
+        renderPopupLog(log, [msg]);
+      }
+    }
 
     // 重新计时：又来新消息就把倒计时重置
     if (_msgPopupTimer) clearTimeout(_msgPopupTimer);
