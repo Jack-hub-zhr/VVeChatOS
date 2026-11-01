@@ -8,7 +8,9 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="theme-color" content="#8b5cf6" />
   <title>VVeChat</title>
-  <link rel="stylesheet" href="style.css?v=20261101a" />
+  <link rel="stylesheet" href="style.css?v=20261101b" />
+  <!-- 液态玻璃视觉层（移植自 xiaofangstudio/liquid-glass-web, MIT） -->
+  <link rel="stylesheet" href="liquid-glass.css?v=20261101b" />
   <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><text x='32' y='44' font-family='system-ui' font-size='40' font-weight='800' text-anchor='middle' fill='%238b5cf6'>V</text></svg>" />
 </head>
 <body>
@@ -201,15 +203,14 @@
               </span>
               <span class="side-nav-label" data-i18n="nav_discover">发现</span>
             </button>
-            <button class="side-nav-item" data-pane="more" role="tab" title="个性化">
+            <button class="side-nav-item" data-pane="more" role="tab" title="设置">
               <span class="side-nav-ic">
-                <svg viewBox="0 0 24 24" width="19" height="19" fill="currentColor" aria-hidden="true">
-                  <circle cx="5"  cy="12" r="1.9"/>
-                  <circle cx="12" cy="12" r="1.9"/>
-                  <circle cx="19" cy="12" r="1.9"/>
+                <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="3.1"/>
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
                 </svg>
               </span>
-              <span class="side-nav-label" data-i18n="nav_personal">个性化</span>
+              <span class="side-nav-label" data-i18n="nav_personal">设置</span>
             </button>
           </nav>
         </aside>
@@ -364,17 +365,18 @@
             <div class="side-section">
               <span class="side-section-title" data-i18n="pref_assistant">助手</span>
             </div>
+            <!-- The assistant always answers in groups now — there used to
+                 be a switch for it, but turning it off only confused
+                 people ("why doesn't @Qwen work?").  The row is kept as a
+                 static label so the feature is still discoverable. -->
             <div class="more-list">
-              <label class="more-row" for="toggle-ai-in-groups">
+              <div class="more-row static">
                 <span class="more-row-main">
                   <span class="more-row-title" data-i18n="pref_ai_groups">群里可以叫助手</span>
                   <span class="more-row-desc" data-i18n="pref_ai_groups_desc">在群聊里 @Qwen，它会读完上下文再回答</span>
                 </span>
-                <span class="more-switch">
-                  <input type="checkbox" id="toggle-ai-in-groups" />
-                  <span class="more-switch-track"><span class="more-switch-knob"></span></span>
-                </span>
-              </label>
+                <span class="more-row-badge" data-i18n="pref_ai_groups_always">始终开启</span>
+              </div>
             </div>
 
             <div class="side-section">
@@ -621,6 +623,19 @@
           <input id="plus-search-input" type="text" placeholder="搜索用户名…" autocomplete="off" />
         </div>
         <div id="plus-results" class="plus-results"></div>
+        <button class="plus-action" data-action="group">
+          <div class="plus-action-icon">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+              <circle cx="9" cy="7" r="3.4"/>
+              <path d="M17.5 11.5h5"/><path d="M20 9v5"/>
+            </svg>
+          </div>
+          <div>
+            <div class="plus-action-title" data-i18n="plus_create_group">建个群聊</div>
+            <div class="plus-action-sub" data-i18n="plus_create_group_desc">拉人一起聊，自选群头像</div>
+          </div>
+        </button>
         <button class="plus-action" data-action="friend">
           <div class="plus-action-icon">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -712,6 +727,12 @@
         <div class="modal-body">
           <label class="field-label" for="cg-name" data-i18n="cg_name">群名称</label>
           <input class="field-input" id="cg-name" type="text" maxlength="40" placeholder="给群起个名字" data-i18n-ph="cg_name_ph" autocomplete="off" />
+          <label class="field-label" for="cg-emoji-row" data-i18n="cg_emoji">群头像</label>
+          <div class="cg-emoji-row" id="cg-emoji-row" role="radiogroup" aria-labelledby="cg-emoji-label"></div>
+          <div class="cg-emoji-foot">
+            <button type="button" class="btn btn-ghost btn-sm" id="cg-emoji-random" data-i18n="cg_emoji_random">🎲 随机换一个</button>
+            <span class="cg-emoji-hint" data-i18n="cg_emoji_hint">不挑也行，开群时自动随机分配</span>
+          </div>
           <label class="cg-recommend">
             <input type="checkbox" id="cg-recommend" checked />
             <span class="cg-recommend-box"></span>
@@ -747,12 +768,37 @@
 
   <div id="lightbox" class="lightbox hidden"></div>
   <div id="toast" class="toast hidden"></div>
+
+  <!-- 新消息弹窗：屏幕中央的 1:1 小窗，背景虚化，可以直接快速回复，
+       5 秒后自动收起。点击小窗本身会跳到那个对话。 -->
+  <div id="msg-popup" class="msg-popup hidden" role="dialog" aria-label="新消息">
+    <div class="msg-popup-scrim" id="msg-popup-scrim"></div>
+    <div class="msg-popup-card" id="msg-popup-card" role="button" tabindex="0">
+      <div class="msg-popup-top">
+        <span class="msg-popup-badge" id="msg-popup-badge">新消息</span>
+        <span class="msg-popup-hint" id="msg-popup-hint">点击打开对话 · 5 秒后自动关闭</span>
+        <span class="msg-popup-count" id="msg-popup-count">5</span>
+      </div>
+      <div class="msg-popup-progress"><span id="msg-popup-bar"></span></div>
+      <div class="msg-popup-body">
+        <div class="msg-popup-avatar" id="msg-popup-avatar">?</div>
+        <div class="msg-popup-main">
+          <div class="msg-popup-from" id="msg-popup-from"></div>
+          <div class="msg-popup-text" id="msg-popup-text"></div>
+        </div>
+      </div>
+      <form class="msg-popup-reply" id="msg-popup-reply">
+        <input class="msg-popup-input" id="msg-popup-input" type="text" maxlength="200" placeholder="快速回复…" autocomplete="off" />
+        <button class="msg-popup-send" type="submit">发送</button>
+      </form>
+    </div>
+  </div>
   <div id="offline-banner" class="offline-banner hidden"><span class="dot"></span> <span data-i18n="reconnecting">正在重新连接…</span></div>
 
   <!-- Socket.io client is served by this same Express app at /socket.io/socket.io.js,
        so there is no third-party CDN to fail (or be blocked). -->
   <script src="/socket.io/socket.io.js"></script>
-  <script src="config.js?v=20261101a"></script>
+  <script src="config.js?v=20261101b"></script>
   <!-- The 550C theme is ~60 KB. Only fetch it when it is actually on:
        localStorage says so right now, and app.js re-checks after login
        for the case where the account has it on but this browser does
@@ -770,7 +816,7 @@
        time even though the theme was enabled. -->
   <script>
   (function () {
-    try { window.__VV_ASSET_V = '20261101a'; } catch (e) { }
+    try { window.__VV_ASSET_V = '20261101b'; } catch (e) { }
     var V = window.__VV_ASSET_V || '';
     var on = false;
     try { on = localStorage.getItem('vve:boot550c') === '1'; } catch (e) { }
@@ -791,6 +837,8 @@
     });
   })();
   </script>
-  <script src="app.js?v=20261101a"></script>
+  <!-- 液态玻璃引擎：折射 + 果冻物理 + 体积光 + 光照互通 -->
+  <script src="liquid-glass.js?v=20261101b"></script>
+  <script src="app.js?v=20261101b"></script>
 </body>
 </html>

@@ -1,0 +1,167 @@
+/* ============================================================
+   LIQUID GLASS — 液态玻璃视觉层
+   ------------------------------------------------------------
+   移植自 xiaofangstudio/liquid-glass-web (MIT)
+   折射引擎源自 shuding/liquid-glass (MIT, © Shu Ding)
+   动效标准参考 Apple WWDC25《Meet Liquid Glass》
+
+   这一层只管「看起来像液态玻璃」：
+     · 玻璃面板的边缘处理（内高光 + 方向性投影 + 更高对比的模糊）
+     · 果冻按压的视觉反馈
+     · 受光层
+   真正的折射由 liquid-glass.js 用 SVG 位移贴图实现。
+   ============================================================ */
+
+/* ---------- 玻璃面板 ---------- */
+.lg-glass {
+  position: relative;
+  isolation: isolate;
+}
+/* 元素本来就有定位（fixed / absolute / sticky）—— 只加隔离层，
+   绝不能改它的 position，否则浮层会被拉回文档流。 */
+.lg-lit-host {
+  isolation: isolate;
+}
+
+/* 受光层：光源在哪，受光面朝哪。 */
+.lg-lit-glow {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 2;
+  background: radial-gradient(circle at var(--lx, 50%) var(--ly, 50%),
+    rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0.22) 38%, transparent 68%);
+  opacity: 0;
+  transition: opacity .28s ease;
+  mix-blend-mode: soft-light;
+}
+body.dark .lg-lit-glow {
+  background: radial-gradient(circle at var(--lx, 50%) var(--ly, 50%),
+    rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0.14) 40%, transparent 70%);
+}
+
+/* ---------- 果冻按压 ---------- */
+.lg-pressed {
+  will-change: transform;
+  transform-origin: 50% 50%;
+}
+/* 按下去：底部内阴影 —— 下陷感只压底部，顶部留给增亮层。 */
+.lg-glass.lg-pressed::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 3;
+  box-shadow:
+    inset 0 0 16px 3px rgba(255, 255, 255, 0.42),
+    inset 0 -9px 18px rgba(0, 0, 0, 0.20);
+  opacity: 1;
+}
+
+/* ============================================================
+   液态玻璃主视觉：浅色主题下把整个 App 的玻璃感往 Apple 的方向拧
+   ============================================================ */
+body.lg-liquid {
+  /* 更强的对比与饱和 —— 液态玻璃的通透感靠这个，不是靠更白。 */
+  --glass-bg: rgba(255, 255, 255, 0.46);
+  --glass-bg-strong: rgba(255, 255, 255, 0.62);
+  --glass-bg-soft: rgba(255, 255, 255, 0.30);
+  --glass-bg-frost: rgba(255, 255, 255, 0.16);
+  --glass-border: rgba(255, 255, 255, 0.62);
+  --glass-border-soft: rgba(255, 255, 255, 0.36);
+  --glass-blur: 40px;
+  --glass-blur-strong: 56px;
+  --glass-shadow: 0 12px 38px rgba(38, 62, 100, 0.13), 0 1px 2px rgba(38, 62, 100, 0.06);
+  --glass-shadow-lg: 0 26px 76px rgba(38, 62, 100, 0.20), 0 2px 6px rgba(38, 62, 100, 0.07);
+  --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.85), inset 0 -1px 0 rgba(0, 0, 0, 0.04);
+}
+body.lg-liquid.dark {
+  --glass-bg: rgba(28, 33, 44, 0.46);
+  --glass-bg-strong: rgba(32, 38, 50, 0.62);
+  --glass-bg-soft: rgba(255, 255, 255, 0.055);
+  --glass-bg-frost: rgba(255, 255, 255, 0.035);
+  --glass-border: rgba(255, 255, 255, 0.115);
+  --glass-border-soft: rgba(255, 255, 255, 0.06);
+  --glass-shadow: 0 12px 38px rgba(0, 0, 0, 0.46), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --glass-shadow-lg: 0 26px 76px rgba(0, 0, 0, 0.62), 0 2px 6px rgba(0, 0, 0, 0.34);
+  --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.13), inset 0 -1px 0 rgba(0, 0, 0, 0.20);
+}
+
+/* ---------- 关键面板：更强的边缘处理 ---------- */
+body.lg-liquid .list-pane,
+body.lg-liquid .topbar,
+body.lg-liquid .side-nav,
+body.lg-liquid .mobile-tabbar {
+  backdrop-filter: blur(var(--glass-blur)) saturate(190%) contrast(1.04);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(190%) contrast(1.04);
+  border-color: var(--glass-border);
+}
+/* 顶部边缘的一道高光 —— 玻璃的「厚度」就靠这条线 */
+body.lg-liquid .list-pane,
+body.lg-liquid .topbar {
+  position: relative;
+}
+body.lg-liquid .list-pane::before,
+body.lg-liquid .topbar::before {
+  content: '';
+  position: absolute;
+  left: 10%; right: 10%; top: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.75), transparent);
+  pointer-events: none;
+  z-index: 3;
+}
+body.lg-liquid.dark .list-pane::before,
+body.lg-liquid.dark .topbar::before {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.20), transparent);
+}
+
+/* ---------- 按钮 / 可点元素：果冻反馈 ---------- */
+body.lg-liquid .btn,
+body.lg-liquid .icon-btn,
+body.lg-liquid .side-nav-item,
+body.lg-liquid .msg-action-btn,
+body.lg-liquid .emoji-pick,
+body.lg-liquid .ai-tool-btn {
+  transition: transform .18s cubic-bezier(.22, 1, .36, 1),
+              box-shadow .18s ease,
+              background .18s ease,
+              color .18s ease;
+}
+body.lg-liquid .btn:active,
+body.lg-liquid .icon-btn:active,
+body.lg-liquid .side-nav-item:active,
+body.lg-liquid .msg-action-btn:active {
+  transform: scale(.955);
+}
+
+/* ---------- 小圆角的东西：果冻按压更明显 ---------- */
+body.lg-liquid .icon-btn:active,
+body.lg-liquid .cg-emoji-pick:active {
+  transform: scale(.88);
+}
+
+/* ============================================================
+   550C 终端主题 —— 硬边、等宽、不折射。
+   液态玻璃和终端风格是两种语言，混在一起会脏。
+   ============================================================ */
+body.theme-550c .lg-lit-glow { display: none !important; }
+body.theme-550c .lg-glass::after { box-shadow: none !important; }
+body.theme-550c .btn:active,
+body.theme-550c .icon-btn:active,
+body.theme-550c .side-nav-item:active,
+body.theme-550c .msg-action-btn:active {
+  transform: none;
+}
+
+/* ---------- 无障碍：系统说不要动，就别动 ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .lg-lit-glow { display: none !important; }
+  body.lg-liquid .btn:active,
+  body.lg-liquid .icon-btn:active,
+  body.lg-liquid .side-nav-item:active,
+  body.lg-liquid .msg-action-btn:active { transform: none; }
+  .lg-glass.lg-pressed::after { display: none !important; }
+}

@@ -55,6 +55,7 @@ db.exec(`
     name TEXT NOT NULL,
     owner_id INTEGER,
     is_official INTEGER NOT NULL DEFAULT 0,
+    icon_emoji TEXT,
     created_at INTEGER NOT NULL
   );
 
@@ -161,6 +162,8 @@ db.exec(`
   if (!names.has('announcement')) db.exec("ALTER TABLE groups ADD COLUMN announcement TEXT");
   if (!names.has('pinned')) db.exec("ALTER TABLE groups ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0");
   if (!names.has('icon_color')) db.exec("ALTER TABLE groups ADD COLUMN icon_color TEXT");
+  // 群头像 emoji（自建群随机分配，也可以建群时自己挑）
+  if (!names.has('icon_emoji')) db.exec("ALTER TABLE groups ADD COLUMN icon_emoji TEXT");
   if (!names.has('owner_id')) db.exec("ALTER TABLE groups ADD COLUMN owner_id INTEGER");
   // Emoji avatar: a single character chosen by the user, rendered instead of
   // the auto-generated initial. Takes priority over the colour/initial.
@@ -217,10 +220,14 @@ function userPublic(u) {
 }
 function ensureOfficialGroup() {
   const row = db.prepare('SELECT id FROM groups WHERE is_official = 1 LIMIT 1').get();
-  if (row) return row.id;
+  if (row) {
+    // 官方群头像统一是 🛡️ —— 老库里的官方群补一次。
+    db.prepare("UPDATE groups SET icon_emoji = '🛡️' WHERE id = ? AND (icon_emoji IS NULL OR icon_emoji = '')").run(row.id);
+    return row.id;
+  }
   const info = db.prepare(
-    'INSERT INTO groups (name, owner_id, is_official, created_at) VALUES (?, NULL, 1, ?)'
-  ).run('VVeChat 官方群', now());
+    'INSERT INTO groups (name, owner_id, is_official, icon_emoji, created_at) VALUES (?, NULL, 1, ?, ?)'
+  ).run('VVeChat 官方群', '🛡️', now());
   return info.lastInsertRowid;
 }
 let OFFICIAL_GROUP_ID = ensureOfficialGroup();
@@ -448,8 +455,9 @@ function authRequired(req, res, next) {
     // The group-assistant toggle lives on the account, so the message
     // endpoint can honour it without a second lookup.
     try {
-      const row = db.prepare('SELECT ai_in_groups FROM users WHERE id = ?').get(payload.uid);
-      req.user.aiInGroups = !row || row.ai_in_groups !== 0;
+      // 助手在群里恒定应答 —— 设置里的开关已经移除，用户表里的
+      // ai_in_groups 字段保留只为兼容，不再影响行为。
+      req.user.aiInGroups = true;
     } catch (_) { req.user.aiInGroups = true; }
     next();
   } catch (e) {
@@ -1874,7 +1882,7 @@ app.get('/api/friends', authRequired, (req, res) => {
 // groups (joined)
 app.get('/api/groups', authRequired, (req, res) => {
   const rows = db.prepare(`
-    SELECT g.id, g.name, g.is_official, g.owner_id, g.icon_color, g.recommended, g.pinned, g.announcement,
+    SELECT g.id, g.name, g.is_official, g.owner_id, g.icon_color, g.icon_emoji, g.recommended, g.pinned, g.announcement,
            (SELECT COUNT(*) FROM group_members m WHERE m.group_id = g.id) AS member_count
     FROM group_members gm
     JOIN groups g ON g.id = gm.group_id
@@ -1893,15 +1901,36 @@ app.get('/api/groups', authRequired, (req, res) => {
 // off, and approve join requests. Jack can do all of that to every
 // group in the system.
 // ------------------------------------------------------------
+// 自建群的默认头像：随机一个 emoji。建群时用户也可以自己挑一个。
+const GROUP_EMOJI_POOL = [
+  '🦊','🐼','🐨','🦁','🐯','🐸','🐵','🐧','🐦','🦉',
+  '🐶','🐱','🐭','🐹','🐰','🦄','🐝','🦋','🐢','🐙',
+  '🌟','✨','🔥','💎','🎯','🚀','☕️','🍀','🌊','🌙',
+  '👑','🧠','👾','🤖','👻','🎨','🎧','📷','🧩','🗝',
+  '🍎','🍉','🍇','🍓','🍑','🥑','🌵','🌻','🌈','⛅',
+  '🎮','🎧','🎬','📚','✏️','🖊','🧪','🔭','🧭','🗺️'
+];
+function pickGroupEmoji() {
+  return GROUP_EMOJI_POOL[Math.floor(Math.random() * GROUP_EMOJI_POOL.length)];
+}
+
 app.post('/api/groups', rateLimit('write'), authRequired, (req, res) => {
   const name = String((req.body || {}).name || '').trim();
   if (!name) return res.status(400).json({ error: '群名称不能为空' });
   if (name.length > 40) return res.status(400).json({ error: '群名称太长了' });
   const iconColor = String((req.body || {}).icon_color || '') || null;
+  // 用户指定了就用用户的，没指定就随机一个。
+  let iconEmoji = String((req.body || {}).icon_emoji || '').trim();
+  if (iconEmoji) {
+    // 只接受单个 emoji（按码点算长度，避免代理对被截断）
+    const cps = Array.from(iconEmoji);
+    if (cps.length !== 1) iconEmoji = '';
+  }
+  if (!iconEmoji) iconEmoji = pickGroupEmoji();
   const recommended = (req.body || {}).recommended ? 1 : 0;
   const info = db.prepare(
-    'INSERT INTO groups (name, owner_id, is_official, icon_color, recommended, created_at) VALUES (?, ?, 0, ?, ?, ?)'
-  ).run(name, req.user.id, iconColor, recommended, now());
+    'INSERT INTO groups (name, owner_id, is_official, icon_color, icon_emoji, recommended, created_at) VALUES (?, ?, 0, ?, ?, ?, ?)'
+  ).run(name, req.user.id, iconColor, iconEmoji, recommended, now());
   const gid = info.lastInsertRowid;
   db.prepare('INSERT OR IGNORE INTO group_members (group_id, user_id, joined_at) VALUES (?, ?, ?)')
     .run(gid, req.user.id, now());
@@ -1915,7 +1944,7 @@ app.post('/api/groups', rateLimit('write'), authRequired, (req, res) => {
 // ------------------------------------------------------------
 app.get('/api/groups/recommended', authRequired, (req, res) => {
   const rows = db.prepare(`
-    SELECT g.id, g.name, g.is_official, g.owner_id, g.icon_color, g.recommended, g.pinned, g.announcement,
+    SELECT g.id, g.name, g.is_official, g.owner_id, g.icon_color, g.icon_emoji, g.recommended, g.pinned, g.announcement,
            (SELECT COUNT(*) FROM group_members m WHERE m.group_id = g.id) AS member_count,
            (SELECT username FROM users u WHERE u.id = g.owner_id) AS owner_name,
            (SELECT COUNT(*) FROM group_members m WHERE m.group_id = g.id AND m.user_id = ?) AS joined
@@ -2030,6 +2059,7 @@ function groupPublic(g, userId) {
     is_official: g.is_official ? 1 : 0,
     owner_id: g.owner_id == null ? null : Number(g.owner_id),
     icon_color: g.icon_color || null,
+    icon_emoji: g.icon_emoji || null,
     recommended: g.recommended ? 1 : 0,
     pinned: g.pinned ? 1 : 0,
     announcement: g.announcement || null,
@@ -2333,7 +2363,8 @@ app.get('/api/conversations', authRequired, (req, res) => {
     WHERE f.user_id = ? ORDER BY u.username
   `).all(uid);
   const groups = db.prepare(`
-    SELECT g.id, g.name AS username, NULL AS avatar, NULL AS avatar_color, 'group' AS type, g.is_official
+    SELECT g.id, g.name AS username, NULL AS avatar, NULL AS avatar_color, 'group' AS type, g.is_official,
+           g.icon_color, g.icon_emoji
     FROM group_members gm JOIN groups g ON g.id = gm.group_id
     WHERE gm.user_id = ? ORDER BY g.is_official DESC, g.id ASC
   `).all(uid);
@@ -2881,11 +2912,15 @@ io.on('connection', (socket) => {
 // ============================================================
 function cleanupOldMessages() {
   try {
-    // Retain messages for 1 year; auto-clear older ones to save space
+    // 保留 1 年,更早的自动清掉省空间。
+    //
+    // created_at 是 INTEGER(epoch 毫秒) —— 这里必须传毫秒数。
+    // 之前传的是 ISO 字符串('2025-11-01 14:34:16')，而 SQLite 的类型
+    // 序是 NULL < INTEGER/REAL < TEXT < BLOB，所以 `整数 < 字符串` 恒为真，
+    // 结果就是：**每次启动、以及之后每小时,都会把库里所有消息删光**。
     const cutoffMs = Date.now() - 365 * 24 * 60 * 60 * 1000;
-    const cutoffIso = new Date(cutoffMs).toISOString().replace('T', ' ').slice(0, 19);
     // Also clean orphaned reactions pointing to deleted messages
-    const delMsgs = db.prepare("DELETE FROM messages WHERE created_at < ?").run(cutoffIso);
+    const delMsgs = db.prepare("DELETE FROM messages WHERE created_at < ?").run(cutoffMs);
     const delRxns = db.prepare("DELETE FROM message_reactions WHERE message_id NOT IN (SELECT id FROM messages)").run();
     if (delMsgs.changes || delRxns.changes) {
       console.log(`[VVeChat] cleanup: removed ${delMsgs.changes} messages (>1y), ${delRxns.changes} orphan reactions`);

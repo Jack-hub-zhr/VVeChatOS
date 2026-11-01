@@ -3917,6 +3917,19 @@ body.dark .mobile-menu-scrim { background: rgba(0, 0, 0, 0.34); }
   background: var(--glass-bg);
   border-color: var(--glass-border-soft);
 }
+/* A read-only "always on" pill, used where a switch used to be. */
+.more-row-badge {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  color: var(--success);
+  background: rgba(16, 185, 129, 0.13);
+  border: 1px solid rgba(16, 185, 129, 0.30);
+  white-space: nowrap;
+}
 .more-row.static { cursor: default; }
 .more-row.static:hover {
   background: var(--glass-bg-soft);
@@ -4384,6 +4397,34 @@ body.dark .mobile-menu-scrim { background: rgba(0, 0, 0, 0.34); }
   .app-body.ai-active .list-pane { display: none; }
   .app-body.list-open .list-pane { display: flex !important; }
 
+  /* 助手界面里展开的对话列表只占屏幕的 1/3。
+     剩下 2/3 留给对话本身 —— 一边看列表一边看聊天,不用来回切。 */
+  .app-body.ai-active.list-open .list-pane {
+    flex: 0 0 33.33%;
+    width: 33.33%;
+    max-width: 33.33%;
+    min-width: 0;
+    margin: 0;
+    padding: 4px 2px;
+    border-right: 1px solid var(--glass-border);
+    border-left: 0; border-top: 0; border-bottom: 0;
+    border-radius: 0;
+    background: rgba(255, 255, 255, 0.88);
+    backdrop-filter: blur(22px) saturate(180%);
+    -webkit-backdrop-filter: blur(22px) saturate(180%);
+    box-shadow: 6px 0 24px rgba(30, 80, 150, 0.16);
+  }
+  body.dark .app-body.ai-active.list-open .list-pane { background: rgba(18, 22, 30, 0.94); }
+  /* 1/3 的宽度很窄，标题挤成竖排就难看了 —— 强制单行省略。 */
+  .app-body.ai-active.list-open .ai-chat-item,
+  .app-body.ai-active.list-open .ai-chat-title {
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .app-body.ai-active.list-open .ai-chat-item { flex-wrap: nowrap; }
+
   .app-body.chat-open .rail-pane {
     transform: translateY(160%);
     opacity: 0;
@@ -4776,4 +4817,237 @@ body.theme-dark .mention-preview .cancel:hover {
 @media (max-width: 520px) {
   .user-menu { min-width: 170px; max-width: 76vw; }
   .user-menu-item { padding: 11px 10px; font-size: 14px; }
+}
+
+/* ============================================================
+   建群时的群头像选择器
+   ============================================================ */
+.cg-emoji-row {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 5px;
+  padding: 10px;
+  border-radius: 14px;
+  background: var(--glass-bg-soft);
+  border: 1px solid var(--glass-border-soft);
+  max-height: 132px;
+  overflow-y: auto;
+}
+.cg-emoji-pick {
+  aspect-ratio: 1 / 1;
+  min-width: 0;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  font-size: 19px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  transition: background .14s ease, transform .14s ease, border-color .14s ease;
+}
+.cg-emoji-pick:hover { background: var(--accent-soft); transform: scale(1.12); }
+.cg-emoji-pick.on {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  transform: scale(1.12);
+}
+.cg-emoji-foot {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 8px;
+}
+.cg-emoji-hint {
+  font-size: 11.5px;
+  color: var(--muted-2);
+  line-height: 1.4;
+}
+@media (max-width: 520px) {
+  .cg-emoji-row { grid-template-columns: repeat(8, 1fr); }
+}
+
+/* ============================================================
+   新消息弹窗
+   ------------------------------------------------------------
+   屏幕中央的 1:1 小窗 + 背景虚化。5 秒后自动收起。
+   ============================================================ */
+.msg-popup {
+  position: fixed;
+  inset: 0;
+  z-index: 1700;              /* 在 modal(1400) 与用户菜单(1600) 之上 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.msg-popup.hidden { display: none !important; }
+/* 背景虚化：整屏盖一层毛玻璃 */
+.msg-popup-scrim {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+  background: rgba(16, 24, 40, 0.16);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  opacity: 0;
+  transition: opacity .22s ease;
+}
+.msg-popup.show .msg-popup-scrim { opacity: 1; }
+
+/* 1:1 的方窗 */
+.msg-popup-card {
+  position: relative;
+  pointer-events: auto;
+  width: min(76vw, 330px);
+  aspect-ratio: 1 / 1;
+  max-height: 78vh;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 26px;
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(var(--glass-blur-strong)) saturate(200%);
+  -webkit-backdrop-filter: blur(var(--glass-blur-strong)) saturate(200%);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow-lg), var(--glass-highlight);
+  opacity: 0;
+  transform: translateY(14px) scale(.94);
+  transition: opacity .26s cubic-bezier(.22,1,.36,1), transform .26s cubic-bezier(.22,1,.36,1);
+}
+.msg-popup.show .msg-popup-card { opacity: 1; transform: translateY(0) scale(1); }
+
+.msg-popup-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.msg-popup-badge {
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--accent-grad);
+  box-shadow: 0 2px 8px rgba(76,111,255,.32);
+  white-space: nowrap;
+}
+.msg-popup-hint {
+  flex: 1;
+  min-width: 0;
+  font-size: 11.5px;
+  color: var(--muted);
+  line-height: 1.35;
+}
+.msg-popup-count {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted-2);
+  font-variant-numeric: tabular-nums;
+  min-width: 14px;
+  text-align: right;
+}
+/* 倒计时进度条 */
+.msg-popup-progress {
+  height: 3px;
+  border-radius: 3px;
+  background: var(--glass-bg-frost);
+  overflow: hidden;
+}
+.msg-popup-progress > span {
+  display: block;
+  height: 100%;
+  width: 100%;
+  border-radius: 3px;
+  background: var(--accent-grad);
+  transition: width .1s linear;
+}
+
+.msg-popup-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  text-align: center;
+  padding: 4px 0;
+}
+.msg-popup-avatar {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  box-shadow: 0 6px 18px rgba(76,111,255,.30);
+  flex-shrink: 0;
+}
+.msg-popup-main { min-width: 0; max-width: 100%; }
+.msg-popup-from {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 4px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.msg-popup-text {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ink-2);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  word-break: break-word;
+}
+
+.msg-popup-reply {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+}
+.msg-popup-input {
+  flex: 1;
+  min-width: 0;
+  height: 38px;
+  padding: 0 13px;
+  border-radius: 999px;
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg-soft);
+  color: var(--ink);
+  font-size: 13.5px;
+  font-family: inherit;
+}
+.msg-popup-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--glass-bg);
+}
+.msg-popup-send {
+  flex-shrink: 0;
+  height: 38px;
+  padding: 0 15px;
+  border: 0;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: inherit;
+  color: #fff;
+  background: var(--accent-grad);
+  cursor: pointer;
+  box-shadow: 0 3px 10px rgba(76,111,255,.30);
+  transition: transform .14s ease, filter .14s ease;
+}
+.msg-popup-send:hover { filter: brightness(1.06); }
+.msg-popup-send:active { transform: scale(.95); }
+
+@media (max-width: 520px) {
+  .msg-popup-card { width: min(82vw, 300px); padding: 12px; border-radius: 22px; }
+  .msg-popup-avatar { width: 48px; height: 48px; font-size: 19px; }
 }

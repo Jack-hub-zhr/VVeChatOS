@@ -186,13 +186,18 @@
       discover_empty_sub: '你可以自己建一个',
       cg_title: '建个群聊',
       cg_name: '群名称',
+      cg_emoji: '群头像',
+      cg_emoji_random: '🎲 随机换一个',
+      cg_emoji_hint: '不挑也行，开群时自动随机分配',
+      plus_create_group: '建个群聊',
+      plus_create_group_desc: '拉人一起聊，自选群头像',
       cg_name_ph: '给群起个名字',
       cg_recommend: '在 发现页 里推荐',
       cg_recommend_note: '此开关将在群聊的设置里显示',
       cg_create: '创建',
       pref_discover: '发现',
       pref_discover_desc: '看看别人建的群聊，申请加入就能一起聊',
-      nav_personal: '个性化',
+      nav_personal: '设置',
       pref_look: '外观',
       pref_550c: '550C 启动动画主题',
       pref_550c_desc: '重新进入账号时用 550C 开机动画替代欢迎页，并切换为琥珀色终端风格',
@@ -213,6 +218,7 @@
       pref_assistant: '助手',
       pref_ai_groups: '群里可以叫助手',
       pref_ai_groups_desc: '在群聊里 @Qwen，它会读完上下文再回答',
+      pref_ai_groups_always: '始终开启',
       pref_lang: '语言',
       pref_lang_desc: '界面语言',
       pref_about: '关于',
@@ -408,13 +414,18 @@
       discover_empty_sub: 'You can make one yourself',
       cg_title: 'Create a group',
       cg_name: 'Group name',
+      cg_emoji: 'Group avatar',
+      cg_emoji_random: '🎲 Shuffle',
+      cg_emoji_hint: "Don't pick one — we'll assign a random emoji",
+      plus_create_group: 'Create a group',
+      plus_create_group_desc: 'Chat together, pick your own group avatar',
       cg_name_ph: 'Give the group a name',
       cg_recommend: 'Recommend it in Discover',
       cg_recommend_note: 'This switch also shows in the group settings',
       cg_create: 'Create',
       pref_discover: 'Discover',
       pref_discover_desc: 'See the groups other people made and apply to join',
-      nav_personal: 'Personal',
+      nav_personal: 'Settings',
       pref_look: 'Look & feel',
       pref_550c: '550C boot animation',
       pref_550c_desc: 'Show the 550C boot sequence instead of the welcome screen, in amber terminal colours',
@@ -435,6 +446,7 @@
       pref_assistant: 'Assistant',
       pref_ai_groups: 'Let the assistant join groups',
       pref_ai_groups_desc: '@Qwen in a group reads the conversation, then answers',
+      pref_ai_groups_always: 'Always on',
       pref_lang: 'Language',
       pref_lang_desc: 'Interface language',
       pref_about: 'About',
@@ -556,10 +568,23 @@
     if (d.toDateString() === now.toDateString()) return clock();
     return `${d.getMonth()+1}/${d.getDate()}`;
   }
-  // Avatar letter for a group: the official group reads「官」, any other
-  // group「群」. Falls back to initials() for non-Chinese names.
+  // Group avatar content.
+  //   · 官方群  → 🛡️（中英文统一）
+  //   · 自建群  → 群里自己的 emoji（服务端建群时随机分配，也可以自己挑）
+  //   · 没有 emoji 的老群 → 「群」/ 首字母
+  // Returns HTML (the emoji needs the .avatar-emoji wrapper so the font
+  // renders it at the right size).
+  const OFFICIAL_GROUP_EMOJI = '🛡️';
+  function groupAvatarInner(g) {
+    const isOfficial = !!(g && g.is_official);
+    if (isOfficial) return `<span class="avatar-emoji">${OFFICIAL_GROUP_EMOJI}</span>`;
+    const em = g && g.icon_emoji;
+    if (em) return `<span class="avatar-emoji">${escapeHtml(em)}</span>`;
+    return escapeHtml(groupLetter(g && g.name, false));
+  }
+  // Plain-text variant (for textContent assignments).
   function groupLetter(name, isOfficial) {
-    if (isOfficial) return lang === 'en' ? 'O' : '官';
+    if (isOfficial) return OFFICIAL_GROUP_EMOJI;
     if (/[\u4e00-\u9fa5]/.test(name || '')) return lang === 'en' ? 'G' : '群';
     return initials(name);
   }
@@ -759,6 +784,11 @@
     document.body.classList.remove('theme-light', 'theme-dark', 'theme-auto');
     document.body.classList.add('theme-' + mode);
     document.body.classList.toggle('theme-550c', c550);
+    // 液态玻璃：终端主题(550C)是硬边风格，跟液态玻璃是两种语言，
+    // 深色主题下也收敛一点，别把整页都糊成毛玻璃。
+    try {
+      if (window.LiquidGlass) window.LiquidGlass.setTheme(c550 ? '550c' : 'light');
+    } catch (_) {}
     // Update checkmarks in the menu
     $$('.theme-menu-item').forEach(b => b.classList.toggle('active', b.dataset.theme === mode));
     if (window.LiquidGlass) { try { window.LiquidGlass.markDirty(); } catch (_) {} }
@@ -863,7 +893,36 @@
   }
 
   // ---------- rendering ----------
-  function renderAll() { renderChats(); renderBell(); renderTopbarAvatar(); renderSideMe(); setListMode('chats'); }
+  function renderAll() { renderChats(); renderBell(); renderTopbarAvatar(); renderSideMe(); setListMode('chats'); applyLiquidGlass(); }
+
+  // ============================================================
+  // 液态玻璃
+  // ------------------------------------------------------------
+  // 把界面里的玻璃面板和可点元素登记给引擎：面板之间会互相照亮，
+  // 按钮按下去会有果冻形变 + 体积光。
+  // 折射（SVG 位移贴图）只给少数小卡片用 —— 逐像素算一次的成本不低，
+  // 铺满整个界面会拖垮手机。
+  // ============================================================
+  let _lgApplied = false;
+  function applyLiquidGlass() {
+    if (!window.LiquidGlass) return;
+    const LG = window.LiquidGlass;
+    // 会互相照亮的玻璃面板
+    const panels = ['.topbar', '.list-pane', '.side-nav', '.mobile-tabbar', '.rail-pane'];
+    for (const sel of panels) {
+      document.querySelectorAll(sel).forEach(el => LG.register(el, { glow: true }));
+    }
+    // 会果冻形变的可点元素
+    const pressables = '.side-nav-item, .topbar .icon-btn, .btn, .ai-tool-btn, .msg-action-btn, ' +
+                       '.emoji-pick, .cg-emoji-pick, .list-toggle, .settings-action, .plus-action';
+    document.querySelectorAll(pressables).forEach(el => LG.register(el, { press: true }));
+    _lgApplied = true;
+  }
+  // 弹窗类的小卡片可以上真折射 —— 面积小，成本可控。
+  function applyLiquidGlassToCard(el) {
+    if (!window.LiquidGlass || !el) return;
+    window.LiquidGlass.register(el, { glow: true, press: false, refract: true });
+  }
 
   // The identity card at the top of the sidebar.
   function renderSideMe() {
@@ -984,7 +1043,7 @@
       ? '<span style="color:var(--accent);font-weight:700;">[有人@我] </span>' : '';
     const unreadHtml = c.unread > 0 ? `<span class="unread">${c.unread>99?'99+':c.unread}</span>` : '';
     const inner = isGroup
-      ? escapeHtml(groupLetter(c.username, isOfficial))
+      ? groupAvatarInner({ name: c.username, is_official: isOfficial, icon_emoji: c.icon_emoji })
       : avatarInner(c);
     li.innerHTML = `<div class="${avatarCls}"${avatarBg} data-user-avatar="${isGroup ? '' : c.id}">${inner}${dot}</div>
       <div class="meta"><div class="name">${escapeHtml(c.username)} ${officialTag}</div>
@@ -1088,7 +1147,7 @@
       const senderPrefix = c.last_sender_id && c.last_sender_id !== state.user.id && isGroup
         ? `<span style="color:var(--accent);font-weight:600;">${escapeHtml(userInfo(c.last_sender_id).username)}:</span> ` : '';
       const unreadHtml = c.unread > 0 ? `<span class="unread">${c.unread>99?'99+':c.unread}</span>` : '';
-      li.innerHTML = `<div class="${avatarCls}"${avatarBg} data-user-avatar="${isGroup ? '' : c.id}">${escapeHtml(isGroup ? groupLetter(c.username, isOfficial) : initials(c.username))}${dot}</div>
+      li.innerHTML = `<div class="${avatarCls}"${avatarBg} data-user-avatar="${isGroup ? '' : c.id}">${isGroup ? groupAvatarInner({ name: c.username, is_official: isOfficial, icon_emoji: c.icon_emoji }) : escapeHtml(initials(c.username))}${dot}</div>
         <div class="meta"><div class="name">${escapeHtml(c.username)} ${officialTag}</div>
         <div class="preview">${senderPrefix}${escapeHtml(preview)}</div></div>
         <div class="time">${fmtTime(c.last_at)}</div>${unreadHtml}`;
@@ -1140,7 +1199,7 @@
       const color = g.icon_color || '#8b5cf6';
       const bg = `background:linear-gradient(135deg, ${color}, ${shade(color, -25)});`;
       const owner = g.owner_name ? (lang === 'en' ? 'by ' + g.owner_name : g.owner_name + ' 建的') : '';
-      card.innerHTML = `<div class="avatar" style="${bg}">${escapeHtml((g.name || '?').slice(0, 1))}</div>
+      card.innerHTML = `<div class="avatar" style="${bg}">${groupAvatarInner({ name: g.name, is_official: g.is_official, icon_emoji: g.icon_emoji })}</div>
         <div class="discover-card-main">
           <div class="discover-card-name">${escapeHtml(g.name)}</div>
           <div class="discover-card-meta">${escapeHtml(owner)} · ${g.member_count || 0} ${lang === 'en' ? 'members' : '人'}</div>
@@ -1219,7 +1278,7 @@
     const head = document.createElement('div');
     head.className = 'group-info-head';
     const gBg = g.icon_color ? `background:linear-gradient(135deg, ${g.icon_color || '#8b5cf6'}, ${shade(g.icon_color || '#8b5cf6', -25)});` : '';
-    head.innerHTML = `<div class="gi-avatar" style="${gBg}">${escapeHtml((g.name || '?').slice(0,1))}</div>
+    head.innerHTML = `<div class="gi-avatar" style="${gBg}">${groupAvatarInner({ name: g.name, is_official: isOfficial, icon_emoji: g.icon_emoji })}</div>
       <div class="gi-name" id="gi-name">${escapeHtml(g.name || '—')}</div>
       <div class="gi-meta">${g.member_count || 0} ${lang==='zh'?'人':'members'}</div>`;
     wrap.appendChild(head);
@@ -1512,11 +1571,13 @@
       // Set only the properties we need — assigning cssText would wipe the
       // class-driven width/height/font-size, which is what blew the single
       // character up into a giant emoji.
+      const curGroup = state.groups.find(g => Number(g.id) === Number(id));
+      const gEmoji = (curGroup && curGroup.icon_emoji) || (state.currentChat && state.currentChat.icon_emoji) || '';
       avatar.style.background = isOfficial
         ? 'linear-gradient(135deg, #fde68a, #fb923c)'
-        : '';
+        : (gEmoji ? 'rgba(255,255,255,0.42)' : '');
       avatar.style.display = 'flex';
-      avatar.textContent = groupLetter(title, isOfficial);
+      avatar.innerHTML = groupAvatarInner({ name: title, is_official: isOfficial, icon_emoji: gEmoji });
       avatar.removeAttribute('data-user-avatar');
       avatar.onclick = null;
     }
@@ -1745,6 +1806,7 @@
   // behaves: how dense it is, how big the text is, and whether the
   // clock is 12 or 24 hour. All three are applied as body classes /
   // CSS variables, so nothing has to be re-rendered.
+  // ai_in_groups 恒为 true：助手在群里始终应答（设置里的开关已移除）。
   const prefs = { density: 'normal', font_scale: 1, clock24: true, ai_in_groups: true };
 
   function applyPrefs() {
@@ -1761,7 +1823,7 @@
     if (user.density) prefs.density = user.density;
     if (user.font_scale) prefs.font_scale = Number(user.font_scale) || 1;
     if (user.clock24 !== undefined) prefs.clock24 = !!user.clock24;
-    if (user.ai_in_groups !== undefined) prefs.ai_in_groups = !!user.ai_in_groups;
+    prefs.ai_in_groups = true;   // 恒定开启，忽略服务器上的旧值
     applyPrefs();
   }
 
@@ -1775,8 +1837,6 @@
   function renderPrefPanel() {
     const sw = $('#toggle-boot-550c');
     if (sw) sw.checked = boot550cOn();
-    const aiSw = $('#toggle-ai-in-groups');
-    if (aiSw) aiSw.checked = !!prefs.ai_in_groups;
     const mark = (sel, val) => {
       $$(sel + ' button').forEach((b) => b.classList.toggle('on', String(b.dataset.v) === String(val)));
     };
@@ -2068,7 +2128,7 @@
       </div>`;
     }).join('') || `<div class="empty-hint small"><p>${t('no_friends_yet') || '还没有好友'}</p></div>`;
     const groupsHtml = (state.groups || []).map(g => `<div class="req-item" data-gid="${g.id}">
-      <div class="avatar sm group">${escapeHtml(groupLetter(g.name, g.is_official))}</div>
+      <div class="avatar sm group">${groupAvatarInner({ name: g.name, is_official: g.is_official, icon_emoji: g.icon_emoji })}</div>
       <div class="meta"><div class="name">${escapeHtml(g.name)}</div></div>
     </div>`).join('') || `<div class="empty-hint small"><p>${t('no_groups_yet') || '还没有群聊'}</p></div>`;
     modal.querySelector('#forward-friends').innerHTML = friendsHtml;
@@ -2473,6 +2533,7 @@
     document.body.appendChild(menu);
     _userMenuEl = menu;
     positionUserMenu(menu, anchor);
+    applyLiquidGlassToCard(menu);
     menu.addEventListener('click', async (e) => {
       const btn = e.target.closest('[data-act]');
       if (!btn) return;
@@ -2812,11 +2873,152 @@
         ((msg.conv_type==='user' && state.currentChat.id===peerId) ||
          (msg.conv_type==='group' && state.currentChat.id===msg.conv_id));
       if (inChat) { renderMessages(); scrollBottom(); sendReadReceipt(msg); }
-      else refreshConversations();
+      else {
+        refreshConversations();
+        // 这条消息用户还没看到 —— 弹个小窗提示一下，可以直接快速回复。
+        showMessagePopup(msg, peerId);
+      }
     } else {
       refreshConversations();
     }
   }
+  // ============================================================
+  // 新消息弹窗
+  // ------------------------------------------------------------
+  // 收到「当前对话之外」的新消息时，屏幕中央弹一个 1:1 的小窗：
+  // 背景虚化、可以直接快速回复、5 秒后自动收起。
+  // 点小窗本身跳到那个对话；点遮罩收起。
+  // ============================================================
+  const MSG_POPUP_LIFE = 5000;      // 弹窗停留时间
+  let _msgPopupBound = false;
+  let _msgPopupTimer = null;
+  let _msgPopupTick = null;
+  let _msgPopupData = null;
+
+  function closeMessagePopup() {
+    const box = $('#msg-popup');
+    if (box) box.classList.add('hidden');
+    if (_msgPopupTimer) { clearTimeout(_msgPopupTimer); _msgPopupTimer = null; }
+    if (_msgPopupTick) { clearInterval(_msgPopupTick); _msgPopupTick = null; }
+    _msgPopupData = null;
+  }
+
+  function showMessagePopup(msg, peerId) {
+    const box = $('#msg-popup');
+    if (!box) return;
+    const convType = msg.conv_type;
+    const convId = convType === 'user' ? peerId : msg.conv_id;
+    const isGroup = convType === 'group';
+
+    // 标题：私聊是对方，群聊是群名
+    let title = msg.sender_username || '';
+    let avatarText = initials(title);
+    let avatarBg = '';
+    if (isGroup) {
+      const g = (state.groups || []).find(x => Number(x.id) === Number(msg.conv_id));
+      title = (g && g.name) || (lang === 'en' ? 'A group' : '某个群');
+      avatarText = '群';
+      avatarBg = g && g.icon_color ? `background:linear-gradient(135deg, ${g.icon_color}, ${shade(g.icon_color, -25)});` : '';
+    } else {
+      const u = (state.friends || []).find(x => Number(x.id) === Number(peerId));
+      if (u) { avatarText = initials(u.username); avatarBg = avatarStyle(u); }
+    }
+
+    const from = $('#msg-popup-from'); if (from) from.textContent = title;
+    const text = $('#msg-popup-text');
+    if (text) {
+      const raw = msg.type === 'image' ? (lang === 'en' ? '[image]' : '[图片]') : String(msg.content || '');
+      text.textContent = raw.length > 120 ? raw.slice(0, 120) + '…' : raw;
+    }
+    const av = $('#msg-popup-avatar');
+    if (av) { av.textContent = avatarText; av.style.cssText = avatarBg; }
+    const badge = $('#msg-popup-badge');
+    if (badge) badge.textContent = lang === 'en' ? 'New message' : '新消息';
+    const hint = $('#msg-popup-hint');
+    if (hint) hint.textContent = lang === 'en'
+      ? 'Tap to open the chat · closes in 5s'
+      : '点击打开对话 · 5 秒后自动关闭';
+
+    _msgPopupData = { convType, convId, title, isGroup };
+
+    // 重新计时：又来新消息就把倒计时重置
+    if (_msgPopupTimer) clearTimeout(_msgPopupTimer);
+    if (_msgPopupTick) clearInterval(_msgPopupTick);
+    box.classList.remove('hidden');
+    // 下一帧再加 show，才有进场动画
+    requestAnimationFrame(() => box.classList.add('show'));
+    applyLiquidGlassToCard($('#msg-popup-card'));
+
+    const t0 = Date.now();
+    const countEl = $('#msg-popup-count');
+    const barEl = $('#msg-popup-bar');
+    _msgPopupTick = setInterval(() => {
+      const left = Math.max(0, MSG_POPUP_LIFE - (Date.now() - t0));
+      const sec = Math.ceil(left / 1000);
+      if (countEl) countEl.textContent = String(sec);
+      if (barEl) barEl.style.width = (left / MSG_POPUP_LIFE * 100).toFixed(1) + '%';
+      if (left <= 0) { clearInterval(_msgPopupTick); _msgPopupTick = null; }
+    }, 100);
+    _msgPopupTimer = setTimeout(() => closeMessagePopup(), MSG_POPUP_LIFE);
+  }
+
+  function openMessagePopupTarget() {
+    const d = _msgPopupData;
+    if (!d) return;
+    closeMessagePopup();
+    if (d.isGroup) {
+      const g = (state.groups || []).find(x => Number(x.id) === Number(d.convId));
+      openChat('group', d.convId, d.title, g && g.is_official ? 1 : 0);
+    } else {
+      openChat('user', d.convId, d.title, 0);
+    }
+  }
+
+  function bindMessagePopup() {
+    if (_msgPopupBound) return;
+    _msgPopupBound = true;
+    const card = $('#msg-popup-card');
+    if (card) {
+      card.addEventListener('click', (e) => {
+        // 点输入框/发送按钮不要触发「打开对话」
+        if (e.target.closest('.msg-popup-reply')) return;
+        e.stopPropagation();
+        openMessagePopupTarget();
+      });
+      card.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openMessagePopupTarget(); }
+      });
+    }
+    const scrim = $('#msg-popup-scrim');
+    if (scrim) scrim.addEventListener('click', () => closeMessagePopup());
+    const form = $('#msg-popup-reply');
+    if (form) {
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const input = $('#msg-popup-input');
+        const text = (input && input.value || '').trim();
+        const d = _msgPopupData;
+        if (!text || !d) return;
+        if (input) { input.value = ''; input.disabled = true; }
+        try {
+          await api('/messages', {
+            method: 'POST',
+            body: { conv_type: d.convType, conv_id: d.convId, content: text }
+          });
+          toast(lang === 'en' ? 'Sent' : '已发送');
+          closeMessagePopup();
+        } catch (err) {
+          if (input) input.disabled = false;
+          toast(err.message || (lang === 'en' ? 'Send failed' : '发送失败'));
+        }
+      });
+    }
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeMessagePopup();
+    });
+  }
+
   // Somebody wants into one of my groups. Show it — the owner (and Jack)
   // approve it from the group's settings.
   function onGroupJoinRequest(req) {
@@ -3435,6 +3637,46 @@
   // ============================================================
   let _aiChats = [];
   let _aiChatId = null;
+  // 当前对话是不是空的 —— 空对话才显示问候语。
+  let _aiChatEmpty = true;
+
+  // 助手打招呼的句子。每次打开助手都随机挑一句，中英文各一套。
+  const AI_GREETINGS_ZH = [
+    '有什么可以帮你？',
+    '在的,说吧。',
+    '今天想聊点什么？',
+    '需要我做什么？',
+    '随时待命,问点什么吧。',
+    '我在,尽管开口。',
+    '有问题尽管问。',
+    '开工吧 —— 想让我干点什么？',
+    '来活儿了?我准备好了。',
+    '说吧,我听着呢。'
+  ];
+  const AI_GREETINGS_EN = [
+    'What can I help with?',
+    "I'm here — what's up?",
+    'What are we working on today?',
+    'What can I do for you?',
+    'Ready when you are. Ask me anything.',
+    "Shoot — what's on your mind?",
+    'Hit me with a question.',
+    "Let's get started. What do you need?",
+    'Got a task? I am ready.',
+    'Go ahead, I am listening.'
+  ];
+  function aiGreeting() {
+    const list = lang === 'en' ? AI_GREETINGS_EN : AI_GREETINGS_ZH;
+    return list[Math.floor(Math.random() * list.length)];
+  }
+  function aiWelcomeHtml() {
+    return '<div class="ai-welcome"><p class="ai-welcome-title">' + escapeHtml(aiGreeting()) + '</p></div>';
+  }
+  function aiRenderWelcome() {
+    const log = aiLogEl();
+    if (!log) return;
+    log.innerHTML = aiWelcomeHtml();
+  }
 
   async function aiLoadChats() {
     try {
@@ -3533,10 +3775,11 @@
           if (b) b.textContent = m.content;
         }
       }
+      _aiChatEmpty = !msgs.length;
       if (!msgs.length) {
         const w = document.createElement('div');
         w.className = 'ai-welcome';
-        w.innerHTML = '<p class="ai-welcome-title">' + escapeHtml(t('ai_welcome')) + '</p>';
+        w.innerHTML = '<p class="ai-welcome-title">' + escapeHtml(aiGreeting()) + '</p>';
         if (log) { const old = log.querySelector('.ai-welcome'); if (old) old.remove(); log.appendChild(w); }
       }
       if (log) aiAutoScroll(true);
@@ -3551,10 +3794,8 @@
       const r = await api('/ai/chats', { method: 'POST', body: { model: (aiCurrentModel() || {}).id || '' } });
       _aiChatId = r.chat ? r.chat.id : null;
       await aiLoadChats();
-      const log = aiLogEl();
-      if (log) {
-        log.innerHTML = '<div class="ai-welcome"><p class="ai-welcome-title">' + escapeHtml(t('ai_welcome')) + '</p></div>';
-      }
+      _aiChatEmpty = true;
+      aiRenderWelcome();
     } catch (e) {
       toast(e.message || '新建对话失败');
     }
@@ -3565,8 +3806,8 @@
       await api(`/ai/chats/${chatId}`, { method: 'DELETE' });
       if (String(chatId) === String(_aiChatId)) {
         _aiChatId = null;
-        const log = aiLogEl();
-        if (log) log.innerHTML = '<div class="ai-welcome"><p class="ai-welcome-title">' + escapeHtml(t('ai_welcome')) + '</p></div>';
+        _aiChatEmpty = true;
+        aiRenderWelcome();
       }
       await aiLoadChats();
     } catch (e) {
@@ -3944,7 +4185,7 @@
 
   // The Qwen panel lives in the SAME big right-hand panel as the chat.
   // Opening it hides the chat view and shows the AI view (and vice versa).
-  function openAiView() {
+  async function openAiView() {
     const ai = $('#ai-view');
     if (!ai) return;
     ai.classList.remove('hidden');
@@ -3965,13 +4206,19 @@
     }
     ensureAiPanelBound();
     aiCheckStatus();
-    aiLoadChats();
-    // If no chat is open yet, open (or create) the first one so a message
-    // always lands somewhere the user can find again.
+    // 等列表真的加载完再决定要不要新建对话。
+    // 之前这里是同步读的 —— 列表还没返回,_aiChats 还是空的,于是每次
+    // 打开助手都会走「没有对话 → 新建一条」,哪怕上一次那条还是空的。
+    await aiLoadChats();
     if (!_aiChatId) {
-      const first = _aiChats && _aiChats[0];
-      if (first) aiOpenChat(first.id);
+      // 自动识别：直接复用上一次那个对话（哪怕它一条消息都没有），
+      // 不要凭空再造一条空的出来。
+      const last = _aiChats && _aiChats[0];
+      if (last) await aiOpenChat(last.id);
       else aiNewChat();
+    } else if (_aiChatEmpty) {
+      // 是个空对话 → 换一句新的问候语
+      aiRenderWelcome();
     }
     // Sidebar user chip at the bottom of the conversation list.
     const sideName = $('#ai-side-name');
@@ -4207,6 +4454,8 @@
     // bindAppEvents() bailed out part-way through.
     ensureModalCloseBound();
     ensurePlusActionsBound();
+    bindMessagePopup();
+    applyLiquidGlass();
     ensureWipeBound();
     ensureBellBound();
     ensureMobileMenuBound();
@@ -4258,6 +4507,48 @@
   // branches are no longer referenced here — calling the deleted functions
   // would have thrown.
   let _plusBound = false;
+  // ------------------------------------------------------------
+  // 建群时的群头像选择器
+  // ------------------------------------------------------------
+  // 一排 emoji 让用户挑一个;不挑的话服务端会随机分配一个。
+  const CG_EMOJI_CHOICES = [
+    '🦊','🐼','🐨','🦁','🐯','🐸','🐵','🐧','🐦','🦉',
+    '🐶','🐱','🐭','🐹','🐰','🦄','🐝','🦋','🐢','🐙',
+    '🌟','✨','🔥','💎','🎯','🚀','☕️','🍀','🌊','🌙',
+    '👑','🧠','👾','🤖','👻','🎨','🎧','📷','🧩','🗝'
+  ];
+  let _cgEmoji = '';
+  function renderGroupEmojiPicker() {
+    const row = $('#cg-emoji-row');
+    if (!row) return;
+    row.innerHTML = '';
+    const mk = (em, on) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'cg-emoji-pick' + (on ? ' on' : '');
+      b.textContent = em;
+      b.title = em;
+      b.setAttribute('aria-label', em);
+      b.addEventListener('click', () => {
+        _cgEmoji = em;
+        $$('.cg-emoji-pick', row).forEach(x => x.classList.toggle('on', x === b));
+      });
+      return b;
+    };
+    for (const em of CG_EMOJI_CHOICES) row.appendChild(mk(em, em === _cgEmoji));
+    // 「随机」按钮：随机选一个，不是清空。
+    const rnd = $('#cg-emoji-random');
+    if (rnd && !rnd._bound) {
+      rnd._bound = true;
+      rnd.addEventListener('click', () => {
+        let em = CG_EMOJI_CHOICES[Math.floor(Math.random() * CG_EMOJI_CHOICES.length)];
+        if (em === _cgEmoji) em = CG_EMOJI_CHOICES[(CG_EMOJI_CHOICES.indexOf(em) + 1) % CG_EMOJI_CHOICES.length];
+        _cgEmoji = em;
+        $$('.cg-emoji-pick', row).forEach(x => x.classList.toggle('on', x.textContent === em));
+      });
+    }
+  }
+
   function ensurePlusActionsBound() {
     if (_plusBound) return;
     _plusBound = true;
@@ -4267,6 +4558,15 @@
       e.preventDefault(); e.stopPropagation();
       const act = btn.dataset.action;
       closeModal('modal-plus');
+      if (act === 'group') {
+        // 「搜索 / 添加」里也能直接建群
+        const name = $('#cg-name');
+        if (name) name.value = '';
+        renderGroupEmojiPicker();
+        openModal('modal-create-group');
+        setTimeout(() => $('#cg-name')?.focus(), 80);
+        return;
+      }
       if (act === 'friend') {
         const u = $('#add-friend-username');
         if (u) u.value = '';
@@ -4550,15 +4850,8 @@
         }
       });
     }
-    // 助手在群里应答的开关
-    const tAi = $('#toggle-ai-in-groups');
-    if (tAi) {
-      tAi.checked = !!prefs.ai_in_groups;
-      bindOnce(tAi, 'change', () => {
-        savePrefs({ ai_in_groups: tAi.checked ? 1 : 0 });
-        toast(tAi.checked ? '群里 @Qwen 会有人应答' : '群里不会再呼叫助手');
-      });
-    }
+    // 「在群里呼叫助手」的开关被移除了 —— 助手在群里始终应答。
+    // 保留 prefs.ai_in_groups 只是为了兼容服务器上已有的用户字段。
     // 分段选择器：密度 / 字号 / 时钟 / 语言
     const segs = [
       ['#pref-density', (v) => savePrefs({ density: v })],
@@ -4615,6 +4908,7 @@
       e.stopPropagation();
       const name = $('#cg-name');
       if (name) { name.value = ''; name.focus(); }
+      renderGroupEmojiPicker();
       openModal('modal-create-group');
     });
     bindOnce($('#create-group-form'), 'submit', async (e) => {
@@ -4622,8 +4916,10 @@
       const name = ($('#cg-name')?.value || '').trim();
       if (!name) { toast(lang === 'en' ? 'Give the group a name' : '给群起个名字'); return; }
       const recommended = !!$('#cg-recommend')?.checked;
+      // 选了哪个 emoji 就用哪个；没选就让服务端随机分配。
+      const iconEmoji = _cgEmoji || '';
       try {
-        const r = await api('/groups', { method: 'POST', body: { name, recommended } });
+        const r = await api('/groups', { method: 'POST', body: { name, recommended, icon_emoji: iconEmoji } });
         closeModal('modal-create-group');
         toast(lang === 'en' ? 'Group created' : '群建好了');
         await refreshGroups();
