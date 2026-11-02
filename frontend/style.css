@@ -3456,6 +3456,9 @@ body.dark .tag-official { color: #fcd34d; background: rgba(245, 158, 11, 0.16); 
   background: transparent;
 }
 .ai-head-text { min-width: 0; }
+/* The 「新对话」 button in the header is a phone affordance — on the
+   desktop the same button already lives at the top of the list. */
+.ai-new-btn { display: none; }
 .ai-head-title {
   font-size: 17px; font-weight: 800; color: var(--ink);
   letter-spacing: -0.02em;
@@ -4405,6 +4408,36 @@ body.dark .mobile-menu-scrim { background: rgba(0, 0, 0, 0.34); }
      back arrow and the tab bar cover those) but keep this, tucked in
      next to the title instead of sitting alone on the far left. */
   #ai-sidebar-toggle { display: flex !important; order: 99; }
+
+  /* ---- 手机版的助手顶栏(照 P1)----
+     [☰]  对话标题            [＋]
+     左边那个圆按钮折叠/展开对话列表(展开时列表占屏幕 1/3),
+     右边是「新对话」。中间显示的是当前对话的名字,不是「Qwen」。 */
+  .ai-head { padding: 10px 12px; gap: 10px; }
+  .ai-head-left { gap: 10px; }
+  .ai-head-mark { display: none; }          /* 顶栏不重复那个发光环 */
+  .ai-head-sub { display: none; }           /* 状态文字在手机上省掉 */
+  .ai-head-title { font-size: 16px; font-weight: 700; }
+  #ai-sidebar-toggle {
+    order: -1;                              /* 挪到最左边 */
+    width: 36px; height: 36px;
+    border-radius: 999px;                   /* 圆形按钮 */
+    border: 1px solid var(--glass-border-soft);
+    background: var(--glass-bg-strong);
+    color: var(--ink-2);
+    box-shadow: var(--glass-shadow);
+  }
+  .ai-new-btn {
+    display: flex;
+    width: 36px; height: 36px;
+    border-radius: 999px;
+    border: 1px solid var(--glass-border-soft);
+    background: var(--glass-bg-strong);
+    color: var(--ink);
+    box-shadow: var(--glass-shadow);
+  }
+  /* 顶栏右边只留「新对话」,「返回聊天」由底部标签栏负责。 */
+  #ai-close { display: none; }
   /* On a phone the assistant view fills the screen; its conversation
      list is pulled in with the switch next to the title. (The list pane
      is a SIBLING of the content pane, not a child, so the rule has to

@@ -32,6 +32,7 @@
       cancel: '取消',
       cancel_at: '取消 @',
       tag_official: '官方',
+      official_group_name: 'VVeChat 官方群',
       ok: '确定',
       send_request: '发送申请',
       auth_username: '用户名',
@@ -260,6 +261,7 @@
       cancel: 'Cancel',
       cancel_at: 'Cancel @',
       tag_official: 'Official',
+      official_group_name: 'VVeChat Official Group',
       ok: 'OK',
       send_request: 'Send request',
       auth_username: 'Username',
@@ -937,6 +939,9 @@
   function applyLiquidGlass() {
     if (!window.LiquidGlass) return;
     const LG = window.LiquidGlass;
+    // 主题可能比液态玻璃引擎先应用完(引擎是异步加载的)——
+    // 那样 setTheme 就没赶上,整页的玻璃模式会卡在错的状态。补一次。
+    try { LG.setTheme(boot550cOn() ? '550c' : 'light'); } catch (_) {}
     // 会互相照亮的玻璃面板
     const panels = ['.topbar', '.list-pane', '.side-nav', '.mobile-tabbar', '.rail-pane'];
     for (const sel of panels) {
@@ -1076,7 +1081,7 @@
       ? groupAvatarInner({ name: c.username, is_official: isOfficial, icon_emoji: c.icon_emoji })
       : avatarInner(c);
     li.innerHTML = `<div class="${avatarCls}"${avatarBg} data-user-avatar="${isGroup ? '' : c.id}">${inner}${dot}</div>
-      <div class="meta"><div class="name">${escapeHtml(c.username)} ${officialTag}</div>
+      <div class="meta"><div class="name">${escapeHtml(groupDisplayName(c.username, isOfficial))} ${officialTag}</div>
       <div class="preview">${atMePrefix}${senderPrefix}${escapeHtml(preview)}</div></div>
       <div class="time">${fmtTime(c.last_at)}</div>${unreadHtml}`;
     li.addEventListener('click', () => {
@@ -1178,7 +1183,7 @@
         ? `<span style="color:var(--accent);font-weight:600;">${escapeHtml(userInfo(c.last_sender_id).username)}:</span> ` : '';
       const unreadHtml = c.unread > 0 ? `<span class="unread">${c.unread>99?'99+':c.unread}</span>` : '';
       li.innerHTML = `<div class="${avatarCls}"${avatarBg} data-user-avatar="${isGroup ? '' : c.id}">${isGroup ? groupAvatarInner({ name: c.username, is_official: isOfficial, icon_emoji: c.icon_emoji }) : escapeHtml(initials(c.username))}${dot}</div>
-        <div class="meta"><div class="name">${escapeHtml(c.username)} ${officialTag}</div>
+        <div class="meta"><div class="name">${escapeHtml(groupDisplayName(c.username, isOfficial))} ${officialTag}</div>
         <div class="preview">${senderPrefix}${escapeHtml(preview)}</div></div>
         <div class="time">${fmtTime(c.last_at)}</div>${unreadHtml}`;
       li.addEventListener('click', () => openChat(c.type, c.id, c.username, isOfficial));
@@ -1309,7 +1314,7 @@
     head.className = 'group-info-head';
     const gBg = g.icon_color ? `background:linear-gradient(135deg, ${g.icon_color || '#8b5cf6'}, ${shade(g.icon_color || '#8b5cf6', -25)});` : '';
     head.innerHTML = `<div class="gi-avatar" style="${gBg}">${groupAvatarInner({ name: g.name, is_official: isOfficial, icon_emoji: g.icon_emoji })}</div>
-      <div class="gi-name" id="gi-name">${escapeHtml(g.name || '—')}</div>
+      <div class="gi-name" id="gi-name">${escapeHtml(groupDisplayName(g.name, isOfficial) || '—')}</div>
       <div class="gi-meta">${g.member_count || 0} ${lang==='zh'?'人':'members'}</div>`;
     wrap.appendChild(head);
 
@@ -1493,7 +1498,7 @@
     try {
       await api(`/groups/${g.id}`, { method: 'PUT', body: { name: newName.trim() } });
       g.name = newName.trim();
-      $('#gi-name').textContent = g.name;
+      $('#gi-name').textContent = groupDisplayName(g.name, !!g.is_official);
       row.querySelector('#gi-rename-value').textContent = g.name;
       renderChatHeader(); refreshGroups();
       toast(lang==='zh'?'已修改':'Saved');
@@ -1599,21 +1604,29 @@
   }
   function convKey(type, id) { return `${type}:${id}`; }
 
+  // 官方群的名字存在库里是中文 —— 英文模式下要显示英文。
+  // 只翻译「默认名」;Jack 改过名字就照原样显示。
+  function groupDisplayName(name, isOfficial) {
+    if (isOfficial && name === 'VVeChat 官方群') return t('official_group_name');
+    return name;
+  }
+
   function renderChatHeader() {
     if (!state.currentChat) return;
     const { type, id, title, isOfficial } = state.currentChat;
     const titleEl = $('#chat-title');
+    const dispTitle = groupDisplayName(title, isOfficial);
     // Official group: shield sits between the brand and the group type,
     // e.g. "VVeChat 🛡 官方群", rendered as a small inline badge.
     if (isOfficial) {
-      const m = /^(.*?)(官方群|群)$/.exec(title);
-      const head = m ? m[1].trim() : title;
+      const m = /^(.*?)(官方群|群|Official Group)$/.exec(dispTitle);
+      const head = m ? m[1].trim() : dispTitle;
       const tail = m ? m[2] : '';
       titleEl.innerHTML = tail
         ? `${escapeHtml(head)}<span class="title-shield">🛡</span>${escapeHtml(tail)}`
-        : escapeHtml(title);
+        : escapeHtml(dispTitle);
     } else {
-      titleEl.textContent = title;
+      titleEl.textContent = dispTitle;
     }
     titleEl.dataset.tOrig = title;
     titleEl.dataset.tState = 'zh';
@@ -2930,6 +2943,15 @@
       const g = state.groups.find(x => Number(x.id) === Number(group_id));
       if (g) g.owner_id = owner_id;
     });
+    // Qwen 给这条对话起好名字了 —— 把列表里那一条改掉
+    s.on('ai:chat-title', ({ chat_id, title } = {}) => {
+      if (!title) return;
+      const c = (_aiChats || []).find(x => String(x.id) === String(chat_id));
+      if (c) c.title = title;
+      else (_aiChats || ( _aiChats = [])).push({ id: chat_id, title });
+      aiRenderChats();
+      aiUpdateHeadTitle();
+    });
     // 群被解散了 —— 把对话收起来
     s.on('group:disbanded', ({ group_id, name }) => {
       dropGroupLocally(group_id);
@@ -3813,6 +3835,15 @@
   function aiWelcomeHtml() {
     return '<div class="ai-welcome"><p class="ai-welcome-title">' + escapeHtml(aiGreeting()) + '</p></div>';
   }
+  // 手机版的顶栏显示当前对话的名字(照 P1),桌面版还是「Qwen」。
+  function aiUpdateHeadTitle() {
+    const el = $('#ai-head-title');
+    if (!el) return;
+    if (window.innerWidth > 820) { el.textContent = 'Qwen'; return; }
+    const c = (_aiChats || []).find(x => String(x.id) === String(_aiChatId));
+    el.textContent = (c && c.title) || 'Qwen';
+  }
+
   function aiRenderWelcome() {
     const log = aiLogEl();
     if (!log) return;
@@ -3827,6 +3858,7 @@
       _aiChats = [];
     }
     aiRenderChats();
+    aiUpdateHeadTitle();
   }
 
   // Group the chats the way a chat app does: 今天 / 昨天 / 更早.
@@ -3889,6 +3921,7 @@
   async function aiOpenChat(chatId) {
     _aiChatId = chatId;
     aiRenderChats();
+    aiUpdateHeadTitle();
     const log = aiLogEl();
     if (log) log.innerHTML = '';
     try {
@@ -3937,6 +3970,7 @@
       await aiLoadChats();
       _aiChatEmpty = true;
       aiRenderWelcome();
+      aiUpdateHeadTitle();
     } catch (e) {
       toast(e.message || '新建对话失败');
     }
@@ -4548,6 +4582,16 @@
     if (newBtn && !newBtn.__bound) {
       newBtn.__bound = true;
       newBtn.addEventListener('click', () => aiNewChat());
+    }
+    // 手机版顶栏右上角那个「新对话」(P1 的样子)
+    const newBtnTop = $('#ai-new-chat-btn');
+    if (newBtnTop && !newBtnTop.__bound) {
+      newBtnTop.__bound = true;
+      newBtnTop.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        aiNewChat();
+      });
     }
     const toggleBtn = $('#ai-sidebar-toggle');
     if (toggleBtn && !toggleBtn.__bound) {

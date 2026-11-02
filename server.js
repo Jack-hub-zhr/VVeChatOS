@@ -195,6 +195,9 @@ ensureColumn('users', 'ai_in_groups', 'INTEGER NOT NULL DEFAULT 1');
 ensureColumn('users', 'density', "TEXT NOT NULL DEFAULT 'normal'");
 ensureColumn('users', 'font_scale', 'REAL NOT NULL DEFAULT 1');
 ensureColumn('users', 'clock24', 'INTEGER NOT NULL DEFAULT 1');
+// title_mode: 'auto' = 还没命名(等 Qwen 起名) | 'named' = Qwen 起好了
+//             'manual' = 用户自己改过,谁也别动
+ensureColumn('ai_chats', 'title_mode', "TEXT NOT NULL DEFAULT 'auto'");
 ensureColumn('messages', 'type', "TEXT NOT NULL DEFAULT 'text'");
 ensureColumn('messages', 'meta', 'TEXT');
 ensureColumn('messages', 'reply_to', 'INTEGER');
@@ -1353,6 +1356,9 @@ app.post('/api/ai/chat', rateLimit('write'), authRequired, async (req, res) => {
   // appended to its history; otherwise the exchange is not persisted.
   const chat = chat_id ? aiChatOwned(chat_id, req.user.id) : null;
   const chatId = chat ? chat.id : null;
+  // 这条对话还没起过名字(而且用户没手动改过)→ 让模型在回答第一行给出标题。
+  const wantTitle = !!(chat && chat.title_mode === 'auto');
+  const msgIsZh = /[\u4e00-\u9fa5]/.test(userMsg);
 
   // The 深度思考 toggle was removed from the UI, so the models that CAN
   // think now always do — the user asked to see the reasoning trace, not
@@ -1398,6 +1404,9 @@ app.post('/api/ai/chat', rateLimit('write'), authRequired, async (req, res) => {
   // The system prompt. When 搜索 is on, the live results are appended to
   // it so the model can actually ground its answer.
   const BASE_SYSTEM = '你是 VVeChat 内置的通义千问（Qwen）助手。请用简体中文回答，简洁、直接、有条理；不确定的地方要明说。';
+  // 第一轮对话:顺带起个名字。模型被要求把标题放在第一行,
+  // 下面那道「门」会把它从正文里摘走,用户看不到。
+  const TITLE_HINT = '\n\n【重要】回答的第一行必须先输出这一行格式的标题,然后再写正文：\n【标题:不超过12个字的标题】\n标题要概括这段对话的主题,不要引号,不要多余的话。';
   let searchCtx = null;
   const getSearchCtx = async () => {
     if (searchCtx !== null) return searchCtx;
@@ -1428,6 +1437,51 @@ app.post('/api/ai/chat', rateLimit('write'), authRequired, async (req, res) => {
   };
 
   const errors = [];
+
+  // ---- 第一行的「门」----
+  // 模型被要求把标题放在第一行,但那一行不该让用户看见:
+  // 先扣住第一行,认出来是标题就拿去当对话名,认不出来就原样放行。
+  let sniffBuf = '';
+  let sniffing = wantTitle;
+  let pendingTitle = null;
+  const forwardDelta = (text) => {
+    try { res.write(JSON.stringify({ type: 'delta', text: String(text) }) + '\n'); } catch (_) {}
+  };
+  const gate = {
+    write: (raw) => {
+      if (!sniffing) { try { res.write(raw); } catch (_) {} return; }
+      let obj = null;
+      try { obj = JSON.parse(raw); } catch (_) {}
+      if (!obj || obj.type !== 'delta') { try { res.write(raw); } catch (_) {} return; }
+      sniffBuf += String(obj.text || '');
+      const lines = sniffBuf.split('\n');
+      const complete = lines.slice(0, -1);        // 完整的一行行
+      // 模型喜欢在正文前面空两行,所以要找「第一行有字的内容」
+      const idx = complete.findIndex((l) => l.trim().length > 0);
+      if (idx < 0) {
+        // 到现在还只有空行 —— 再等等,但别等太久
+        if (sniffBuf.length > 120) { forwardDelta(sniffBuf); sniffBuf = ''; sniffing = false; }
+        return;
+      }
+      const line = complete[idx];
+      const before = complete.slice(0, idx).join('\n');
+      const after = complete.slice(idx + 1).join('\n');
+      const tail = lines[lines.length - 1] || '';
+      const t = parseTitleLine(line, msgIsZh);
+      if (t) {
+        pendingTitle = t;                          // 标题行(和它前面的空行)不给用户看
+        if (after) forwardDelta(after + '\n');
+      } else {
+        // 不是标题 —— 原样放行
+        forwardDelta(before + '\n' + complete.slice(idx).join('\n') + '\n');
+      }
+      sniffing = false;
+      sniffBuf = '';
+      if (tail) forwardDelta(tail);
+    }
+  };
+  const out = wantTitle ? gate : res;
+
   for (let i = 0; i < chain.length; i++) {
     const entry = chain[i];
     const provider = QWEN_PROVIDERS[entry.provider];
@@ -1444,7 +1498,7 @@ app.post('/api/ai/chat', rateLimit('write'), authRequired, async (req, res) => {
       } catch (_) {}
     }
 
-    const messages = [{ role: 'system', content: BASE_SYSTEM }];
+    const messages = [{ role: 'system', content: BASE_SYSTEM + (wantTitle ? TITLE_HINT : '') }];
     if (wantSearch && !nativeSearch) {
       try { messages[0].content += await getSearchCtx(); } catch (_) {}
     }
@@ -1495,7 +1549,7 @@ app.post('/api/ai/chat', rateLimit('write'), authRequired, async (req, res) => {
         // Accumulated for the chat history.
         let turnReasoning = '';
         let turnContent = '';
-        const result = await relayStream(res, upstream.body, source, {
+        const result = await relayStream(out, upstream.body, source, {
           onReasoning: (t) => {
             turnReasoning += String(t || '');
             reasonLen += t.length;
@@ -1539,7 +1593,20 @@ app.post('/api/ai/chat', rateLimit('write'), authRequired, async (req, res) => {
             break;
           }
           // This one answered. Close the stream properly.
-          aiSaveTurn(chatId, req.user.id, userMsg, turnReasoning, turnContent, entry.model);
+          // 存库的回答里不能带标题那一行
+          const savedContent = wantTitle ? stripTitleLine(turnContent, msgIsZh) : turnContent;
+          aiSaveTurn(chatId, req.user.id, userMsg, turnReasoning, savedContent, entry.model);
+          // 模型给了标题 → 当成这条对话的名字,推给前端改列表
+          if (pendingTitle && chatId) {
+            try {
+              const upd = db.prepare(
+                "UPDATE ai_chats SET title = ?, title_mode = 'named', updated_at = ? WHERE id = ? AND user_id = ? AND title_mode = 'auto'"
+              ).run(pendingTitle, now(), chatId, req.user.id);
+              if (upd.changes) {
+                try { io.to(`user:${req.user.id}`).emit('ai:chat-title', { chat_id: chatId, title: pendingTitle }); } catch (_) {}
+              }
+            } catch (_) {}
+          }
           try { res.write(JSON.stringify({ type: 'done', source: entry.provider, error: null, chatId: chatId || null }) + '\n'); } catch (_) {}
           try { res.end(); } catch (_) {}
           return;
@@ -1611,6 +1678,50 @@ app.get('/api/ai/status', authRequired, (req, res) => {
     }))
   });
 });
+
+// ============================================================
+// 让 Qwen 给对话起名字
+// ------------------------------------------------------------
+// 公共端点的模型「先想后答」,为了一句标题单独发一次请求要等 40 秒,
+// 还要再占一次限流配额(同一 IP 每个模型 2 次/分钟)。所以改成:
+// 第一轮对话时在系统提示里加一句「回答第一行先给标题」,模型顺带就给了。
+//
+// 那一行用户不该看见 —— 所以往客户端推流的时候过一道「门」:
+// 第一行先扣下来,认出来是标题就拿去当对话名,认不出来就原样放行。
+// ============================================================
+
+// 认出「【标题:xxx】」这种第一行
+function parseTitleLine(line, isZh) {
+  const m = /^\s*[【\[]?\s*(?:标题|题目|title)\s*[:：]?\s*[】\]]?\s*(.*)$/i.exec(String(line || ''));
+  if (!m) return null;
+  return cleanAiTitle(m[1], isZh);
+}
+
+// 把模型给的标题收拾干净:去引号、去尾标点、限长
+function cleanAiTitle(raw, isZh) {
+  let t = String(raw || '').trim();
+  if (!t) return null;
+  // 只要第一行:模型有时会先客套一句再给标题
+  const lines = t.split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
+  t = lines[0] || '';
+  t = t.replace(/^\s*[-*•\d.、)）]+\s*/, '');                 // 去掉 "1. " 之类的序号
+  t = t.replace(/^[\"'“”「」『』【】\[\(（]+/, '').replace(/[\"'“”「」『』】\]\)）]+$/, '');
+  t = t.replace(/[。.!,!?,?;；:：]+$/, '').trim();
+  if (!t) return null;
+  const max = isZh ? 18 : 42;
+  if (t.length > max) t = t.slice(0, max).trim();
+  return t || null;
+}
+
+// 把标题那一行从正文里摘掉(存进库的回答不该带标题)
+function stripTitleLine(content, isZh) {
+  const s0 = String(content || '');
+  const nl = s0.indexOf('\n');
+  if (nl < 0) return s0;
+  const first = s0.slice(0, nl);
+  if (!parseTitleLine(first, isZh)) return s0;
+  return s0.slice(nl + 1).replace(/^\s*\n/, '');
+}
 
 // ============================================================
 // AI conversation history
@@ -1685,7 +1796,8 @@ app.patch('/api/ai/chats/:id', rateLimit('write'), authRequired, (req, res) => {
   if (!chat) return res.status(404).json({ error: '对话不存在' });
   const title = String((req.body || {}).title || '').trim().slice(0, 60);
   if (!title) return res.status(400).json({ error: '标题不能为空' });
-  db.prepare('UPDATE ai_chats SET title = ?, updated_at = ? WHERE id = ?').run(title, now(), chat.id);
+  // 用户自己改的名字:Qwen 之后不许再覆盖它
+  db.prepare("UPDATE ai_chats SET title = ?, title_mode = 'manual', updated_at = ? WHERE id = ?").run(title, now(), chat.id);
   res.json({ chat: db.prepare('SELECT * FROM ai_chats WHERE id = ?').get(chat.id) });
 });
 
