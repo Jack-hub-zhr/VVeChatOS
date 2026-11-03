@@ -181,3 +181,31 @@ node tools/slop-scan.js frontend/style.css frontend/liquid-glass.css frontend/bo
 - **不要动画 `width / height / top / left / margin / 大 blur`** —— 现有 3 处要改。
 - 保留 `cubic-bezier(0.34, 1.56, 0.64, 1)`(弹跳)只在真的需要「弹一下」的地方,一般该删。
 - `animation: infinite` 的 12 处逐条看:不是活的东西就别循环。
+
+## ⚠️ 一个容易漏掉的坑:字号缩放会吃掉基准值
+
+VVeChat 有「字号大小」偏好(小 0.9 / 标准 1 / 大 1.15),实现方式是给一批元素加:
+
+```css
+body .msg-bubble { font-size: calc(1em * var(--font-scale)); }
+```
+
+**但 `font-size` 里的 `1em` 指的是【父元素】的字号,不是元素自己的。**
+所以这条规则会把元素自己声明的基准字号整个盖掉,一律掉回父级的 16px。
+实测踩过:小标题 16px、消息气泡 16px、AI 副标题 16px、品牌名 16px —— CSS 里
+明明写着 11 / 13 / 12 / 18px,渲染出来全是 16px。
+
+正确写法(基准值存进变量):
+
+```css
+body .msg-bubble { --fs-base: 13px; }
+body .msg-bubble { font-size: max(11px, calc(var(--fs-base) * var(--font-scale))); }
+```
+
+`max(11px, ...)` 是给「小」这档兜底,缩到最小也不低于 11px。
+
+**改字号之前先量实际渲染值**,别只读 CSS:
+
+```bash
+node tools/check-fs-render.js <url>   # 遍历所有带文字的元素,打印实际 font-size
+```
