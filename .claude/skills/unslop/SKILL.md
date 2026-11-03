@@ -51,7 +51,7 @@ Vibecoded 的界面失败在同样的地方:到处发光、到处 emoji、间距
      ```
      `--screen` 可选 `auth|chats|ai|discover|more|group-info|profile`;`--theme` 可选 `light|dark|550c`;`--mobile` 切手机尺寸。
    - 线上站直接看:https://vvechat.onrender.com/ (账号 Jack / Zhr121005)
-   - 只有一个链接没代码时,用上游的 `scripts/snapshot.mjs`(需要 Playwright,只能截公开页面)。
+   - 只有一个链接没代码时,用上游仓库里的 `scripts/snapshot.mjs`(需要 Playwright,只能截公开页面;本仓库没收录,去 heydamir/unslop 取)。
    - 只有一张截图时,先按原样重建成一个静态 HTML 文件,把它当原稿。
 2. **审。** 逐条走 [references/signs.md](references/signs.md),每条记一行 + 在哪儿。VVeChat 特有的线索见文件末尾那一节。
 3. **决定改多少。** 老实读一遍审的结果再动手。
@@ -190,7 +190,7 @@ Vibecoded 的界面失败在同样的地方:到处发光、到处 emoji、间距
 
 把一个屏幕「自己变干净」的过程录成短视频:红色红线标出 slop,每一步只改 CSS,让数值自己补间过去。
 
-- 脚本在 `scripts/story.mjs`:`node scripts/story.mjs unslop-story/story.html unslop-story.mp4`(需要 Playwright 和 ffmpeg)。
+- 上游的 `scripts/story.mjs`:`node scripts/story.mjs unslop-story/story.html unslop-story.mp4`(需要 Playwright 和 ffmpeg;本仓库没收录,去 heydamir/unslop 取)。
 - 页面用 1440 宽、至少 900 高,别用 100vh。
 - 三到五步,合并成看得见变化的几个:Spacing → Color and icons → Type and copy → Details。
 - 只改数值,不改结构,浏览器才补间得了。渐变/光晕单独一层淡出,文字换行用少量 swap(最多八处,二十处一起来就像两张图硬切)。
