@@ -94,8 +94,9 @@ body.lg-liquid .list-pane,
 body.lg-liquid .topbar,
 body.lg-liquid .side-nav,
 body.lg-liquid .mobile-tabbar {
-  backdrop-filter: blur(var(--glass-blur)) saturate(190%) contrast(1.04);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(190%) contrast(1.04);
+  /* 通透优先:不再糊。饱和度和对比度留着,玻璃的颜色感靠它们。 */
+  backdrop-filter: saturate(190%) contrast(1.04);
+  -webkit-backdrop-filter: saturate(190%) contrast(1.04);
   border-color: var(--glass-border);
 }
 /* 顶部边缘的一道高光 —— 玻璃的「厚度」就靠这条线 */

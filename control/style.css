@@ -20,11 +20,11 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
   color: var(--ink);
   min-height: 100vh;
-  background: #EBF2FA url('../frontend/assets/wall-light.jpg') center/cover fixed no-repeat;
+  background: #EBF2FA url('../assets/wall-light.jpg') center/cover fixed no-repeat;
   padding-top: env(safe-area-inset-top);
 }
 body.dark { background-color: #0F172A; color: #E2E8F0; }
-body.dark { background-image: url('../frontend/assets/wall-dark.jpg'); }
+body.dark { background-image: url('../assets/wall-dark.jpg'); }
 body.dark { --ink: #e2e8f0; --ink-2: #cbd5e1; --muted: #94a3b8; --glass: rgba(20,24,32,0.62); --glass-soft: rgba(20,24,32,0.34); --border: rgba(255,255,255,0.12); --border-soft: rgba(255,255,255,0.08); }
 
 .hidden { display: none !important; }
@@ -37,8 +37,9 @@ input { font: inherit; color: inherit; }
   gap: 12px; padding: 12px 18px;
   background: var(--glass);
   border-bottom: 1px solid var(--border-soft);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  /* 和主应用统一:不再糊。壁纸直接透过来,玻璃才像玻璃。 */
+  backdrop-filter: saturate(180%);
+  -webkit-backdrop-filter: saturate(180%);
   position: sticky; top: 0; z-index: 20;
 }
 .brand { display: inline-flex; align-items: baseline; gap: 6px; font-weight: 800; font-size: 20px; }
@@ -54,7 +55,6 @@ input { font: inherit; color: inherit; }
   padding: 7px 14px; border-radius: 999px;
   background: var(--glass); border: 1px solid var(--border);
   font-size: 13px; font-weight: 600;
-  backdrop-filter: blur(14px);
   transition: transform .12s, background .15s;
 }
 .pill:hover { transform: translateY(-1px); }
@@ -67,8 +67,8 @@ input { font: inherit; color: inherit; }
   width: 100%; max-width: 380px; padding: 34px 30px;
   background: var(--glass); border: 1px solid var(--border);
   border-radius: 28px; box-shadow: 0 20px 60px rgba(30,80,150,0.20);
-  backdrop-filter: blur(30px) saturate(180%);
-  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  backdrop-filter: saturate(180%);
+  -webkit-backdrop-filter: saturate(180%);
   text-align: center;
 }
 .gate-card h1 { font-size: 24px; margin-bottom: 6px; }
@@ -106,7 +106,6 @@ body.dark .gate-card input { background: rgba(255,255,255,0.08); }
   display: flex; align-items: center; gap: 12px;
   padding: 11px 14px; border-radius: var(--radius);
   background: var(--glass); border: 1px solid var(--border-soft);
-  backdrop-filter: blur(14px);
 }
 .user-row .avatar {
   width: 40px; height: 40px; border-radius: 50%;
@@ -134,7 +133,6 @@ body.dark .gate-card input { background: rgba(255,255,255,0.08); }
 .convo {
   padding: 14px 16px; border-radius: var(--radius);
   background: var(--glass); border: 1px solid var(--border-soft);
-  backdrop-filter: blur(14px);
 }
 .convo-head { font-weight: 700; font-size: 14px; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
 .convo-head .arrow { color: var(--muted); font-weight: 400; }
@@ -151,13 +149,13 @@ body.dark .gate-card input { background: rgba(255,255,255,0.08); }
 
 /* confirm */
 .confirm { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 20px; }
-.confirm-mask { position: absolute; inset: 0; background: rgba(0,0,0,0.32); backdrop-filter: blur(10px); }
+.confirm-mask { position: absolute; inset: 0; background: rgba(0,0,0,0.32); }
 .confirm-card {
   position: relative; width: min(88vw, 400px);
   padding: 22px; border-radius: 28px;
   background: var(--glass); border: 1px solid var(--border);
   box-shadow: 0 20px 60px rgba(0,0,0,0.25);
-  backdrop-filter: blur(28px) saturate(180%);
+  backdrop-filter: saturate(180%);
 }
 .confirm-card h3 { font-size: 16px; margin-bottom: 10px; }
 .confirm-card p { color: var(--ink-2); font-size: 14px; line-height: 1.6; margin-bottom: 18px; }
@@ -168,4 +166,75 @@ body.dark .gate-card input { background: rgba(255,255,255,0.08); }
   position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
   background: rgba(28,42,62,0.92); color: #fff; padding: 10px 20px;
   border-radius: 999px; font-size: 13px; z-index: 200;
+}
+
+/* ============================================================
+   iPad / 宽屏:两栏
+   ------------------------------------------------------------
+   iPad 横屏有 1100px 以上的宽度,单栏会把右边空掉一大块,
+   而且用户列表、好友对话、群消息挤在一条竖线上,翻起来很费劲。
+   横屏改成「左:用户 / 右:对话 + 群消息」,竖屏留单栏但放宽。
+   ============================================================ */
+@media (min-width: 900px) {
+  .panel {
+    max-width: 1180px;
+    display: grid;
+    grid-template-columns: minmax(300px, 0.8fr) minmax(0, 1.2fr);
+    grid-template-areas:
+      "users  convos"
+      "users  groups";
+    grid-template-rows: auto 1fr;
+    gap: 24px 28px;
+    align-items: start;
+  }
+  .panel > .block:nth-child(1) { grid-area: users; }
+  .panel > .block:nth-child(2) { grid-area: convos; }
+  .panel > .block:nth-child(3) { grid-area: groups; }
+  /* 列表自己滚动,页面不会被拉成一条长卷轴 */
+  .users, .convos {
+    max-height: min(52vh, 560px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-right: 4px;
+  }
+  .users::-webkit-scrollbar, .convos::-webkit-scrollbar { width: 6px; }
+  .users::-webkit-scrollbar-thumb, .convos::-webkit-scrollbar-thumb {
+    background: rgba(60, 90, 130, 0.22); border-radius: 3px;
+  }
+  .convo { padding: 16px 18px; }
+}
+
+/* 平板及以上:每个区块自己是一块玻璃卡 —— 标题和空状态就不会直接压在壁纸的亮丝带上 */
+@media (min-width: 620px) {
+  .block {
+    background: rgba(255, 255, 255, 0.34);
+    border: 1px solid var(--border-soft);
+    border-radius: 22px;
+    padding: 18px 20px 20px;
+  }
+  body.dark .block { background: rgba(28, 33, 44, 0.34); }
+  .block h2 { margin-bottom: 4px; }
+  .block .hint { margin-bottom: 14px; }
+}
+
+/* iPad 竖屏 / 小平板:单栏,但别那么窄 */
+@media (min-width: 620px) and (max-width: 899px) {
+  .panel { max-width: 720px; padding: 26px 24px 80px; gap: 30px; }
+  .gate-card { max-width: 420px; padding: 40px 36px; }
+}
+
+/* ---------- 触控设备:点得中 ---------- */
+@media (pointer: coarse) {
+  .topbar { padding: 14px 20px; }
+  .pill { padding: 11px 18px; }
+  .btn { padding: 13px 22px; }
+  .kill { padding: 10px 18px; }
+  .user-row { padding: 14px 16px; }
+  .confirm-actions .btn { padding: 14px 20px; }
+  .confirm-card h3 { font-size: 17px; }
+}
+
+/* iPad 有 home 指示条,内容别贴着底 */
+@supports (padding: max(0px)) {
+  .panel { padding-bottom: max(60px, calc(env(safe-area-inset-bottom) + 40px)); }
 }

@@ -163,11 +163,45 @@ These are not slop, but they are what a cleaned up screen falls back to when nob
 
 - 中文界面里别混入英文营销词(「解锁」「无缝」「超级」);英文界面同理别直译成口号。
 - 官方群的中英文名已经分开处理:默认名 `VVeChat 官方群` → `VVeChat Official Group`,**用户改过的群名照原样显示**,别再翻译。
+- **一个界面只有一种语言。** 2026-11-04 之前英文界面里混着 126 处硬编码中文
+  (群资料面板、消息操作栏、确认框、Toast、AI 面板最严重)。
+  → 新写文案先进 `STRINGS` 的 zh / en 两张表,别直接写死字符串。
+  → 服务端下发的文案(供应商名、说明)要**同时给两种语言**,前端按 `lang` 选。
+  → 自查:开英文后满屏找汉字,只允许剩语言切换按钮上的「中」「中文」。
 
 ### 三个主题
 
 - 任何一个界面改动,**浅色 / 深色 / 550C 都要看**。
 - 550C 会主动关掉液态玻璃(`LiquidGlass.setTheme('550c')`),别在 550C 里「补」玻璃。
+
+---
+
+## 三、第二轮(2026-11-04):关模糊 · 语言统一 · iPad
+
+### 玻璃
+
+- ✅ **全站 backdrop blur → 0**(只留聊天列 `.right-pane` 的 18px)。
+  模糊会把液态玻璃的折射冲掉(滤镜链 `url(#f) blur(18px)`,blur 在后)。
+  主面板改走 `LG.register(el, { glow: true, refract: true })`。
+- ⚠️ **这不是「视觉偏好」,是技术因果**:想要玻璃感就去开折射,别加 blur。
+  新增玻璃元素时如果写了 `blur()`,等于把折射擦掉。
+- 控制台(`control/`)同步去模糊;`--glass-blur` / `--glass-blur-strong` 两个变量已废弃。
+
+### 语言
+
+- ✅ 静态 HTML 全部接上 `data-i18n-*`;动态 JS 全部走 `t('key')`。
+- ✅ 服务端 provider 同时下发 `label` / `labelEn` / `note` / `noteEn`。
+- ✅ 群成员数用了复数:`1 member` / `2 members`(中文是「N 人」,没有复数问题)。
+
+### 布局
+
+- ✅ 控制台 ≥900px 两栏 grid,620–899px 单栏,≥620px 起用玻璃卡片。
+- ⛔ **媒体查询必须写在基础规则之后** —— 踩过:`.panel { display:flex }` 写在 iPad 块后面,
+  两栏完全没生效,查的时候一直怀疑媒体查询写错了。
+- ✅ 触控设备(`pointer: coarse`)点击区加大;iPad 上药丸/按钮/用户行都要够大。
+- ⛔ **壁纸路径写错不报错**:`url('../frontend/assets/x.jpg')` 会命中 SPA 兜底,
+  返回 200 + `text/html`,浏览器当图片解码失败 → 背景变死灰。
+  验证:`curl -o /dev/null -w '%{content_type} %{size_download}'`。
 
 ---
 

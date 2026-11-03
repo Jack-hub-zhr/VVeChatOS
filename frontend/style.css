@@ -243,8 +243,8 @@ input::placeholder, textarea::placeholder { color: var(--muted-2); }
    ============================================================ */
 .glass {
   background: var(--glass-bg);
-  backdrop-filter: blur(18px) saturate(180%);
-  -webkit-backdrop-filter: blur(18px) saturate(180%);
+  backdrop-filter: saturate(180%);
+  -webkit-backdrop-filter: saturate(180%);
   border: 1px solid var(--glass-border);
   /* Inner top highlight + inner bottom edge + outer soft glow + drop shadow */
   box-shadow:
@@ -259,8 +259,8 @@ input::placeholder, textarea::placeholder { color: var(--muted-2); }
 
 .glass-strong {
   background: var(--glass-bg-strong);
-  backdrop-filter: blur(18px) saturate(180%);
-  -webkit-backdrop-filter: blur(18px) saturate(180%);
+  backdrop-filter: saturate(180%);
+  -webkit-backdrop-filter: saturate(180%);
   border: 1px solid var(--glass-border);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.22),
@@ -307,8 +307,8 @@ body.dark [data-liquid-glass] {
   padding: 36px 32px 28px;
   display: flex; flex-direction: column; gap: 18px;
   background: rgba(255, 255, 255, 0.40);
-  backdrop-filter: blur(18px) saturate(180%);
-  -webkit-backdrop-filter: blur(18px) saturate(180%);
+  backdrop-filter: saturate(180%);
+  -webkit-backdrop-filter: saturate(180%);
   border: 1px solid var(--glass-border);
   border-radius: var(--r-card);
   box-shadow:
@@ -476,8 +476,8 @@ body.dark .auth-card { background: rgba(20, 24, 32, 0.60); border-color: rgba(25
   border: 1px solid var(--glass-border-soft);
   color: var(--ink-2);
   transition: background 0.2s, color 0.2s, transform 0.15s, box-shadow 0.2s;
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: saturate(180%);
+  -webkit-backdrop-filter: saturate(180%);
   box-shadow: var(--glass-highlight), 0 4px 12px rgba(30, 80, 150, 0.08);
   flex-shrink: 0;
 }
@@ -522,8 +522,8 @@ body.dark .auth-card { background: rgba(20, 24, 32, 0.60); border-color: rgba(25
   color: #12508f;
   border-radius: 999px;
   background: linear-gradient(135deg, rgba(146, 202, 255, 0.62), rgba(88, 158, 240, 0.44));
-  backdrop-filter: blur(22px) saturate(200%);
-  -webkit-backdrop-filter: blur(22px) saturate(200%);
+  backdrop-filter: saturate(200%);
+  -webkit-backdrop-filter: saturate(200%);
   border: 1px solid rgba(255, 255, 255, 0.78);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.95),
@@ -580,8 +580,8 @@ body.theme-dark .beta-tag {
   border-radius: 0;
   overflow: hidden;
   background: rgba(255, 255, 255, 0.10);
-  backdrop-filter: blur(10px) saturate(180%);
-  -webkit-backdrop-filter: blur(10px) saturate(180%);
+  backdrop-filter: saturate(180%);
+  -webkit-backdrop-filter: saturate(180%);
   border: none;
   box-shadow: none;
 }
@@ -596,8 +596,8 @@ body.dark .app-shell { background: rgba(20, 24, 32, 0.30); border-color: rgba(25
   height: 60px;
   border-bottom: 1px solid var(--glass-border-soft);
   background: rgba(255, 255, 255, 0.20);
-  backdrop-filter: blur(14px) saturate(180%);
-  -webkit-backdrop-filter: blur(14px) saturate(180%);
+  backdrop-filter: saturate(180%);
+  -webkit-backdrop-filter: saturate(180%);
   flex-shrink: 0;
   z-index: 5;
 }
@@ -656,8 +656,8 @@ body.dark .brand-name { text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4); }
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.30),
     0 8px 24px rgba(30, 80, 150, 0.10);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: saturate(180%);
+  -webkit-backdrop-filter: saturate(180%);
   flex-shrink: 0;
   overflow: hidden;
 }
@@ -677,8 +677,8 @@ body.dark .rail-pane {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.30),
     0 8px 24px rgba(30, 80, 150, 0.10);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: saturate(180%);
+  -webkit-backdrop-filter: saturate(180%);
   flex-shrink: 0;
   overflow: hidden;
   transition: width 0.28s cubic-bezier(0.22, 1, 0.36, 1),
@@ -755,8 +755,10 @@ body.dark .list-me .avatar.md { color: #e6ecf5; }
   border-radius: 22px;
   border: 1px solid var(--glass-border);
   background: rgba(255, 255, 255, 0.12);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  /* 聊天区留一点模糊:消息文字直接压在壁纸上,完全不清会花。
+     全站只此一处保留模糊,18px 把壁纸上那些亮丝带化成柔光,又不会糊成一片。 */
+  backdrop-filter: blur(18px) saturate(180%);
+  -webkit-backdrop-filter: blur(18px) saturate(180%);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.20),
     0 8px 24px rgba(30, 80, 150, 0.08);
@@ -771,8 +773,8 @@ body.dark .list-me .avatar.md { color: #e6ecf5; }
   border: 1px solid var(--glass-border-soft);
   border-radius: var(--r-pill);
   align-self: flex-start;
-  backdrop-filter: blur(10px) saturate(180%);
-  -webkit-backdrop-filter: blur(10px) saturate(180%);
+  backdrop-filter: saturate(180%);
+  -webkit-backdrop-filter: saturate(180%);
 }
 body.dark .tabbar { background: rgba(255, 255, 255, 0.06); }
 .tab2 {
@@ -834,8 +836,8 @@ body.dark .tab2.active { background: rgba(96, 165, 250, 0.25); color: #93c5fd; }
     0 0 0 0.5px rgba(255, 130, 130, 0.10),
     0 0 20px rgba(255, 255, 255, 0.04),
     0 4px 18px rgba(30, 80, 150, 0.08);
-  backdrop-filter: blur(14px) saturate(180%);
-  -webkit-backdrop-filter: blur(14px) saturate(180%);
+  backdrop-filter: saturate(180%);
+  -webkit-backdrop-filter: saturate(180%);
 }
 body.dark #chats-list, body.dark #groups-list, body.dark #friends-list {
   background: rgba(20, 24, 32, 0.45);
@@ -1024,8 +1026,8 @@ body.dark .right-pane {
   height: 64px;
   border-bottom: 1px solid var(--glass-border-soft);
   background: rgba(255, 255, 255, 0.20);
-  backdrop-filter: blur(14px) saturate(180%);
-  -webkit-backdrop-filter: blur(14px) saturate(180%);
+  backdrop-filter: saturate(180%);
+  -webkit-backdrop-filter: saturate(180%);
   flex-shrink: 0;
   min-width: 0;
 }
@@ -1168,8 +1170,8 @@ body.dark .chat-header { background: rgba(20, 24, 32, 0.30); border-bottom-color
   color: var(--bubble-them-text);
   border: 1px solid rgba(255, 255, 255, 0.7);
   box-shadow: 0 4px 14px rgba(30, 80, 150, 0.06);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+
+  -webkit-backdrop-filter: ;
   overflow: hidden;
 }
 .msg-row:not(.me) .msg-bubble,
@@ -1226,7 +1228,7 @@ body.dark .chat-header { background: rgba(20, 24, 32, 0.30); border-bottom-color
   border: 1px solid var(--glass-border-soft);
   border-radius: 999px;
   box-shadow: var(--highlight);
-  backdrop-filter: blur(14px);
+
   z-index: 5;
   pointer-events: none;
   animation: typingFade .2s ease;
@@ -1312,8 +1314,8 @@ body.dark .chat-header { background: rgba(20, 24, 32, 0.30); border-bottom-color
   padding: 12px 16px 14px;
   border-top: 1px solid var(--glass-border-soft);
   background: rgba(255, 255, 255, 0.20);
-  backdrop-filter: blur(14px) saturate(180%);
-  -webkit-backdrop-filter: blur(14px) saturate(180%);
+  backdrop-filter: saturate(180%);
+  -webkit-backdrop-filter: saturate(180%);
   flex-shrink: 0;
   display: flex; flex-direction: column; gap: 8px;
 }
@@ -1466,8 +1468,8 @@ body.dark .mention-hint-bar { background: rgba(255, 255, 255, 0.05); }
   width: 260px; max-height: 230px; overflow-y: auto;
   padding: 6px;
   background: rgba(255, 255, 255, 0.88);
-  backdrop-filter: blur(30px) saturate(180%);
-  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  backdrop-filter: saturate(180%);
+  -webkit-backdrop-filter: saturate(180%);
   border: 1px solid var(--glass-border);
   border-radius: 16px;
   box-shadow: var(--glass-shadow-lg);
@@ -1572,7 +1574,7 @@ body.dark .mention-hint-bar { background: rgba(255, 255, 255, 0.05); }
   width: 320px; max-height: 260px; overflow-y: auto;
   padding: 10px;
   background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(30px) saturate(180%);
+  backdrop-filter: saturate(180%);
   border: 1px solid var(--glass-border);
   border-radius: 18px;
   box-shadow: var(--glass-shadow-lg);
@@ -1623,8 +1625,8 @@ body.dark .mention-hint-bar { background: rgba(255, 255, 255, 0.05); }
   border-radius: 999px !important;
   border: 1px solid var(--glass-border-soft);
   box-shadow: var(--glass-highlight);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: saturate(180%);
+  -webkit-backdrop-filter: saturate(180%);
   flex-shrink: 0;
   cursor: default;
   /* Soft circular glow that follows the circle shape (no square clip) */
@@ -1711,8 +1713,8 @@ body.dark .msg-jack-label {
   display: flex; gap: 6px;
   padding: 7px 8px;
   background: rgba(255, 255, 255, 0.55);
-  backdrop-filter: blur(28px) saturate(200%);
-  -webkit-backdrop-filter: blur(28px) saturate(200%);
+  backdrop-filter: saturate(200%);
+  -webkit-backdrop-filter: saturate(200%);
   border: 1px solid rgba(255, 255, 255, 0.55);
   border-radius: 18px;
   box-shadow:
@@ -1791,8 +1793,8 @@ body.dark .msg-action-bar {
   align-items: center;
   justify-content: center;
   background: rgba(255, 255, 255, 0.78);
-  backdrop-filter: blur(40px) saturate(180%);
-  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  backdrop-filter: saturate(180%);
+  -webkit-backdrop-filter: saturate(180%);
   cursor: pointer;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
@@ -1821,8 +1823,8 @@ body.dark .msg-action-bar {
 }
 body.dark .hello-splash {
   background: rgba(10, 14, 22, 0.82);
-  backdrop-filter: blur(40px) saturate(180%);
-  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  backdrop-filter: saturate(180%);
+  -webkit-backdrop-filter: saturate(180%);
 }
 body.dark .hello-splash-text {
   background: linear-gradient(135deg, #45CFE0 0%, #7C9CFF 60%, #4C6FFF 100%);
@@ -1899,8 +1901,8 @@ body.dark .hello-splash-hint {
 .modal-mask {
   position: absolute; inset: 0;
   background: rgba(28, 42, 62, 0.20);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+
+  -webkit-backdrop-filter: ;
   animation: modalMaskIn 0.3s ease both;
 }
 @keyframes modalMaskIn { from { opacity: 0; } to { opacity: 1; } }
@@ -1916,8 +1918,8 @@ body.dark .hello-splash-hint {
 .ask-confirm-mask {
   position: absolute; inset: 0;
   background: rgba(0, 0, 0, 0.32);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+
+  -webkit-backdrop-filter: ;
 }
 .ask-confirm-card {
   position: relative;
@@ -1937,8 +1939,8 @@ body.dark .hello-splash-hint {
   display: flex; flex-direction: column;
   margin: 0 auto;
   background: rgba(255, 255, 255, 0.50);
-  backdrop-filter: blur(18px) saturate(180%);
-  -webkit-backdrop-filter: blur(18px) saturate(180%);
+  backdrop-filter: saturate(180%);
+  -webkit-backdrop-filter: saturate(180%);
   border: 1px solid var(--glass-border);
   border-radius: 24px;
   box-shadow:
@@ -2038,8 +2040,8 @@ body.dark .modal-card { background: rgba(20, 24, 32, 0.70); border-color: rgba(2
 .lightbox {
   position: fixed; inset: 0; z-index: 200;
   background: rgba(28, 42, 62, 0.85);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+
+  -webkit-backdrop-filter: ;
   display: flex; align-items: center; justify-content: center;
   padding: 20px;
   cursor: zoom-out;
@@ -2096,8 +2098,8 @@ body.dark .modal-card { background: rgba(20, 24, 32, 0.70); border-color: rgba(2
   min-width: 160px;
   padding: 6px;
   background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(30px) saturate(200%);
-  -webkit-backdrop-filter: blur(30px) saturate(200%);
+  backdrop-filter: saturate(200%);
+  -webkit-backdrop-filter: saturate(200%);
   border: 1px solid var(--glass-border);
   border-radius: 16px;
   box-shadow: var(--glass-shadow-lg);
@@ -2137,8 +2139,8 @@ body.dark .modal-card { background: rgba(20, 24, 32, 0.70); border-color: rgba(2
   background: rgba(255, 255, 255, 0.55);
   border: 1px solid var(--glass-border-soft);
   color: var(--ink-2);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: saturate(180%);
+  -webkit-backdrop-filter: saturate(180%);
   box-shadow: 0 4px 14px rgba(30, 80, 150, 0.10), var(--glass-highlight);
   transition: background 0.2s, transform 0.2s, color 0.2s;
   flex-shrink: 0;
@@ -2161,8 +2163,8 @@ body.theme-auto:not(.theme-light):not(.theme-dark) .theme-toggle { color: var(--
   min-width: 150px;
   padding: 6px;
   background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(30px) saturate(200%);
-  -webkit-backdrop-filter: blur(30px) saturate(200%);
+  backdrop-filter: saturate(200%);
+  -webkit-backdrop-filter: saturate(200%);
   border: 1px solid var(--glass-border);
   border-radius: 14px;
   box-shadow: 0 12px 36px rgba(30, 80, 150, 0.20), var(--glass-highlight);
@@ -2237,8 +2239,8 @@ body.dark .theme-menu { background: rgba(20, 24, 32, 0.92); border-color: rgba(2
     overflow: hidden;
     z-index: 10;
     background: rgba(255, 255, 255, 0.40);
-    backdrop-filter: blur(14px) saturate(180%);
-    -webkit-backdrop-filter: blur(14px) saturate(180%);
+    backdrop-filter: saturate(180%);
+    -webkit-backdrop-filter: saturate(180%);
     border: 1px solid var(--glass-border);
   }
   body.dark .right-pane { background: rgba(20, 24, 32, 0.50); }
@@ -2264,8 +2266,8 @@ body.dark .theme-menu { background: rgba(20, 24, 32, 0.92); border-color: rgba(2
   .topbar {
     height: 48px; padding: 0 10px 0 12px; gap: 6px;
     background: rgba(255, 255, 255, 0.72) !important;
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: saturate(180%);
+    -webkit-backdrop-filter: saturate(180%);
   }
   body.dark .topbar { background: rgba(20, 24, 32, 0.72) !important; }
   /* Hide root console bar on small screens (too cramped) */
@@ -3539,8 +3541,8 @@ body.dark .ai-welcome-title { color: var(--ink); }
   color: var(--ink);
   border: 1px solid var(--glass-border-soft);
   border-bottom-left-radius: 6px;
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: saturate(180%);
+  -webkit-backdrop-filter: saturate(180%);
   box-shadow: var(--glass-shadow);
 }
 .ai-error { color: var(--danger); font-size: 13px; }
@@ -3615,8 +3617,8 @@ body.dark .ai-welcome-title { color: var(--ink); }
   border-radius: 20px;
   background: var(--glass-bg-strong);
   border: 1px solid var(--glass-border-soft);
-  backdrop-filter: blur(26px) saturate(180%);
-  -webkit-backdrop-filter: blur(26px) saturate(180%);
+  backdrop-filter: saturate(180%);
+  -webkit-backdrop-filter: saturate(180%);
   box-shadow: var(--glass-highlight), var(--glass-shadow);
 }
 .ai-composer textarea {
@@ -3888,6 +3890,9 @@ body.dark .mobile-menu-scrim { background: rgba(0, 0, 0, 0.34); }
   display: flex;
   align-items: center;
   gap: 12px;
+  /* 英文的分段控件(Compact / Normal / Roomy)比中文宽得多,
+     不换行的话描述文字会被挤成一列单词。放不下就让它掉到下一行。 */
+  flex-wrap: wrap;
   padding: 12px 14px;
   border-radius: var(--r-row);
   background: var(--glass-bg-soft);
@@ -3922,7 +3927,7 @@ body.dark .mobile-menu-scrim { background: rgba(0, 0, 0, 0.34); }
   display: flex;
   flex-direction: column;
   gap: 3px;
-  flex: 1;
+  flex: 1 1 180px;
   /* Without this the text refuses to shrink and gets squeezed into a
      one-word-per-line column when the description is long. */
   min-width: 0;
@@ -4241,8 +4246,8 @@ body.dark .mobile-menu-scrim { background: rgba(0, 0, 0, 0.34); }
     margin: 0; padding: 5px 6px;
     border-radius: 28px;
     background: rgba(255, 255, 255, 0.72);
-    backdrop-filter: blur(26px) saturate(180%);
-    -webkit-backdrop-filter: blur(26px) saturate(180%);
+    backdrop-filter: saturate(180%);
+    -webkit-backdrop-filter: saturate(180%);
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.55),
       0 8px 26px rgba(30, 80, 150, 0.18);
@@ -4306,8 +4311,8 @@ body.dark .mobile-menu-scrim { background: rgba(0, 0, 0, 0.34); }
     border-radius: 0 20px 0 0;
     border-top: 0; border-bottom: 0; border-left: 0;
     background: rgba(255, 255, 255, 0.96);
-    backdrop-filter: blur(26px) saturate(180%);
-    -webkit-backdrop-filter: blur(26px) saturate(180%);
+    backdrop-filter: saturate(180%);
+    -webkit-backdrop-filter: saturate(180%);
     box-shadow: 8px 0 30px rgba(30, 80, 150, 0.22);
   }
   body.dark .app-body.chat-open .list-pane { background: rgba(18, 22, 30, 0.97); }
@@ -4433,8 +4438,8 @@ body.dark .mobile-menu-scrim { background: rgba(0, 0, 0, 0.34); }
     /* 真的不透明 —— 用玻璃变量(0.62)的话底下的助手界面照样透出来,
        一片糊。这里给到 97%,底下几乎看不穿,但边缘还留着玻璃感。 */
     background: rgba(255, 255, 255, 0.97);
-    backdrop-filter: blur(34px) saturate(190%);
-    -webkit-backdrop-filter: blur(34px) saturate(190%);
+    backdrop-filter: saturate(190%);
+    -webkit-backdrop-filter: saturate(190%);
     box-shadow: 6px 0 28px rgba(30, 80, 150, 0.20);
   }
   body.dark .app-body.ai-active.list-open .list-pane {
@@ -4502,8 +4507,8 @@ body.dark .mobile-menu-scrim { background: rgba(0, 0, 0, 0.34); }
   padding: 6px;
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(28px) saturate(190%);
-  -webkit-backdrop-filter: blur(28px) saturate(190%);
+  backdrop-filter: saturate(190%);
+  -webkit-backdrop-filter: saturate(190%);
   border: 1px solid var(--glass-border);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.85),
@@ -4802,8 +4807,8 @@ body.theme-dark .mention-preview .cancel:hover {
   padding: 8px;
   border-radius: 20px;
   background: var(--glass-bg-strong);
-  backdrop-filter: blur(var(--glass-blur)) saturate(200%);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(200%);
+  backdrop-filter: saturate(200%);
+  -webkit-backdrop-filter: saturate(200%);
   border: 1px solid var(--glass-border);
   box-shadow: var(--glass-shadow-lg), var(--glass-highlight);
   animation: userMenuIn 0.16s cubic-bezier(0.22, 1, 0.36, 1) both;
@@ -4924,8 +4929,8 @@ body.theme-dark .mention-preview .cancel:hover {
   inset: 0;
   pointer-events: auto;
   background: rgba(16, 24, 40, 0.18);
-  backdrop-filter: blur(16px) saturate(140%);
-  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  backdrop-filter: saturate(140%);
+  -webkit-backdrop-filter: saturate(140%);
   opacity: 0;
   transition: opacity .22s ease;
 }
@@ -4943,8 +4948,8 @@ body.theme-dark .mention-preview .cancel:hover {
   padding: 12px 12px 10px;
   border-radius: 26px;
   background: var(--glass-bg-strong);
-  backdrop-filter: blur(var(--glass-blur-strong)) saturate(200%);
-  -webkit-backdrop-filter: blur(var(--glass-blur-strong)) saturate(200%);
+  backdrop-filter: saturate(200%);
+  -webkit-backdrop-filter: saturate(200%);
   border: 1px solid var(--glass-border);
   box-shadow: var(--glass-shadow-lg), var(--glass-highlight);
   opacity: 0;

@@ -74,14 +74,37 @@ node tools/slop-scan.js frontend/style.css frontend/liquid-glass.css frontend/bo
 --glass-bg-frost    rgba(255,255,255,.20)      玻璃上的玻璃
 --glass-border      rgba(255,255,255,.72)
 --glass-border-soft rgba(255,255,255,.48)
---glass-blur        34px        常规
---glass-blur-strong 48px        强调容器
 --glass-shadow      0 10px 34px rgba(38,62,100,.10)
 --glass-shadow-lg   0 22px 68px rgba(38,62,100,.16)
 --glass-highlight   inset 0 1px 0 rgba(255,255,255,.85)
 ```
 
+> ⚠️ `--glass-blur` / `--glass-blur-strong` **已经不用了**。2026-11-04 起全站去掉
+> backdrop blur,只保留聊天列 `.right-pane` 的 18px。理由见下面「玻璃:关掉模糊之后」。
+
 深色主题里同结构换值(烟熏玻璃,不是黑板)。
+
+## 玻璃:关掉模糊之后
+
+**背景模糊和液态玻璃的折射是互相抵消的。** 引擎的滤镜链是
+`url(#lg-N_filter) blur(18px)` —— blur 排在后面,把前面位移贴图造成的边缘错位
+整个抹平,于是面板看上去只是一块磨砂板,折射一点都看不出来。
+
+所以 2026-11-04 的做法是:
+
+| 位置 | 改前 | 改后 |
+|---|---|---|
+| `.topbar` / `.list-pane` / `.side-nav` / `.mobile-tabbar` / `.rail-pane` | `backdrop-filter: blur(34px) saturate(180%)` | `LG.register(el, { glow: true, refract: true })` —— 开**真折射**,不糊 |
+| 其它面板(`.panel` / `.block` / 卡片等) | 各种 blur | `backdrop-filter: saturate(180%)` —— 只提饱和度,不糊 |
+| `.right-pane`(聊天列) | blur(18px) | **保留** `blur(18px) saturate(180%)` —— 聊天区文字多,需要一点柔化,又不要太多 |
+| `.lg-glass` | blur + saturate | `saturate(190%) contrast(1.04)` |
+
+**规则:新增玻璃元素不要写 `blur()`。** 要「看起来是玻璃」就去 `LG.register(el, { refract: true })`,
+折射比模糊更像玻璃,而且不牺牲锐度。
+
+`refract: true` 的成本是真算像素,别铺满整页:只给主面板和小卡片。
+按钮按下形变走 `LG.register(el, { press: true })`,不要自己写 `scale()`。
+
 
 ## Accent
 

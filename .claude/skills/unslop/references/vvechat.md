@@ -47,7 +47,9 @@ VVeChatOS/
 `style.css` 顶部的 `:root` 写死了三条规则,改 UI 之前必须理解:
 
 1. **大而柔的圆角。** 面板是超椭圆(squircle),不是方盒子。卡片 32、面板 28、行 20、控件 16、药丸 999。
-2. **真的半透明。** 面板是 62%~78% 白 + 34px~48px 背景模糊,壁纸能透过来。以前 0.30~0.45 的值看着像灰塑料。
+2. **真的半透明。** 面板是 62%~78% 白,壁纸能透过来。以前 0.30~0.45 的值看着像灰塑料。
+   (注:**背景模糊已经在 2026-11-04 全站去掉了**,只保留聊天列 18px —— 模糊会把液态玻璃的折射冲掉。
+   想要「玻璃感」用 `LG.register(el, { refract: true })`,别写 `blur()`。)
 3. **轻而宽的阴影,不要描边。** 分隔靠模糊 + 阴影,不靠线条。
 
 > 这三条是**已经解决好的问题**。上游 unslop 说「少用阴影、少用描边」,VVeChat 恰恰是「阴影和模糊是唯一的分隔手段」——这里的「少」指的是「别在不该有的地方加」,不是「删掉」。
@@ -115,10 +117,13 @@ VVeChatOS/
 
 - 入口:`applyLiquidGlass()`(在 app.js 里),主题切换后会在 `applyTheme()` 末尾补一次 `setTheme()`。
 - 引擎 API:`LiquidGlass.setTheme(mode)`、`LiquidGlass.markDirty()`。
-- **真折射只给 Chromium,而且开销高** → 只给小卡片用。
+- **真折射只给 Chromium,而且开销高** → 只给小卡片和主面板用。
+  (2026-11-04 起主面板 `.topbar` / `.list-pane` / `.side-nav` / `.mobile-tabbar` / `.rail-pane`
+  也开 `refract: true`,因为模糊已经全站去掉。)
 - 果冻物理、体积光是全局铺开的。
 - CSS 类:`.lg-glass`(普通玻璃卡片)、`.lg-lit-host`(已经定位的元素)。
   - **陷阱**:`position: relative` 会把 `position: fixed` 的浮层拉回文档流 —— 只给 computed position 为 static 的元素加 `.lg-glass`,已定位的用 `.lg-lit-host`。
+- **滤镜链顺序陷阱**:引擎是 `url(#f) blur(18px)`,blur 在后 → 折射被抹平。要折射就不要 blur。
 
 ## 六、签名元素(别动,也别复制第二套)
 
@@ -136,13 +141,69 @@ VVeChatOS/
 - Socket 事件:`group:member-left`、`group:owner-changed`、`group:disbanded`、`ai:chat-title` 等。
 - 管理端接口:`GET /api/control/snapshot`、`POST /api/control/purge-user/:id`、`POST /api/control/format-all`、`GET /api/admin/stats`、`GET /api/ai/status`。
 - 助手走 OVH 公共端点(Qwen3.6),`GET /api/ai/status` 能看 provider/model 就绪状态。
-- 上线方式:GitHub `main` → Render 自动部署。**每次上线必须 bump `frontend/index.html` 里的资源版本号**(现在是 `20261102c`),否则浏览器拿旧缓存。
+- 上线方式:GitHub `main` → Render 自动部署。**每次上线必须 bump `frontend/index.html` 里的资源版本号**(现在是 `20261104a`),否则浏览器拿旧缓存。
+
+## 七之二、静态资源路径(踩过两次的坑)
+
+后端把 `frontend/` 挂在站点根上:`/style.css` → `frontend/style.css`,
+`/assets/wall-light.jpg` → `frontend/assets/wall-light.jpg`。
+
+所以:
+
+- 前端 HTML 里写 `url('assets/wall-light.jpg')`(相对 `/style.css`)→ `/assets/...` ✅
+- 控制台 HTML 在 `/control/` 下,写 `url('../assets/wall-light.jpg')` → `/assets/...` ✅
+- **写成 `url('../frontend/assets/...')` 会命中 SPA 兜底路由,返回一段 HTML(200!),
+  浏览器当图片解码失败 → 壁纸不显示,背景变成死灰。** 这个坑最难查,因为状态码是 200。
+
+验证办法:`curl -s -o /dev/null -w '%{content_type} %{size_download}' <url>`,
+要看到 `image/jpeg` 和几百 KB,而不是 `text/html`。
+
+## 七之三、双语(i18n)
+
+主界面有中英切换,词条表在 `frontend/app.js` 顶部的 `STRINGS = { zh: {...}, en: {...} }`。
+三种文本来源,三套接法:
+
+| 来源 | 接法 |
+|---|---|
+| `index.html` 里的静态文案 | 加 `data-i18n="key"`(文本)/ `data-i18n-ph` / `data-i18n-title` / `data-i18n-aria` |
+| `app.js` 动态生成的 HTML | 直接 `t('key')`,插值用 `t('key', arg)` + 词条里的 `{0}` |
+| **服务端下发**(provider label/note、模型 tag) | 服务端同时给 `label` 和 `labelEn`,前端按 `lang` 选 |
+
+**规则**
+
+1. `t()` 找不到 key 时会 fallback 到 `STRINGS.zh[key]` —— 所以 zh 表必须 ⊇ en 表。
+   写新词条要**两张表都加**。`node tools/check-i18n-keys.js` 会验这个。
+2. `zh` / `en` 两张表里同一个 key 出现两次时,**后写的赢**(JS 对象字面量的规则)。
+   老表里有 5 个重复 key(`cancel`/`ok`/`profile_title`/`btn_logout`/`reply`),值一样所以没出事,
+   但 `reply` 的语义是「引用/Reply」,新代码请用 `t('quote')`。
+3. **英文界面不能出现中文。** 动态 UI(群资料、消息操作栏、确认框、Toast、AI 面板)
+   是最容易漏的 —— 2026-11-04 一口气清了 126 处硬编码中文,加了 127 条词条。
+4. 服务端存的字面量(如 AI 对话默认标题 `'新对话'`)也会漏到界面上,
+   前端要把它当「没有标题」处理:`if (!raw || raw === '新对话') return t('ai_new_chat_title');`
+5. 英文界面里**故意保留**的中文只有两处:语言切换按钮本身(「中」「中文」——
+   它显示的是「要切到哪种语言」)。
+
+## 七之四、响应式断点
+
+| 断点 | 行为 |
+|---|---|
+| ≤ 820px | 手机:列表变抽屉,顶栏按钮搬进 FAB 展开的竖排 sheet |
+| 620–899px | 控制台单栏,`max-width: 720px` 居中 |
+| ≥ 900px | 控制台两栏 grid:`"users convos" / "users groups"`,列 `minmax(300px,.8fr) minmax(0,1.2fr)`,整体 `max-width: 1180px` |
+
+**媒体查询必须写在基础规则之后。** CSS 是「同优先级后来者胜」,
+`control/style.css` 里的 iPad 块一开始插在 `.panel { display:flex }` 前面,
+结果被后写的 `display:flex` 盖掉,两栏完全没生效 —— 看起来像「媒体查询没写对」。
+整个块现在放在文件末尾。
+
+触控设备(`@media (pointer: coarse)`)要把药丸/按钮/用户行的点击区放大。
+
 
 ## 八、怎么在本地看界面
 
 ```bash
 # 起本地服务(用另一个数据库,别碰线上库)
-PORT=3000 DB_FILE=/workspace/vvechat-test.db node server.js
+PORT=3000 DB_FILE=vvechat-test.db node server.js
 
 # 截图(技能自带)
 node .claude/skills/unslop/scripts/shot-vvechat.mjs \
@@ -161,4 +222,7 @@ node .claude/skills/unslop/scripts/shot-vvechat.mjs \
 4. 不把 Qwen 的发光环换成字母头像,也不在别处新造发光头像。
 5. 不为了「统一」把群 emoji 头像换成字母。
 6. 不改 `--r-*` 圆角阶梯的层级关系。
-7. 改完记得 bump 版本号再推。
+7. **不要新增 `backdrop-filter: blur()`**(除了聊天列那 18px)。玻璃感来自折射,不是模糊。
+8. **英文界面里不许出现中文。** 新写的文案先进 `STRINGS` 两张表,别直接写死。
+9. 改完记得 bump 版本号再推。
+

@@ -37,6 +37,16 @@ Vibecoded 的界面失败在同样的地方:到处发光、到处 emoji、间距
 | **iOS 风格的小标题**(全大写 + 字距) | 代码里明确写了是 iOS Settings 风格。字号仍然不许低于 11px |
 | **550C 开机动画的小字**(9~10.5px) | 那是 CRT 终端序列的质感,一次性的过场,不是工作界面 |
 
+**另外三条硬规则(2026-11-04 加)**:
+
+- **玻璃感来自折射,不是模糊。** 全站 backdrop blur 已归零(只留聊天列 18px),
+  因为滤镜链 `url(#f) blur(18px)` 里 blur 在后,会把折射抹平。
+  新增玻璃元素写 `LG.register(el, { refract: true })`,**不要写 `blur()`**。
+- **一个界面只有一种语言。** 新文案先进 `STRINGS` 的 zh / en 两张表;
+  服务端下发的文案要同时给两种语言。英文界面里不许出现中文。
+- **媒体查询写在基础规则之后。** CSS 同优先级后来者胜,iPad 块被后写的
+  `display:flex` 盖掉过一次,表现和「媒体查询写错」一模一样。
+
 **界线怎么画**:上游说的「渐变/发光/阴影要少而克制」,在 VVeChat 翻译成 —— **一个屏幕里,允许有玻璃、有折射、有光晕,但它们要各自有理由**:玻璃是容器,折射只给少数小卡片(成本高),光晕只给签名元素(助手环、Jack 头像)。**到处都是玻璃光晕 = slop;只有助手环在发光 = 设计。**
 
 其余上游规则(spacing 网格、图标统一、文案不喊、层级靠字号而不是粗细、数字统一格式、动效只解释事情)**在 VVeChat 里全部照用**。
@@ -193,7 +203,7 @@ Vibecoded 的界面失败在同样的地方:到处发光、到处 emoji、间距
 
 把一个屏幕「自己变干净」的过程录成短视频:红色红线标出 slop,每一步只改 CSS,让数值自己补间过去。
 
-- 上游的 `scripts/story.mjs`:`node scripts/story.mjs unslop-story/story.html unslop-story.mp4`(需要 Playwright 和 ffmpeg;本仓库没收录,去 heydamir/unslop 取)。
+- 脚本在 `scripts/story.mjs`:`node scripts/story.mjs unslop-story/story.html unslop-story.mp4`(需要 Playwright 和 ffmpeg)。
 - 页面用 1440 宽、至少 900 高,别用 100vh。
 - 三到五步,合并成看得见变化的几个:Spacing → Color and icons → Type and copy → Details。
 - 只改数值,不改结构,浏览器才补间得了。渐变/光晕单独一层淡出,文字换行用少量 swap(最多八处,二十处一起来就像两张图硬切)。

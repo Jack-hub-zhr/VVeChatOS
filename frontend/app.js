@@ -240,7 +240,171 @@
       chat_input_ph: '输入消息…',
       send: '发送',
       attach: '图片',
-    },
+   
+      splash_aria: '点击任意处开始使用',
+      auth_username_ph: '2-24 位字符',
+      auth_password_ph: '至少 4 位',
+      my_profile: '我的资料',
+      menu: '菜单',
+      main_menu: '主菜单',
+      lang_switch: '切换语言',
+      friend_requests: '好友申请',
+      search_add: '搜索 / 添加',
+      log_out: '退出登录',
+      toggle_theme: '切换主题',
+      nav_ai: '助手',
+      nav_settings: '设置',
+      new_chat: '新对话',
+      session_list: '会话列表',
+      back_to_chat: '返回聊天',
+      collapse_list: '收起会话列表',
+      refresh: '刷新',
+      group_settings: '群聊设置',
+      wipe_official: '清空官方群',
+      remove: '移除',
+      emoji: '表情',
+      image: '图片',
+      mention_members: '@ 群成员',
+      search_username_ph: '搜索用户名…',
+      any_part_ph: '输入任何部分即可',
+      no_friend_requests: '暂无好友申请',
+      new_message: '新消息',
+      popup_hint: '点击打开对话 · 5 秒后自动关闭',
+      quick_reply_ph: '快速回复…',
+
+      ai_model_title: '选择模型',
+      ai_level_title: '思考档位',
+      expand_list: '展开会话列表',
+      back: '返回',
+
+      admin_word: '管理员',
+      jack_admin_title: 'Jack 管理员',
+      mentioned_me: '有人@我',
+      confirm_action: '确认操作',
+      quote: '引用',
+      me_tag: '我',
+      remove_from_group: '移出群聊',
+      confirm_remove_member: '确定把 {0} 从群里移出？',
+      remove_verb: '移出',
+      removed_member: '已移出 {0}',
+      group_name: '群名称',
+      mention_pick_hint: '选择要 @ 的群成员',
+      mention_preview_text: '这条消息会 @ 他',
+      mention_members_title: '@ 群成员',
+      mention_only_group: '只有群聊才能 @ 人',
+      view_profile: '查看资料',
+      more_actions: '更多操作',
+      send_emoji: '发送 {0}',
+      forward_hint: '转发 — 把这条消息发给其他好友或群聊',
+      quote_hint: '引用 — 引用这条消息并回复（显示在发送的消息上方）',
+      copy: '复制',
+      copy_hint: '复制 — 把消息内容复制到剪贴板',
+      clear_msg: '清除',
+      clear_msg_hint: '清除 — 管理员可永久清除任何消息',
+      recall_msg: '撤回',
+      recall_msg_hint: '撤回 — 2 分钟内可撤回自己发送的消息',
+      cancel_hint: '取消 — 关闭操作栏',
+      pick_conversation_first: '请先选择一个会话',
+      server_no_message: '服务器没有返回消息',
+      send_failed: '发送失败',
+      send_failed_reason: '发送失败：{0}',
+      add_friend: '加好友',
+      remove_friend: '删除好友',
+      now_friends: '已成为好友 ✓',
+      request_sent_check: '申请已发送 ✓',
+      confirm_remove_friend: '确定不再和 {0} 做好友吗？你们的私聊记录也会一并清除。',
+      friend_removed: '已删除好友 {0}',
+      delete_failed: '删除失败',
+      user_not_found: '找不到该用户',
+      sending: '发送中…',
+      added_name: '已添加 {0}',
+      friend_request_sent_to: '好友申请已发送给 {0}',
+      add_failed: '添加失败',
+      friend_added: '已添加好友',
+      rejected: '已拒绝',
+      op_failed: '操作失败',
+      requested: '已申请',
+      friend_req_sent_to: '已向 {0} 发送好友申请',
+      cannot_open_chat: '无法打开会话',
+      no_user_found: '没有找到用户',
+      send_message: '发消息',
+      search_failed: '搜索失败：{0}',
+      add_member_to: '添加成员到「{0}」',
+      no_matching_user: '没有匹配的用户',
+      all_users_in_group: '所有用户都已在群里',
+      add_member_verb: '添加',
+      added_check: '✓ 已添加',
+      load_failed: '加载失败',
+      join_requests: '入群申请',
+      no_requests_yet: '暂时没有申请',
+      admin_wiped_group: '群消息已被管理员清除',
+      open_group_first: '请先打开一个群聊',
+      jack_only: '只有 Jack 可以使用该功能',
+      current_group: '当前群聊',
+      wipe_group_title: '清空群内所有消息',
+      confirm_wipe_group: '确定要删除「{0}」内的全部消息吗？此操作不可恢复。',
+      delete_all: '全部删除',
+      deleted_messages: '已删除 {0} 条消息',
+      conv_load_failed: '会话加载失败',
+      conv_load_failed_reason: '加载会话失败：{0}',
+      someone: '有人',
+      is_typing: '正在输入…',
+      thinking_process: '思考过程',
+      need_key_suffix: '（需密钥）',
+      ai_yesterday: '昨天',
+      ai_this_week: '本周',
+      ai_this_month: '本月',
+      ai_earlier: '更早',
+      ai_no_chats: '还没有对话记录',
+      ai_new_chat_title: '新对话',
+      ai_delete_chat: '删除对话',
+      ai_load_chat_failed: '加载对话失败',
+      ai_new_chat_failed: '新建对话失败',
+      no_key_suffix: '（未配置密钥）',
+      models_available: '{0} 个模型可用',
+      no_qwen_source: '没有可用的 Qwen 源',
+      ai_setup_key: '接入免费 Qwen 密钥',
+      ai_setup_ask_admin: '尚未接入密钥（请联系管理员）',
+      ai_setup_hint: '粘贴一个免费中转的密钥，立即生效',
+      ai_setup_admin_only: '只有管理员可以配置',
+      relay_unavailable: '中转暂不可用',
+      configured: '已配置',
+      paste_key_ph: '粘贴 API Key（留空＝不启用）',
+      no_key_needed: '无需密钥',
+      ai_setup_intro: '免密钥的公共端点已经可以直接用。想换更快的模型、用上「思考档位」或「官方联网搜索」，在下面任选一家免费注册后把密钥贴进来（留空＝不启用该家）：',
+      tavily_opt: 'Tavily 搜索（可选）',
+      tavily_note: '不填也能搜索，只是结果质量差一些',
+      paste_tavily_ph: '粘贴 Tavily API Key（留空＝不启用）',
+      save: '保存',
+      need_one_key: '请至少填写一个密钥',
+      saved_rechecking: '已保存，正在重新检查中转源…',
+      stop_generating: '停止生成',
+      searching_web: '正在联网搜索…',
+      thinking_now: '正在思考…',
+      switched_suffix: '（已切换）',
+      switching_model: '正在换用其他模型…',
+      search_on: '已开启联网搜索（由模型自己搜索）',
+      search_results: '已联网搜索 · {0} 条来源',
+      search_no_results: '联网搜索没有找到结果',
+      relay_failed: '中转失败',
+      stopped: '已停止',
+      request_failed: '请求失败',
+      no_reply: '没有收到回复',
+      ready: '就绪',
+      toast_theme_auto: '跟随系统',
+      toast_theme_dark: '已切换到深色',
+      toast_theme_light: '已切换到浅色',
+      boot550c_on: '已开启 550C 启动动画主题',
+      boot550c_off: '已关闭 550C 启动动画主题',
+      group_name_required: '给群起个名字',
+      group_created: '群建好了',
+      no_messages_yet: '还没有消息',
+      a_group: '某个群',
+      group_word: '群',
+      switched_to_en: '已切换到 English',
+      switched_to_zh: '已切换到中文',
+      contacts: '联系人',
+ },
     en: {
       theme_auto: 'System',
       theme_light: 'Light',
@@ -469,7 +633,171 @@
       chat_input_ph: 'Type a message…',
       send: 'Send',
       attach: 'Image',
-    },
+   
+      splash_aria: 'Tap anywhere to start',
+      auth_username_ph: '2-24 characters',
+      auth_password_ph: 'At least 4 characters',
+      my_profile: 'My profile',
+      menu: 'Menu',
+      main_menu: 'Main menu',
+      lang_switch: 'Switch language',
+      friend_requests: 'Friend requests',
+      search_add: 'Search / Add',
+      log_out: 'Log out',
+      toggle_theme: 'Toggle theme',
+      nav_ai: 'Assistant',
+      nav_settings: 'Settings',
+      new_chat: 'New chat',
+      session_list: 'Conversation list',
+      back_to_chat: 'Back to chat',
+      collapse_list: 'Collapse conversation list',
+      refresh: 'Refresh',
+      group_settings: 'Group settings',
+      wipe_official: 'Clear official group',
+      remove: 'Remove',
+      emoji: 'Emoji',
+      image: 'Image',
+      mention_members: '@ group members',
+      search_username_ph: 'Search username…',
+      any_part_ph: 'Type any part of it',
+      no_friend_requests: 'No friend requests',
+      new_message: 'New message',
+      popup_hint: 'Tap to open · closes in 5s',
+      quick_reply_ph: 'Quick reply…',
+
+      ai_model_title: 'Choose a model',
+      ai_level_title: 'Thinking level',
+      expand_list: 'Expand conversation list',
+      back: 'Back',
+
+      admin_word: 'Admin',
+      jack_admin_title: 'Jack · Admin',
+      mentioned_me: 'mentioned me',
+      confirm_action: 'Confirm action',
+      quote: 'Quote',
+      me_tag: 'Me',
+      remove_from_group: 'Remove from group',
+      confirm_remove_member: 'Remove {0} from the group?',
+      remove_verb: 'Remove',
+      removed_member: 'Removed {0}',
+      group_name: 'Group name',
+      mention_pick_hint: 'Pick a group member to @',
+      mention_preview_text: 'This message will @ them',
+      mention_members_title: '@ Members',
+      mention_only_group: 'You can only @ people in a group chat',
+      view_profile: 'View profile',
+      more_actions: 'More actions',
+      send_emoji: 'Send {0}',
+      forward_hint: 'Forward — send this message to a friend or a group',
+      quote_hint: 'Quote — reply to this message (shown above your reply)',
+      copy: 'Copy',
+      copy_hint: 'Copy — copy the message to the clipboard',
+      clear_msg: 'Clear',
+      clear_msg_hint: 'Clear — an admin can permanently remove any message',
+      recall_msg: 'Recall',
+      recall_msg_hint: 'Recall — you can recall your own message within 2 minutes',
+      cancel_hint: 'Cancel — close the action bar',
+      pick_conversation_first: 'Pick a conversation first',
+      server_no_message: 'The server did not return a message',
+      send_failed: 'Send failed',
+      send_failed_reason: 'Send failed: {0}',
+      add_friend: 'Add friend',
+      remove_friend: 'Remove friend',
+      now_friends: 'Now friends ✓',
+      request_sent_check: 'Request sent ✓',
+      confirm_remove_friend: 'Stop being friends with {0}? Your private chat history will be deleted too.',
+      friend_removed: 'Removed friend {0}',
+      delete_failed: 'Delete failed',
+      user_not_found: 'User not found',
+      sending: 'Sending…',
+      added_name: 'Added {0}',
+      friend_request_sent_to: 'Friend request sent to {0}',
+      add_failed: 'Failed to add',
+      friend_added: 'Friend added',
+      rejected: 'Rejected',
+      op_failed: 'Action failed',
+      requested: 'Requested',
+      friend_req_sent_to: 'Sent a friend request to {0}',
+      cannot_open_chat: 'Cannot open the chat',
+      no_user_found: 'No users found',
+      send_message: 'Message',
+      search_failed: 'Search failed: {0}',
+      add_member_to: 'Add members to “{0}”',
+      no_matching_user: 'No matching users',
+      all_users_in_group: 'Everyone is already in the group',
+      add_member_verb: 'Add',
+      added_check: '✓ Added',
+      load_failed: 'Failed to load',
+      join_requests: 'Join requests',
+      no_requests_yet: 'No requests yet',
+      admin_wiped_group: 'The group messages were cleared by the admin',
+      open_group_first: 'Open a group chat first',
+      jack_only: 'Only Jack can use this',
+      current_group: 'This group',
+      wipe_group_title: 'Delete every message',
+      confirm_wipe_group: 'Delete every message in “{0}”? This cannot be undone.',
+      delete_all: 'Delete all',
+      deleted_messages: 'Deleted {0} messages',
+      conv_load_failed: 'Failed to load conversations',
+      conv_load_failed_reason: 'Failed to load conversations: {0}',
+      someone: 'Someone',
+      is_typing: 'is typing…',
+      thinking_process: 'Reasoning',
+      need_key_suffix: ' (key required)',
+      ai_yesterday: 'Yesterday',
+      ai_this_week: 'This week',
+      ai_this_month: 'This month',
+      ai_earlier: 'Earlier',
+      ai_no_chats: 'No conversations yet',
+      ai_new_chat_title: 'New chat',
+      ai_delete_chat: 'Delete chat',
+      ai_load_chat_failed: 'Failed to load the chat',
+      ai_new_chat_failed: 'Failed to create the chat',
+      no_key_suffix: ' (no key configured)',
+      models_available: '{0} models available',
+      no_qwen_source: 'No available Qwen source',
+      ai_setup_key: 'Add a free Qwen key',
+      ai_setup_ask_admin: 'No key yet (ask the admin)',
+      ai_setup_hint: 'Paste a free relay key — it takes effect immediately',
+      ai_setup_admin_only: 'Only the admin can configure this',
+      relay_unavailable: 'The relay is temporarily unavailable',
+      configured: 'configured',
+      paste_key_ph: 'Paste an API key (leave blank to skip)',
+      no_key_needed: 'No key needed',
+      ai_setup_intro: 'The key-free public endpoint is ready to use. To unlock faster models, thinking levels or web search, sign up for a free relay below and paste the key (leave blank to skip it):',
+      tavily_opt: 'Tavily search (optional)',
+      tavily_note: 'Optional — search still works without it, just with weaker results',
+      paste_tavily_ph: 'Paste a Tavily API key (leave blank to skip)',
+      save: 'Save',
+      need_one_key: 'Enter at least one key',
+      saved_rechecking: 'Saved — re-checking the relay sources…',
+      stop_generating: 'Stop generating',
+      searching_web: 'Searching the web…',
+      thinking_now: 'Thinking…',
+      switched_suffix: ' (switched)',
+      switching_model: 'Switching to another model…',
+      search_on: 'Web search is on (the model searches by itself)',
+      search_results: 'Searched the web · {0} sources',
+      search_no_results: 'The web search found nothing',
+      relay_failed: 'The relay failed',
+      stopped: 'Stopped',
+      request_failed: 'Request failed',
+      no_reply: 'No reply received',
+      ready: 'Ready',
+      toast_theme_auto: 'Following the system',
+      toast_theme_dark: 'Switched to dark',
+      toast_theme_light: 'Switched to light',
+      boot550c_on: '550C boot theme enabled',
+      boot550c_off: '550C boot theme disabled',
+      group_name_required: 'Give the group a name',
+      group_created: 'Group created',
+      no_messages_yet: 'No messages yet',
+      a_group: 'A group',
+      group_word: 'Group',
+      switched_to_en: 'Switched to English',
+      switched_to_zh: 'Switched to Chinese',
+      contacts: 'Contacts',
+ },
   };
 
   // ---------- state ----------
@@ -942,10 +1270,12 @@
     // 主题可能比液态玻璃引擎先应用完(引擎是异步加载的)——
     // 那样 setTheme 就没赶上,整页的玻璃模式会卡在错的状态。补一次。
     try { LG.setTheme(boot550cOn() ? '550c' : 'light'); } catch (_) {}
-    // 会互相照亮的玻璃面板
+    // 会互相照亮的玻璃面板 —— 现在开真折射。
+    // 以前这些面板只有「受光 + 磨砂」,折射被那一层 backdrop blur 冲掉了,
+    // 看上去就是一块磨砂板;把模糊关掉之后,边缘的折射才看得出来。
     const panels = ['.topbar', '.list-pane', '.side-nav', '.mobile-tabbar', '.rail-pane'];
     for (const sel of panels) {
-      document.querySelectorAll(sel).forEach(el => LG.register(el, { glow: true }));
+      document.querySelectorAll(sel).forEach(el => LG.register(el, { glow: true, refract: true }));
     }
     // 会果冻形变的可点元素
     const pressables = '.side-nav-item, .topbar .icon-btn, .btn, .ai-tool-btn, .msg-action-btn, ' +
@@ -977,7 +1307,7 @@
     av.style.background = fill;
     av.classList.toggle('avatar-jack-glow', state.user.username === 'Jack');
     if (nm) nm.textContent = state.user.username;
-    if (sb) sb.textContent = state.user.username === 'Jack' ? '管理员' : 'VVeChat';
+    if (sb) sb.textContent = state.user.username === 'Jack' ? t('admin_word') : 'VVeChat';
     // The same face, at the top of the list column.
     const la = $('#list-avatar');
     if (la) {
@@ -988,7 +1318,7 @@
     const lnm = $('#list-me-name');
     if (lnm) lnm.textContent = state.user.username;
     const lsb = $('#list-me-sub');
-    if (lsb) lsb.textContent = state.user.username === 'Jack' ? '管理员' : 'VVeChat';
+    if (lsb) lsb.textContent = state.user.username === 'Jack' ? t('admin_word') : 'VVeChat';
   }
 
   function renderTopbarAvatar() {
@@ -1032,7 +1362,7 @@
       const pill = document.createElement('span');
       pill.id = 'topbar-jack-pill';
       pill.className = 'admin-pill';
-      pill.title = 'Jack 管理员';
+      pill.title = t('jack_admin_title');
       pill.textContent = '';  // ::before adds the shield, no text needed
       // insert before the profile button so layout flows: Jack | avatar | bell | plus | logout
       const profile = $('#btn-profile');
@@ -1061,7 +1391,7 @@
       ? c.last_message
       : (isGroup
           ? (isOfficial ? t('official_sub') : t('group_sub'))
-          : (c.is_new_friend ? (t('friend') || '好友') : t('new_msg')));
+          : (c.is_new_friend ? (t('friend')) : t('new_msg')));
     const officialTag = isOfficial ? `<span class="tag-official">${escapeHtml(t('tag_official'))}</span>` : '';
     // avatarStyle() returns a bare CSS declaration list, so it has to be
     // wrapped in style="..." — dropping that produced broken markup like
@@ -1075,7 +1405,7 @@
     // A group message that calls the user out gets a loud prefix, so it
     // is visible even in the one-line preview.
     const atMePrefix = isGroup && mentionsMe(c.last_message)
-      ? '<span style="color:var(--accent);font-weight:700;">[有人@我] </span>' : '';
+      ? `<span style="color:var(--accent);font-weight:700;">[${t('mentioned_me')}] </span>` : '';
     const unreadHtml = c.unread > 0 ? `<span class="unread">${c.unread>99?'99+':c.unread}</span>` : '';
     const inner = isGroup
       ? groupAvatarInner({ name: c.username, is_official: isOfficial, icon_emoji: c.icon_emoji })
@@ -1170,7 +1500,7 @@
       ? c.last_message
       : (isGroup
           ? (isOfficial ? t('official_sub') : t('group_sub'))
-          : (c.is_new_friend ? (t('friend') || '好友') : t('new_msg')));
+          : (c.is_new_friend ? (t('friend')) : t('new_msg')));
       const officialTag = isOfficial ? `<span style="font-size:10px;background:rgba(245,158,11,0.14);color:#b45309;padding:2px 7px;border-radius:6px;border:1px solid rgba(245,158,11,0.30);font-weight:600;">${t('group_sub')==='群聊'?'官方':'Off'}</span>` : '';
       // avatarStyle() returns a bare CSS declaration list, so it has to be
       // wrapped in style="..." — dropping that produced broken markup like
@@ -1237,7 +1567,7 @@
       card.innerHTML = `<div class="avatar" style="${bg}">${groupAvatarInner({ name: g.name, is_official: g.is_official, icon_emoji: g.icon_emoji })}</div>
         <div class="discover-card-main">
           <div class="discover-card-name">${escapeHtml(g.name)}</div>
-          <div class="discover-card-meta">${escapeHtml(owner)} · ${g.member_count || 0} ${lang === 'en' ? 'members' : '人'}</div>
+          <div class="discover-card-meta">${escapeHtml(owner)} · ${memberCountLabel(g.member_count || 0)}</div>
         </div>
         <button class="discover-join${g.requested ? ' pending' : ''}" data-gid="${g.id}">${
           g.requested ? (lang === 'en' ? 'Applied' : '已申请') : (lang === 'en' ? 'Apply' : '申请加入')
@@ -1268,13 +1598,13 @@
       mask.innerHTML = `
         <div class="ask-confirm-mask"></div>
         <div class="modal-card ask-confirm-card">
-          <div class="modal-head"><h3>${escapeHtml(opts.title || '确认操作')}</h3></div>
+          <div class="modal-head"><h3>${escapeHtml(opts.title || t('confirm_action'))}</h3></div>
           <div class="modal-body" style="font-size:14px;line-height:1.6;color:var(--ink-2);">
             ${escapeHtml(opts.message || '')}
           </div>
           <div class="modal-actions" style="display:flex;gap:10px;padding:0 20px 20px">
-            <button class="btn btn-ghost" data-x="0" style="flex:1">${escapeHtml(opts.cancelText || '取消')}</button>
-            <button class="btn ${opts.danger === false ? 'btn-primary' : 'btn-danger'}" data-x="1" style="flex:1">${escapeHtml(opts.okText || '确定')}</button>
+            <button class="btn btn-ghost" data-x="0" style="flex:1">${escapeHtml(opts.cancelText || t('cancel'))}</button>
+            <button class="btn ${opts.danger === false ? 'btn-primary' : 'btn-danger'}" data-x="1" style="flex:1">${escapeHtml(opts.okText || t('ok'))}</button>
           </div>
         </div>`;
       document.body.appendChild(mask);
@@ -1315,7 +1645,7 @@
     const gBg = g.icon_color ? `background:linear-gradient(135deg, ${g.icon_color || '#8b5cf6'}, ${shade(g.icon_color || '#8b5cf6', -25)});` : '';
     head.innerHTML = `<div class="gi-avatar" style="${gBg}">${groupAvatarInner({ name: g.name, is_official: isOfficial, icon_emoji: g.icon_emoji })}</div>
       <div class="gi-name" id="gi-name">${escapeHtml(groupDisplayName(g.name, isOfficial) || '—')}</div>
-      <div class="gi-meta">${g.member_count || 0} ${lang==='zh'?'人':'members'}</div>`;
+      <div class="gi-meta">${memberCountLabel(g.member_count || 0)}</div>`;
     wrap.appendChild(head);
 
     // Editable name row (群主 / 管理员)
@@ -1323,7 +1653,7 @@
       const renameRow = document.createElement('div');
       renameRow.className = 'settings-row';
       renameRow.innerHTML = `<span class="settings-label">${lang==='zh'?'群名称':'Group name'}</span>
-        <span class="settings-value" id="gi-rename-value">${escapeHtml(g.name || '—')}</span>
+        <span class="settings-value" id="gi-rename-value">${escapeHtml(groupDisplayName(g.name, isOfficial) || '—')}</span>
         <span class="settings-chevron">›</span>`;
       renameRow.addEventListener('click', () => doRenameGroup(g, renameRow));
       wrap.appendChild(renameRow);
@@ -1413,7 +1743,7 @@
       mTitle.textContent = lang==='zh'?'群成员（' + roster.length + '）':`Members (${roster.length})`;
       g.member_count = roster.length;
       const giMeta = wrap.querySelector('.gi-meta');
-      if (giMeta) giMeta.textContent = roster.length + (lang==='zh'?' 人':' members');
+      if (giMeta) giMeta.textContent = memberCountLabel(roster.length);
       for (const m of roster) {
         const row = document.createElement('div'); row.className = 'settings-row';
         const bg = m.avatar_color ? `background:linear-gradient(135deg, ${m.avatar_color}, ${shade(m.avatar_color, -25)})` : '';
@@ -1432,15 +1762,15 @@
         if (kick) kick.addEventListener('click', async (e) => {
           e.stopPropagation();
           const ok = await askConfirm({
-            title: '移出群聊',
-            message: '确定把 ' + m.username + ' 从群里移出？',
-            okText: '移出',
+            title: t('remove_from_group'),
+            message: t('confirm_remove_member', m.username),
+            okText: t('remove_verb'),
           });
           if (!ok) return;
           try {
             await api(`/groups/${gid}/members/${m.id}`, { method: 'DELETE' });
             row.remove();
-            toast('已移出 ' + m.username);
+            toast(t('removed_member', m.username));
             refreshGroups();
           } catch (e) { toast(e.message); }
         });
@@ -1566,8 +1896,8 @@
   function setReplyTo(msg) {
     if (!msg) return;
     state.pendingReply = { id: msg.id, sender_username: msg.sender_username, content: msg.content, type: msg.type };
-    $('#reply-preview-name').textContent = `${t('reply') || '引用'} ${msg.sender_username}`;
-    $('#reply-preview-text').textContent = msg.type === 'image' ? (t('type_image') || '[图片]') : (msg.content || '').slice(0, 80);
+    $('#reply-preview-name').textContent = `${t('quote')} ${msg.sender_username}`;
+    $('#reply-preview-text').textContent = msg.type === 'image' ? (t('type_image')) : (msg.content || '').slice(0, 80);
     $('#reply-preview').classList.remove('hidden');
     $('#chat-input')?.focus();
   }
@@ -1789,11 +2119,11 @@
     mentionState.end = q.end;
     // A hint line at the top of the picker: the "@" button is a new way
     // in, so say what the list is for.
-    const head = '<div class="mention-hint">选择要 @ 的群成员</div>';
+    const head = `<div class="mention-hint">${t('mention_pick_hint')}</div>`;
     menu.innerHTML = head + items.map((m, i) => {
       const bg = m.avatar_color ? `background:linear-gradient(135deg, ${m.avatar_color}, ${shade(m.avatar_color, -25)});` : '';
       const em = emojiOf(m);
-      const who = m.id === state.user.id ? '<div class="tag">我</div>' : '';
+      const who = m.id === state.user.id ? `<div class="tag">${t('me_tag')}</div>` : '';
       // The assistant is a person here, but a special one — mark it, so
       // it does not get lost among the ordinary members.
       const isBot = String(m.username || '').toLowerCase() === 'qwen';
@@ -1849,7 +2179,7 @@
     const nameEl = $('#mention-preview-name');
     const textEl = $('#mention-preview-text');
     if (nameEl) nameEl.textContent = '@ ' + t.username;
-    if (textEl) textEl.textContent = '这条消息会 @ 他';
+    if (textEl) textEl.textContent = t('mention_preview_text');
   }
 
   function clearMentionTarget() {
@@ -1931,7 +2261,7 @@
     const c = state.currentChat;
     const on = !!(c && c.type === 'group');
     b.classList.toggle('disabled', !on);
-    b.title = on ? '@ 群成员' : '只有群聊才能 @ 人';
+    b.title = on ? t('mention_members_title') : t('mention_only_group');
     // The hint that says the assistant can be called by name.
     const hint = $('#qwen-hint');
     if (hint) hint.classList.toggle('hidden', !on);
@@ -1970,7 +2300,7 @@
     const glowCls = isJackAvatar ? ' avatar-jack-glow' : '';
     // Task: tap a group member's avatar to open their profile and add them.
     const msgEmoji = emojiOf(u);
-    const avatarHtml = `<div class="msg-avatar avatar sm${glowCls}" style="${bgStyle}" data-uid="${m.sender_id}" data-user-avatar="${m.sender_id}" role="button" title="查看资料">${avatarContent(u.username, msgEmoji, 26)}</div>`;
+    const avatarHtml = `<div class="msg-avatar avatar sm${glowCls}" style="${bgStyle}" data-uid="${m.sender_id}" data-user-avatar="${m.sender_id}" role="button" title="${t('view_profile')}">${avatarContent(u.username, msgEmoji, 26)}</div>`;
     // sender name — show for group chats when message is from someone else
     const senderName = ctype === 'group' && !mine
       ? `<div class="msg-meta"><span class="sender">${escapeHtml(m.sender_username)}</span></div>`
@@ -1982,7 +2312,7 @@
     else bubbleContent = `<div class="msg-bubble">${renderMentionText(m.content)}</div>`;
     // "Someone called you out" — a flag above the bubble.
     const mentionFlag = (ctype === 'group' && !mine && !m.is_deleted && mentionsMe(m.content))
-      ? '<div class="mention-flag">@ 我</div>' : '';
+      ? `<div class="mention-flag">@ ${t('me_tag')}</div>` : '';
     const time = new Date(m.created_at).toTimeString().slice(0,5);
     let receipt = '';
     if (mine && ctype === 'user' && !m.is_deleted) {
@@ -2000,7 +2330,7 @@
     // so they sit directly beneath the time, aligned with it.
     // A deleted message has nothing to act on, so it gets no dots at all
     // (a visible button that does nothing is worse than no button).
-    const dotsHtml = m.is_deleted ? '' : `<button class="msg-dots" type="button" aria-label="更多操作" title="更多操作">
+    const dotsHtml = m.is_deleted ? '' : `<button class="msg-dots" type="button" aria-label="${t('more_actions')}" title="${t('more_actions')}">
       <svg viewBox="0 0 34 6" width="34" height="6" fill="currentColor">
         <circle cx="4" cy="3" r="2.2"/><circle cx="17" cy="3" r="2.2"/><circle cx="30" cy="3" r="2.2"/>
       </svg>
@@ -2060,35 +2390,35 @@
     // whole point is a one-tap reply, so it must not require the composer.
     const QUICK_EMOJIS = ['👍','❤️','😂','🎉','😮','😢','🙏','🔥'];
     const quickRow = `<div class="msg-action-quick">${QUICK_EMOJIS.map(em =>
-      `<button class="msg-quick-emoji" data-quick-emoji="${em}" title="发送 ${em}" aria-label="发送 ${em}">${em}</button>`
+      `<button class="msg-quick-emoji" data-quick-emoji="${em}" title="${t('send_emoji', em)}" aria-label="${t('send_emoji', em)}">${em}</button>`
     ).join('')}</div>`;
     bar.innerHTML = `${quickRow}
-      <button class="msg-action-btn msg-action-forward" data-tip="转发" title="转发 — 把这条消息发给其他好友或群聊" aria-label="转发">
-        <span class="msg-action-label">转发</span>
+      <button class="msg-action-btn msg-action-forward" data-tip="${t('forward')}" title="${t('forward_hint')}" aria-label="${t('forward')}">
+        <span class="msg-action-label">${t('forward')}</span>
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/>
         </svg>
       </button>
-      <button class="msg-action-btn msg-action-reply ${canReply ? '' : 'msg-action-disabled'}" data-tip="引用" title="引用 — 引用这条消息并回复（显示在发送的消息上方）" aria-label="引用" ${canReply ? '' : 'disabled'}>
-        <span class="msg-action-label">引用</span>
+      <button class="msg-action-btn msg-action-reply ${canReply ? '' : 'msg-action-disabled'}" data-tip="${t('quote')}" title="${t('quote_hint')}" aria-label="${t('quote')}" ${canReply ? '' : 'disabled'}>
+        <span class="msg-action-label">${t('quote')}</span>
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/>
         </svg>
       </button>
-      <button class="msg-action-btn msg-action-copy" data-tip="复制" title="复制 — 把消息内容复制到剪贴板" aria-label="复制">
-        <span class="msg-action-label">复制</span>
+      <button class="msg-action-btn msg-action-copy" data-tip="${t('copy')}" title="${t('copy_hint')}" aria-label="${t('copy')}">
+        <span class="msg-action-label">${t('copy')}</span>
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
         </svg>
       </button>
-      <button class="msg-action-btn msg-action-delete ${canDelete ? '' : 'msg-action-disabled'}" data-tip="${jack ? '清除' : '撤回'}" title="${jack ? '清除 — 管理员可永久清除任何消息' : '撤回 — 2 分钟内可撤回自己发送的消息'}" aria-label="${jack ? '清除' : '撤回'}" ${canDelete ? '' : 'disabled'}>
-        <span class="msg-action-label">${jack ? '清除' : '撤回'}</span>
+      <button class="msg-action-btn msg-action-delete ${canDelete ? '' : 'msg-action-disabled'}" data-tip="${jack ? t('clear_msg') : t('recall_msg')}" title="${jack ? t('clear_msg_hint') : t('recall_msg_hint')}" aria-label="${jack ? t('clear_msg') : t('recall_msg')}" ${canDelete ? '' : 'disabled'}>
+        <span class="msg-action-label">${jack ? t('clear_msg') : t('recall_msg')}</span>
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
         </svg>
       </button>
-      <button class="msg-action-btn msg-action-cancel" data-tip="取消" title="取消 — 关闭操作栏" aria-label="取消">
-        <span class="msg-action-label">取消</span>
+      <button class="msg-action-btn msg-action-cancel" data-tip="${t('cancel')}" title="${t('cancel_hint')}" aria-label="${t('cancel')}">
+        <span class="msg-action-label">${t('cancel')}</span>
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
           <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
         </svg>
@@ -2149,7 +2479,7 @@
           await sendMessage(em);
         } catch (e) {
           console.error('[VVeChat] quick emoji failed:', e);
-          toast(e.message || '发送失败');
+          toast(e.message || t('send_failed'));
         }
       });
     });
@@ -2180,15 +2510,15 @@
     document.getElementById('modal-forward')?.remove();
     // Build a proper modal with mask + card so it overlays the whole app
     const html = `<div class="modal-mask" data-close="modal-forward"></div>
-      <div class="modal-card" role="dialog" aria-label="${t('forward_to') || '转发到'}">
+      <div class="modal-card" role="dialog" aria-label="${t('forward_to')}">
         <div class="modal-head">
-          <h3>${t('forward_to') || '转发到'}</h3>
-          <button class="icon-btn icon-btn-sm modal-close" data-close="modal-forward" aria-label="${t('cancel') || '取消'}">×</button>
+          <h3>${t('forward_to')}</h3>
+          <button class="icon-btn icon-btn-sm modal-close" data-close="modal-forward" aria-label="${t('cancel')}">×</button>
         </div>
         <div class="modal-body" style="max-height:50vh;overflow-y:auto;padding:0 4px;">
-          <div class="section-title">${t('contacts') || '联系人'}</div>
+          <div class="section-title">${t('contacts')}</div>
           <div id="forward-friends"></div>
-          <div class="section-title">${t('groups') || '群聊'}</div>
+          <div class="section-title">${t('groups')}</div>
           <div id="forward-groups"></div>
         </div>
       </div>`;
@@ -2205,11 +2535,11 @@
         <div class="avatar sm" data-user-avatar="${f.id}"${bg ? ` style="${bg}"` : ''}>${avatarInner(f)}</div>
         <div class="meta"><div class="name">${escapeHtml(f.username)}</div></div>
       </div>`;
-    }).join('') || `<div class="empty-hint small"><p>${t('no_friends_yet') || '还没有好友'}</p></div>`;
+    }).join('') || `<div class="empty-hint small"><p>${t('no_friends_yet')}</p></div>`;
     const groupsHtml = (state.groups || []).map(g => `<div class="req-item" data-gid="${g.id}">
       <div class="avatar sm group">${groupAvatarInner({ name: g.name, is_official: g.is_official, icon_emoji: g.icon_emoji })}</div>
       <div class="meta"><div class="name">${escapeHtml(g.name)}</div></div>
-    </div>`).join('') || `<div class="empty-hint small"><p>${t('no_groups_yet') || '还没有群聊'}</p></div>`;
+    </div>`).join('') || `<div class="empty-hint small"><p>${t('no_groups_yet')}</p></div>`;
     modal.querySelector('#forward-friends').innerHTML = friendsHtml;
     modal.querySelector('#forward-groups').innerHTML = groupsHtml;
     // Click handlers
@@ -2239,7 +2569,7 @@
     state.currentChat = { type: 'user', id: friendId, title: friend?.username || '' };
     try {
       await sendMessage(origMsg.content, { type: origMsg.type || 'text', meta: origMsg.meta || null });
-      toast(t('forwarded') || '已转发');
+      toast(t('forwarded'));
     } catch (e) { toast(e.message); }
     state.currentChat = prev;
   }
@@ -2249,7 +2579,7 @@
     state.currentChat = { type: 'group', id: gid, title: group?.name || '' };
     try {
       await sendMessage(origMsg.content, { type: origMsg.type || 'text', meta: origMsg.meta || null });
-      toast(t('forwarded') || '已转发');
+      toast(t('forwarded'));
     } catch (e) { toast(e.message); }
     state.currentChat = prev;
   }
@@ -2271,7 +2601,7 @@
   }
 
   async function sendMessage(content, opts = {}, inputEl) {
-    if (!state.currentChat) { toast('请先选择一个会话'); return; }
+    if (!state.currentChat) { toast(t('pick_conversation_first')); return; }
     const { type, id } = state.currentChat;
     const payload = {
       conv_type: type, conv_id: id, content,
@@ -2312,14 +2642,14 @@
     try {
       console.log('[VVeChat] sending', payload);
       const data = await api('/messages', { method: 'POST', body: payload });
-      if (!data || !data.message) throw new Error('服务器没有返回消息');
+      if (!data || !data.message) throw new Error(t('server_no_message'));
       if (inputEl) inputEl.value = '';
       acceptMessage(data.message);
       console.log('[VVeChat] sent ok');
     } catch (e) {
-      const msg = (e && e.message) || '发送失败';
+      const msg = (e && e.message) || t('send_failed');
       // Keep the text in the box so the user can retry, and say why.
-      toast('发送失败：' + msg);
+      toast(t('send_failed_reason', msg));
       console.error('[VVeChat] send failed:', e);
     }
   }
@@ -2416,14 +2746,14 @@
         ${isMe ? `<button class="btn btn-primary btn-sm" id="btn-edit-profile">${t('btn_edit')}</button>
                  <button class="btn btn-danger btn-sm" id="btn-profile-logout">${t('btn_logout')}</button>`
                 : (allowAdd && !isFriend
-                    ? `<button class="btn btn-primary btn-sm" id="btn-add-friend">+ 加好友</button>`
+                    ? `<button class="btn btn-primary btn-sm" id="btn-add-friend">+ ${t('add_friend')}</button>`
                     : `<button class="btn btn-primary btn-sm" id="btn-msg-friend">${t('btn_msg')}</button>`)}
-        ${isFriend ? `<button class="btn btn-danger btn-sm" id="btn-remove-friend">删除好友</button>` : ''}
+        ${isFriend ? `<button class="btn btn-danger btn-sm" id="btn-remove-friend">${t('remove_friend')}</button>` : ''}
       </div></div>`;
     if (isMe) {
       $('#btn-edit-profile')?.addEventListener('click', openProfileEdit);
       $('#btn-profile-logout')?.addEventListener('click', () => {
-        if (confirm(t('confirm_logout') || '确定要退出登录？')) { closeModal('modal-profile'); logout(); }
+        if (confirm(t('confirm_logout'))) { closeModal('modal-profile'); logout(); }
       });
     }
     else {
@@ -2432,16 +2762,16 @@
       if (addBtn) addBtn.addEventListener('click', async () => {
         const r = await doAddFriend(user.id, user.username, addBtn);
         if (!r) return;                       // doAddFriend already reported the error
-        addBtn.textContent = r.autoAccepted ? '已成为好友 ✓' : '申请已发送 ✓';
+        addBtn.textContent = r.autoAccepted ? t('now_friends') : t('request_sent_check');
         addBtn.disabled = true;
         if (r.autoAccepted) setTimeout(() => closeModal('modal-profile'), 900);
       });
       const rmBtn = $('#btn-remove-friend');
       if (rmBtn) rmBtn.addEventListener('click', async () => {
         const ok = await askConfirm({
-          title: '删除好友',
-          message: '确定不再和 ' + user.username + ' 做好友吗？你们的私聊记录也会一并清除。',
-          okText: '删除好友',
+          title: t('remove_friend'),
+          message: t('confirm_remove_friend', user.username),
+          okText: t('remove_friend'),
         });
         if (!ok) return;
         rmBtn.disabled = true;
@@ -2457,10 +2787,10 @@
             delete state.messagesByConv[convKey('user', user.id)];
           }
           renderAll();
-          toast('已删除好友 ' + user.username);
+          toast(t('friend_removed', user.username));
         } catch (e) {
           rmBtn.disabled = false;
-          toast(e.message || '删除失败');
+          toast(e.message || t('delete_failed'));
         }
       });
     }
@@ -2497,7 +2827,7 @@
   // (e.g. another member of a group). Shows a "加好友" button when appropriate.
   async function openUserProfileById(uid) {
     const u = await resolveUser(uid);
-    if (!u) { toast('找不到该用户'); return; }
+    if (!u) { toast(t('user_not_found')); return; }
     openProfileModal(u, { allowAdd: true });
   }
 
@@ -2549,7 +2879,7 @@
   async function doAddFriend(uid, name, btn) {
     if (btn) { btn.disabled = true; }
     const orig = btn ? btn.textContent : '';
-    if (btn) btn.textContent = (lang === 'en' ? 'Sending…' : '发送中…');
+    if (btn) btn.textContent = t('sending');
     try {
       const r = await api('/friend/request/' + uid, { method: 'POST', body: {} });
       if (btn) btn.textContent = '✓';
@@ -2559,8 +2889,8 @@
       // reads as "nothing happened".
       closeUserMenu();
       toast(r.autoAccepted
-        ? (lang === 'en' ? `Added ${name}` : `已添加 ${name}`)
-        : (lang === 'en' ? `Friend request sent to ${name}` : `好友申请已发送给 ${name}`));
+        ? t('added_name', name)
+        : t('friend_request_sent_to', name));
       // Refresh the lists in the background — a failure here must not
       // turn a successful request into an error message.
       try {
@@ -2571,7 +2901,7 @@
       return r;
     } catch (e) {
       if (btn) { btn.disabled = false; btn.textContent = orig; }
-      toast(e.message || (lang === 'en' ? 'Failed' : '添加失败'));
+      toast(e.message || t('add_failed'));
       return null;
     }
   }
@@ -2582,7 +2912,7 @@
     if (uid === Number(state.user.id)) return;   // your own face needs no menu
     closeUserMenu();
     const u = await resolveUser(uid);
-    if (!u) { toast('找不到该用户'); return; }
+    if (!u) { toast(t('user_not_found')); return; }
     const isFriend = state.friends.some(f => Number(f.id) === uid);
     const online = isOnline(uid);
     const bg = avatarStyle(u);
@@ -2645,12 +2975,12 @@
       <div class="modal-mask"></div>
       <div class="modal-card">
         <div class="modal-head">
-          <h3>${lang === 'en' ? 'Join requests' : '入群申请'} · ${escapeHtml(g.name || '')}</h3>
+          <h3>${t('join_requests')} · ${escapeHtml(g.name || '')}</h3>
           <button class="icon-btn icon-btn-sm" data-x="0">×</button>
         </div>
         <div class="modal-body">
           <div id="gr-list" style="max-height:320px;overflow-y:auto;">
-            <div class="empty-hint"><p>${lang === 'en' ? 'Loading…' : '正在加载…'}</p></div>
+            <div class="empty-hint"><p>${t('loading')}</p></div>
           </div>
         </div>
       </div>`;
@@ -2665,7 +2995,7 @@
         const r = await api(`/groups/${gid}/requests`);
         const reqs = r.requests || [];
         if (!reqs.length) {
-          list.innerHTML = `<div class="empty-hint"><p>${lang === 'en' ? 'No requests yet' : '暂时没有申请'}</p></div>`;
+          list.innerHTML = `<div class="empty-hint"><p>${t('no_requests_yet')}</p></div>`;
           return;
         }
         list.innerHTML = '';
@@ -2708,13 +3038,13 @@
       <div class="modal-mask"></div>
       <div class="modal-card">
         <div class="modal-head">
-          <h3>添加成员到「${escapeHtml(g.name || '')}」</h3>
+          <h3>${t('add_member_to', escapeHtml(g.name || ''))}</h3>
           <button class="icon-btn icon-btn-sm" data-x="0">×</button>
         </div>
         <div class="modal-body">
-          <input id="am-q" class="input" type="text" placeholder="输入用户名搜索…" autocomplete="off" />
+          <input id="am-q" class="input" type="text" placeholder="${t('search_username_ph')}" autocomplete="off" />
           <div id="am-results" style="margin-top:12px;max-height:300px;overflow-y:auto;">
-            <div class="empty-hint"><p>正在加载…</p></div>
+            <div class="empty-hint"><p>${t('loading')}</p></div>
           </div>
         </div>
       </div>`;
@@ -2730,7 +3060,7 @@
         const r = await api(`/groups/${gid}/candidates` + (q ? `?q=${encodeURIComponent(q)}` : ''));
         const list = r.candidates || [];
         if (!list.length) {
-          results.innerHTML = `<div class="empty-hint"><p>${q ? '没有匹配的用户' : '所有用户都已在群里'}</p></div>`;
+          results.innerHTML = `<div class="empty-hint"><p>${q ? t('no_matching_user') : t('all_users_in_group')}</p></div>`;
           return;
         }
         results.innerHTML = '';
@@ -2740,28 +3070,28 @@
           const bg = u.avatar_color ? `background:linear-gradient(135deg, ${u.avatar_color}, ${shade(u.avatar_color, -25)})` : '';
           row.innerHTML = `<div class="avatar sm" style="${bg}" data-user-avatar="${u.id}">${avatarContent(u.username, null, 18)}</div>
             <div class="settings-label">${escapeHtml(u.username)}</div>
-            <div class="settings-trailing"><span class="settings-action" data-add="${u.id}">添加</span></div>`;
+            <div class="settings-trailing"><span class="settings-action" data-add="${u.id}">${t('add_member_verb')}</span></div>`;
           const btn = row.querySelector('[data-add]');
           btn.addEventListener('click', async () => {
             btn.disabled = true;
             btn.textContent = '…';
             try {
               await api(`/groups/${gid}/members`, { method: 'POST', body: { memberId: u.id } });
-              btn.textContent = '✓ 已添加';
+              btn.textContent = t('added_check');
               btn.style.color = '#10b981';
-              toast('已添加 ' + u.username);
+              toast(t('added_name', u.username));
               refreshGroups();
               setTimeout(close, 700);
             } catch (e) {
               btn.disabled = false;
-              btn.textContent = '添加';
-              toast(e.message || '添加失败');
+              btn.textContent = t('add_member_verb');
+              toast(e.message || t('add_failed'));
             }
           });
           results.appendChild(row);
         }
       } catch (e) {
-        results.innerHTML = `<div class="empty-hint"><p>${escapeHtml(e.message || '加载失败')}</p></div>`;
+        results.innerHTML = `<div class="empty-hint"><p>${escapeHtml(e.message || t('load_failed'))}</p></div>`;
       }
     };
     load('');
@@ -2922,7 +3252,7 @@
         renderMessages();
       }
       refreshConversations();
-      toast('群消息已被管理员清除');
+      toast(t('admin_wiped_group'));
     });
     s.on('group:renamed', ({ groupId, name }) => {
       const g = state.groups.find(x => x.id === groupId);
@@ -3017,7 +3347,7 @@
     if (!msgs || !msgs.length) {
       const empty = document.createElement('div');
       empty.className = 'msg-popup-empty';
-      empty.textContent = lang === 'en' ? 'No messages yet' : '还没有消息';
+      empty.textContent = t('no_messages_yet');
       log.appendChild(empty);
       return;
     }
@@ -3067,8 +3397,8 @@
     let avatarBg = '';
     if (isGroup) {
       const g = (state.groups || []).find(x => Number(x.id) === Number(msg.conv_id));
-      title = (g && g.name) || (lang === 'en' ? 'A group' : '某个群');
-      avatarText = '群';
+      title = (g && g.name) || t('a_group');
+      avatarText = t('group_word');
       avatarBg = g && g.icon_color ? `background:linear-gradient(135deg, ${g.icon_color}, ${shade(g.icon_color, -25)});` : '';
     } else {
       const u = (state.friends || []).find(x => Number(x.id) === Number(peerId));
@@ -3169,11 +3499,11 @@
             method: 'POST',
             body: { conv_type: d.convType, conv_id: d.convId, content: text }
           });
-          toast(lang === 'en' ? 'Sent' : '已发送');
+          toast(t('sent'));
           closeMessagePopup();
         } catch (err) {
           if (input) input.disabled = false;
-          toast(err.message || (lang === 'en' ? 'Send failed' : '发送失败'));
+          toast(err.message || t('send_failed'));
         }
       });
     }
@@ -3186,7 +3516,7 @@
   // approve it from the group's settings.
   function onGroupJoinRequest(req) {
     if (!req || !req.group_id) return;
-    const who = req.username || (lang === 'en' ? 'Somebody' : '有人');
+    const who = req.username || t('someone');
     toast(lang === 'en'
       ? `${who} wants to join “${req.group_name}”`
       : `${who} 申请加入「${req.group_name}」`);
@@ -3304,8 +3634,8 @@
       updateMentionButton();
       return;
     }
-    const who = names.length === 1 ? names[0] : (lang === 'en' ? 'Someone' : '有人');
-    const verb = lang === 'en' ? 'is typing…' : '正在输入…';
+    const who = names.length === 1 ? names[0] : t('someone');
+    const verb = t('is_typing');
     box.innerHTML = '<span class="typing-dots"><i></i><i></i><i></i></span><span>' +
       escapeHtml(who + ' ' + verb) + '</span>';
     box.classList.remove('hidden');
@@ -3328,10 +3658,10 @@
       const list = $('#chats-list');
       if (list && !state.conversations.length) {
         list.innerHTML = `<li style="padding:14px;color:var(--danger);font-size:12px;line-height:1.5">
-          会话加载失败<br><span style="opacity:.7;font-size:11px">${escapeHtml(e && e.message || 'unknown')}</span>
+          ${t('conv_load_failed')}<br><span style="opacity:.7;font-size:11px">${escapeHtml(e && e.message || 'unknown')}</span>
         </li>`;
       }
-      toast('加载会话失败：' + (e && e.message || ''));
+      toast(t('conv_load_failed_reason', e && e.message || ''));
     }
   }
   async function refreshOnlineStatus() {
@@ -3386,13 +3716,15 @@
   // Labels for the sheet entries. The icons alone (avatar / bell / search /
   // logout / theme) are cryptic on a phone, so each gets a text label that
   // only exists inside the sheet.
+  // The sheet labels are i18n keys, resolved at render time — the language
+  // can change while the sheet is open.
   const MOBILE_MENU_LABELS = {
-    'btn-profile': '我的资料',
-    'btn-bell': '好友申请',
-    'btn-plus': '搜索 / 添加',
-    'btn-lang': '切换语言',
-    'btn-logout': '退出登录',
-    'theme-menu-wrap': '切换主题'
+    'btn-profile': 'my_profile',
+    'btn-bell': 'friend_requests',
+    'btn-plus': 'search_add',
+    'btn-lang': 'lang_switch',
+    'btn-logout': 'log_out',
+    'theme-menu-wrap': 'toggle_theme'
   };
 
   function labelMobileMenuItems(sheet) {
@@ -3406,7 +3738,7 @@
         tag.className = 'mm-label';
         host.appendChild(tag);
       }
-      tag.textContent = text;
+      tag.textContent = t(text);
     }
     // The Jack shield pill is decorative — label it too.
     const pill = document.getElementById('topbar-jack-pill');
@@ -3417,7 +3749,7 @@
         tag.className = 'mm-label';
         pill.appendChild(tag);
       }
-      tag.textContent = '管理员';
+      tag.textContent = t('admin_word');
     }
   }
 
@@ -3684,7 +4016,7 @@
     if (!row || row.classList.contains('think-done')) return;
     row.classList.add('think-done');
     const title = row.querySelector('.ai-think-title');
-    if (title) title.textContent = '思考过程';
+    if (title) title.textContent = t('thinking_process');
   }
 
   // Type text into an element one character at a time.
@@ -3729,6 +4061,26 @@
     el.className = 'ai-head-sub' + (cls ? ' ' + cls : '');
   }
 
+  // "1 member" / "2 members" — English needs the plural.
+  function memberCountLabel(n) {
+    const num = Number(n) || 0;
+    if (lang === 'zh') return num + ' 人';
+    return num + (num === 1 ? ' member' : ' members');
+  }
+
+  // The provider label comes from the server, which ships both languages.
+  // Pick the one that matches the interface language.
+  function aiProviderLabel(m) {
+    if (!m) return '';
+    return lang === 'en' ? (m.providerLabelEn || m.providerLabel || '') : (m.providerLabel || '');
+  }
+  // Same for a provider row in the setup dialog (label + note).
+  function aiProviderText(p, field) {
+    if (!p) return '';
+    if (lang === 'en') return (p[field + 'En'] || p[field] || '');
+    return (p[field] || '');
+  }
+
   // Fill the model dropdown. Every entry is one concrete Qwen model, so
   // the name the user picks is exactly the model that answers.
   function aiFillModels(models, defaultId) {
@@ -3748,8 +4100,8 @@
     // Group by provider so the dropdown reads like a menu, not a dump.
     const groups = [];
     for (const m of list) {
-      let g = groups.find((x) => x.label === m.providerLabel);
-      if (!g) { g = { label: m.providerLabel, items: [] }; groups.push(g); }
+      let g = groups.find((x) => x.label === aiProviderLabel(m));
+      if (!g) { g = { label: aiProviderLabel(m), items: [] }; groups.push(g); }
       g.items.push(m);
     }
     for (const g of groups) {
@@ -3758,7 +4110,7 @@
       for (const m of g.items) {
         const o = document.createElement('option');
         o.value = m.id;
-        o.textContent = m.label + (m.ready ? '' : '（需密钥）');
+        o.textContent = m.label + (m.ready ? '' : t('need_key_suffix'));
         og.appendChild(o);
       }
       sel.appendChild(og);
@@ -3828,6 +4180,13 @@
     'Got a task? I am ready.',
     'Go ahead, I am listening.'
   ];
+  // An untitled chat is stored server-side as the literal 「新对话」.
+  // Treat that as "no title" so the English UI shows "New chat".
+  function aiChatTitle(c) {
+    const raw = (c && c.title) || '';
+    if (!raw || raw === '新对话') return t('ai_new_chat_title');
+    return raw;
+  }
   function aiGreeting() {
     const list = lang === 'en' ? AI_GREETINGS_EN : AI_GREETINGS_ZH;
     return list[Math.floor(Math.random() * list.length)];
@@ -3841,7 +4200,7 @@
     if (!el) return;
     if (window.innerWidth > 820) { el.textContent = 'Qwen'; return; }
     const c = (_aiChats || []).find(x => String(x.id) === String(_aiChatId));
-    el.textContent = (c && c.title) || 'Qwen';
+    el.textContent = (c && c.title && c.title !== '新对话') ? c.title : 'Qwen';
   }
 
   function aiRenderWelcome() {
@@ -3866,11 +4225,11 @@
     const d = new Date(ts);
     const now = new Date();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    if (ts >= startOfToday) return '今天';
-    if (ts >= startOfToday - 86400000) return '昨天';
-    if (ts >= startOfToday - 7 * 86400000) return '本周';
-    if (ts >= startOfToday - 30 * 86400000) return '本月';
-    return '更早';
+    if (ts >= startOfToday) return t('ai_today');
+    if (ts >= startOfToday - 86400000) return t('ai_yesterday');
+    if (ts >= startOfToday - 7 * 86400000) return t('ai_this_week');
+    if (ts >= startOfToday - 30 * 86400000) return t('ai_this_month');
+    return t('ai_earlier');
   }
 
   function aiRenderChats() {
@@ -3880,7 +4239,7 @@
     if (!_aiChats.length) {
       const empty = document.createElement('div');
       empty.className = 'ai-chat-empty';
-      empty.textContent = '还没有对话记录';
+      empty.textContent = t('ai_no_chats');
       list.appendChild(empty);
       return;
     }
@@ -3898,13 +4257,13 @@
       item.className = 'ai-chat-item' + (String(c.id) === String(_aiChatId) ? ' active' : '');
       const title = document.createElement('span');
       title.className = 'ai-chat-title';
-      title.textContent = c.title || '新对话';
-      title.title = c.title || '新对话';
+      title.textContent = aiChatTitle(c);
+      title.title = aiChatTitle(c);
       const del = document.createElement('button');
       del.className = 'ai-chat-del';
       del.type = 'button';
-      del.title = '删除对话';
-      del.setAttribute('aria-label', '删除对话');
+      del.title = t('ai_delete_chat');
+      del.setAttribute('aria-label', t('ai_delete_chat'));
       del.innerHTML = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
         <line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>`;
       del.addEventListener('click', async (e) => {
@@ -3938,7 +4297,7 @@
             const row = aiAppendBlock('think');
             const body = row && row.querySelector('.ai-think-body');
             const title = row && row.querySelector('.ai-think-title');
-            if (title) title.textContent = '思考过程';
+            if (title) title.textContent = t('thinking_process');
             // A trace that is already finished must not look like it is
             // still going: freeze the three dots.
             if (row) row.classList.add('think-done');
@@ -3958,7 +4317,7 @@
       }
       if (log) aiAutoScroll(true);
     } catch (e) {
-      toast(e.message || '加载对话失败');
+      toast(e.message || t('ai_load_chat_failed'));
     }
   }
 
@@ -3972,7 +4331,7 @@
       aiRenderWelcome();
       aiUpdateHeadTitle();
     } catch (e) {
-      toast(e.message || '新建对话失败');
+      toast(e.message || t('ai_new_chat_failed'));
     }
   }
 
@@ -3986,7 +4345,7 @@
       }
       await aiLoadChats();
     } catch (e) {
-      toast(e.message || '删除失败');
+      toast(e.message || t('delete_failed'));
     }
   }
 
@@ -4006,13 +4365,13 @@
       const readyCount = models.filter((m) => m.ready).length;
       if (cur) {
         aiSetStatus(
-          `${cur.label} · ${cur.providerLabel}${cur.ready ? '' : '（未配置密钥）'}`,
+          `${cur.label} · ${aiProviderLabel(cur)}${cur.ready ? '' : t('no_key_suffix')}`,
           cur.ready ? 'ok' : 'warn'
         );
       } else if (readyCount) {
-        aiSetStatus(`${readyCount} 个模型可用`, 'ok');
+        aiSetStatus(t('models_available', readyCount), 'ok');
       } else {
-        aiSetStatus('没有可用的 Qwen 源', 'warn');
+        aiSetStatus(t('no_qwen_source'), 'warn');
       }
 
       // The setup button appears when a key would unlock more models.
@@ -4023,13 +4382,13 @@
         const admin = isJack();
         const missing = models.some((m) => !m.ready);
         setup.classList.toggle('hidden', !missing);
-        setup.textContent = admin ? '接入免费 Qwen 密钥' : '尚未接入密钥（请联系管理员）';
+        setup.textContent = admin ? t('ai_setup_key') : t('ai_setup_ask_admin');
         setup.disabled = !admin;
-        setup.title = admin ? '粘贴一个免费中转的密钥，立即生效' : '只有管理员可以配置';
+        setup.title = admin ? t('ai_setup_hint') : t('ai_setup_admin_only');
       }
       state.aiReady = readyCount > 0;
     } catch (e) {
-      aiSetStatus('中转暂不可用', 'warn');
+      aiSetStatus(t('relay_unavailable'), 'warn');
     }
   }
 
@@ -4039,9 +4398,9 @@
     const providers = state.aiProviders || [];
     const rows = providers.map((p) => `
       <label class="ai-provider">
-        <span class="ai-provider-name">${escapeHtml(p.label)}${p.hasKey ? ' · 已配置' : ''}</span>
-        <span class="ai-provider-note">${escapeHtml(p.note || '')}</span>
-        <input type="text" id="ai-key-${escapeHtml(p.id)}" placeholder="${p.needKey ? '粘贴 API Key（留空＝不启用）' : '无需密钥'}" autocomplete="off" ${p.needKey ? '' : 'disabled'} />
+        <span class="ai-provider-name">${escapeHtml(aiProviderText(p, 'label'))}${p.hasKey ? ' · ' + t('configured') : ''}</span>
+        <span class="ai-provider-note">${escapeHtml(aiProviderText(p, 'note'))}</span>
+        <input type="text" id="ai-key-${escapeHtml(p.id)}" placeholder="${p.needKey ? t('paste_key_ph') : t('no_key_needed')}" autocomplete="off" ${p.needKey ? '' : 'disabled'} />
       </label>`).join('');
     const dlg = document.createElement('div');
     dlg.className = 'modal';
@@ -4050,26 +4409,25 @@
       <div class="modal-mask"></div>
       <div class="modal-card modal-card-sm" style="aspect-ratio:auto; width:min(92vw, 460px);">
         <div class="modal-head">
-          <h3>接入免费 Qwen 密钥</h3>
+          <h3>${t('ai_setup_key')}</h3>
           <button class="icon-btn icon-btn-sm modal-close" data-close="modal-ai-setup">×</button>
         </div>
         <div class="modal-body">
           <p style="margin:0 0 12px;font-size:13px;color:var(--muted);line-height:1.6;">
-            免密钥的公共端点已经可以直接用。想换更快的模型、用上「思考档位」或「官方联网搜索」，
-            在下面任选一家免费注册后把密钥贴进来（留空＝不启用该家）：
+            ${t('ai_setup_intro')}
           </p>
           <div class="ai-provider-list">
             ${rows}
             <label class="ai-provider">
-              <span class="ai-provider-name">Tavily 搜索（可选）</span>
-              <span class="ai-provider-note">不填也能搜索，只是结果质量差一些</span>
-              <input type="text" id="ai-key-tavily" placeholder="粘贴 Tavily API Key（留空＝不启用）" autocomplete="off" />
+              <span class="ai-provider-name">${t('tavily_opt')}</span>
+              <span class="ai-provider-note">${t('tavily_note')}</span>
+              <input type="text" id="ai-key-tavily" placeholder="${t('paste_tavily_ph')}" autocomplete="off" />
             </label>
           </div>
           <div class="modal-msg" id="ai-setup-msg"></div>
           <div class="modal-actions">
-            <button type="button" class="btn btn-ghost" data-close="modal-ai-setup">取消</button>
-            <button type="button" class="btn btn-primary" id="ai-setup-save">保存</button>
+            <button type="button" class="btn btn-ghost" data-close="modal-ai-setup">${t('cancel')}</button>
+            <button type="button" class="btn btn-primary" id="ai-setup-save">${t('save')}</button>
           </div>
         </div>
       </div>`;
@@ -4094,8 +4452,8 @@
           return;
         }
       }
-      if (!saved) { msg.textContent = '请至少填写一个密钥'; return; }
-      toast('已保存，正在重新检查中转源…');
+      if (!saved) { msg.textContent = t('need_one_key'); return; }
+      toast(t('saved_rechecking'));
       close();
       aiCheckStatus();
     });
@@ -4112,8 +4470,8 @@
     // the request.
     if (sendBtn) {
       sendBtn.classList.add('stopping');
-      sendBtn.title = '停止生成';
-      sendBtn.setAttribute('aria-label', '停止生成');
+      sendBtn.title = t('stop_generating');
+      sendBtn.setAttribute('aria-label', t('stop_generating'));
     }
 
     const prefs = aiPrefs();
@@ -4134,7 +4492,7 @@
     // of text — no dots, no bubble.
     const waiting = document.createElement('div');
     waiting.className = 'ai-waiting';
-    waiting.textContent = prefs.search ? '正在联网搜索…' : '正在思考…';
+    waiting.textContent = prefs.search ? t('searching_web') : t('thinking_now');
     (aiLogEl() || document.body).appendChild(waiting);
 
     let answer = '';
@@ -4184,8 +4542,8 @@
           if (j.type === 'source') {
             // The server tells us which model really answered — it may be
             // a different one than the one that was picked.
-            answeredBy = `${j.label || j.model} · ${j.provider || j.source}`;
-            if (j.fallback) answeredBy += '（已切换）';
+            answeredBy = `${j.label || j.model} · ${(lang === 'en' ? (j.providerEn || j.provider) : j.provider) || j.source}`;
+            if (j.fallback) answeredBy += t('switched_suffix');
             aiSetStatus(answeredBy, 'ok');
           } else if (j.type === 'reset') {
             // The server gave up on this model. Drop the dead-end trace so
@@ -4198,7 +4556,7 @@
               if (deadRow) deadRow.remove();
             }
             if (!waiting.parentElement) {
-              waiting.textContent = '正在换用其他模型…';
+              waiting.textContent = t('switching_model');
               (aiLogEl() || document.body).appendChild(waiting);
             }
             thinkRow = null;
@@ -4216,8 +4574,8 @@
             const note = document.createElement('div');
             note.className = 'ai-search-note';
             note.textContent = j.provider
-              ? '已开启联网搜索（由模型自己搜索）'
-              : (j.count > 0 ? `已联网搜索 · ${j.count} 条来源` : '联网搜索没有找到结果');
+              ? t('search_on')
+              : (j.count > 0 ? t('search_results', j.count) : t('search_no_results'));
             const log = aiLogEl();
             if (log) {
               log.appendChild(note);
@@ -4261,7 +4619,7 @@
           } else if (j.type === 'error') {
             // The server already tried every source. Surface a short,
             // readable message instead of a wall of upstream JSON.
-            throw new Error(j.message || '中转失败');
+            throw new Error(j.message || t('relay_failed'));
           }
         }
       }
@@ -4273,12 +4631,12 @@
       const aborted = e && (e.name === 'AbortError' ||
         /abort/i.test(String(e.message || '')));
       if (aborted) {
-        aiSetStatus('已停止', 'warn');
+        aiSetStatus(t('stopped'), 'warn');
         aiEndBusy();
         await aiLoadChats();
         return;
       }
-      const msgText = String(e.message || '请求失败');
+      const msgText = String(e.message || t('request_failed'));
       const showErr = (row) => {
         const b = row && row.querySelector('.ai-bubble');
         if (b) b.innerHTML = `<span class="ai-error">${escapeHtml(msgText)}</span>`;
@@ -4315,11 +4673,11 @@
       await aiType(botBubble, cleanAnswer, AI_TYPE_MS);
     }
     if (!cleanAnswer) {
-      if (botBubble) botBubble.innerHTML = `<span class="ai-error">没有收到回复</span>`;
+      if (botBubble) botBubble.innerHTML = `<span class="ai-error">${t('no_reply')}</span>`;
       else {
         const errRow = aiAppendBlock('bot');
         const errBubble = errRow && errRow.querySelector('.ai-bubble');
-        if (errBubble) errBubble.innerHTML = `<span class="ai-error">没有收到回复</span>`;
+        if (errBubble) errBubble.innerHTML = `<span class="ai-error">${t('no_reply')}</span>`;
       }
     }
 
@@ -4328,7 +4686,7 @@
     state.aiHistory.push({ role: 'assistant', content: cleanAnswer.slice(0, 2000) });
     if (state.aiHistory.length > 8) state.aiHistory = state.aiHistory.slice(-8);
 
-    aiSetStatus(answeredBy || '就绪', 'ok');
+    aiSetStatus(answeredBy || t('ready'), 'ok');
     aiEndBusy();
   }
 
@@ -4340,8 +4698,8 @@
     const btn = $('#ai-send');
     if (btn) {
       btn.classList.remove('stopping');
-      btn.title = '发送';
-      btn.setAttribute('aria-label', '发送');
+      btn.title = t('send');
+      btn.setAttribute('aria-label', t('send'));
       btn.disabled = false;
     }
   }
@@ -4354,8 +4712,8 @@
     const waiting = document.querySelector('.ai-waiting');
     if (waiting) waiting.remove();
     aiEndBusy();
-    aiSetStatus('已停止', 'warn');
-    toast('已停止生成');
+    aiSetStatus(t('stopped'), 'warn');
+    toast(t('stop_generating'));
   }
 
   // The Qwen panel lives in the SAME big right-hand panel as the chat.
@@ -4456,7 +4814,7 @@
     } else {
       folded = body.classList.toggle('list-collapsed');
     }
-    const title = folded ? '展开会话列表' : '收起会话列表';
+    const title = folded ? t('expand_list') : t('collapse_list');
     for (const b of [$('#ai-sidebar-toggle'), $('#list-toggle'), $('#list-toggle-empty')]) {
       if (b) { b.title = title; b.setAttribute('aria-label', title); }
     }
@@ -4491,7 +4849,7 @@
     if (!body) return;
     body.classList.remove('list-open');
     for (const b of [$('#ai-sidebar-toggle'), $('#list-toggle'), $('#list-toggle-empty')]) {
-      if (b) { b.title = '展开会话列表'; b.setAttribute('aria-label', b.title); }
+      if (b) { b.title = t('expand_list'); b.setAttribute('aria-label', b.title); }
     }
   }
 
@@ -4548,7 +4906,7 @@
         aiSetPrefs({ model: modelSel.value });
         aiSyncTools();
         const cur = aiCurrentModel();
-        if (cur) aiSetStatus(`${cur.label} · ${cur.providerLabel}${cur.ready ? '' : '（未配置密钥）'}`, cur.ready ? 'ok' : 'warn');
+        if (cur) aiSetStatus(`${cur.label} · ${aiProviderLabel(cur)}${cur.ready ? '' : t('no_key_suffix')}`, cur.ready ? 'ok' : 'warn');
       });
     }
 
@@ -4794,11 +5152,11 @@
         if (actBtn.dataset.act === 'add') {
           try {
             await api(`/api/friend/request/${uid}`, { method: 'POST' });
-            toast('已向 ' + name + ' 发送好友申请');
-            actBtn.textContent = '已申请';
+            toast(t('friend_req_sent_to', name));
+            actBtn.textContent = t('requested');
             actBtn.disabled = true;
           } catch (err) {
-            toast(err.message || '发送失败');
+            toast(err.message || t('send_failed'));
           }
         } else if (actBtn.dataset.act === 'chat') {
           closeModal('modal-plus');
@@ -4806,7 +5164,7 @@
           try {
             await openDirectChat(uid, name);
           } catch (err) {
-            toast(err.message || '无法打开会话');
+            toast(err.message || t('cannot_open_chat'));
           }
         }
       });
@@ -4821,7 +5179,7 @@
       const r = await api(`/users/search?q=${encodeURIComponent(q)}`);
       const users = r.users || [];
       if (!users.length) {
-        results.innerHTML = '<div class="plus-empty">没有找到用户</div>';
+        results.innerHTML = `<div class="plus-empty">${t('no_user_found')}</div>`;
         return;
       }
       results.innerHTML = users.map(u => {
@@ -4832,12 +5190,12 @@
         return `<div class="plus-result">
           <div class="avatar sm" style="${bg}">${letter}</div>
           <div class="plus-result-name">${escapeHtml(u.username)}</div>
-          <button class="plus-result-btn" data-act="add" data-uid="${u.id}" data-name="${escapeHtml(u.username)}">加好友</button>
-          <button class="plus-result-btn" data-act="chat" data-uid="${u.id}" data-name="${escapeHtml(u.username)}">发消息</button>
+          <button class="plus-result-btn" data-act="add" data-uid="${u.id}" data-name="${escapeHtml(u.username)}">${t('add_friend')}</button>
+          <button class="plus-result-btn" data-act="chat" data-uid="${u.id}" data-name="${escapeHtml(u.username)}">${t('send_message')}</button>
         </div>`;
       }).join('');
     } catch (err) {
-      results.innerHTML = `<div class="plus-empty">搜索失败：${escapeHtml(err.message || '')}</div>`;
+      results.innerHTML = `<div class="plus-empty">${t('search_failed', escapeHtml(err.message || ''))}</div>`;
     }
   }
 
@@ -4861,15 +5219,15 @@
       e.preventDefault(); e.stopPropagation();
       console.log('[VVeChat] wipe clicked');
       if (!state.currentChat || state.currentChat.type !== 'group') {
-        toast('请先打开一个群聊');
+        toast(t('open_group_first'));
         return;
       }
-      if (!isJack()) { toast('只有 Jack 可以使用该功能'); return; }
-      const chatName = state.currentChat.title || '当前群聊';
+      if (!isJack()) { toast(t('jack_only')); return; }
+      const chatName = state.currentChat.title || t('current_group');
       const ok = await askConfirm({
-        title: '清空群内所有消息',
-        message: '确定要删除「' + chatName + '」内的全部消息吗？此操作不可恢复。',
-        okText: '全部删除',
+        title: t('wipe_group_title'),
+        message: t('confirm_wipe_group', chatName),
+        okText: t('delete_all'),
       });
       if (!ok) return;
       const gid = state.currentChat.id;
@@ -4879,9 +5237,9 @@
         state.messagesByConv[convKey('group', gid)] = [];
         renderMessages();
         refreshConversations();
-        toast('已删除 ' + (r.deleted != null ? r.deleted : (r.matched || 0)) + ' 条消息');
+        toast(t('deleted_messages', r.deleted != null ? r.deleted : (r.matched || 0)));
       } catch (e) {
-        toast(e.message || '删除失败');
+        toast(e.message || t('delete_failed'));
       } finally {
         btn.disabled = false;
       }
@@ -4905,10 +5263,10 @@
         await api('/friend/respond', { method: 'POST', body: { requestId: id, accept } });
         state.requests = state.requests.filter(r => r.id !== id);
         renderBell();
-        if (accept) { await refreshFriends(); await refreshConversations(); renderAll(); toast('已添加好友'); }
-        else toast('已拒绝');
+        if (accept) { await refreshFriends(); await refreshConversations(); renderAll(); toast(t('friend_added')); }
+        else toast(t('rejected'));
       } catch (err) {
-        toast(err.message || '操作失败');
+        toast(err.message || t('op_failed'));
         btn.disabled = false;
       }
     }, true);
@@ -5036,7 +5394,7 @@
       const next = current === 'light' ? 'dark' : current === 'dark' ? 'auto' : 'light';
       applyTheme(next);
       try { localStorage.setItem('vve:theme', next); } catch (_) {}
-      if (window.toast) toast(next === 'auto' ? '跟随系统' : next === 'dark' ? '已切换到深色' : '已切换到浅色');
+      if (window.toast) toast(next === 'auto' ? t('toast_theme_auto') : next === 'dark' ? t('toast_theme_dark') : t('toast_theme_light'));
     });
 
     // language toggle button in main app topbar
@@ -5056,7 +5414,7 @@
         if (window.Boot550C) window.Boot550C.setEnabled(isOn);
         else { try { localStorage.setItem('vve:boot550c', isOn ? '1' : '0'); } catch (_) {} }
         applyTheme(currentThemeMode());
-        if (window.toast) toast(isOn ? '已开启 550C 启动动画主题' : '已关闭 550C 启动动画主题');
+        if (window.toast) toast(isOn ? t('boot550c_on') : t('boot550c_off'));
         saveBoot550cToServer(isOn);
         // Turning it on is a demo — play the boot right here so the
         // user sees what they just turned on.
@@ -5129,14 +5487,14 @@
     bindOnce($('#create-group-form'), 'submit', async (e) => {
       e.preventDefault();
       const name = ($('#cg-name')?.value || '').trim();
-      if (!name) { toast(lang === 'en' ? 'Give the group a name' : '给群起个名字'); return; }
+      if (!name) { toast(t('group_name_required')); return; }
       const recommended = !!$('#cg-recommend')?.checked;
       // 选了哪个 emoji 就用哪个；没选就让服务端随机分配。
       const iconEmoji = _cgEmoji || '';
       try {
         const r = await api('/groups', { method: 'POST', body: { name, recommended, icon_emoji: iconEmoji } });
         closeModal('modal-create-group');
-        toast(lang === 'en' ? 'Group created' : '群建好了');
+        toast(t('group_created'));
         await refreshGroups();
         refreshRecommended();
         if (r && r.group) {
@@ -5308,7 +5666,7 @@
     bindOnce($('#mention-btn'), 'click', (e) => {
       e.stopPropagation();
       const c = state.currentChat;
-      if (!c || c.type !== 'group') { toast('只有群聊才能 @ 人'); return; }
+      if (!c || c.type !== 'group') { toast(t('mention_only_group')); return; }
       const input = $('#chat-input');
       if (!input) return;
       input.focus();
@@ -5395,7 +5753,7 @@
     bindOnce($('#btn-lang'), 'click', (e) => {
       e.currentTarget._handled = true;
       setLang(lang === 'en' ? 'zh' : 'en');
-      toast(lang === 'en' ? '已切换到 English' : '已切换到中文');
+      toast(lang === 'en' ? t('switched_to_en') : t('switched_to_zh'));
     });
 
     // add friend form
@@ -5521,7 +5879,10 @@
     if (big) { runCycler(big, 2200); }
   }
   function runCycler(el, interval) {
-    let idx = 0;
+    // 从当前界面语言的那句开始 —— 英文界面第一眼看到「Hello」,
+    // 而不是跳到一句俄语,免得看着像没切换干净。
+    let idx = Math.max(0, HELLOS.findIndex(h => h.lang === lang));
+    if (idx < 0) idx = 0;
     const show = () => {
       el.style.opacity = '0';
       el.style.transform = 'translateY(-6px)';

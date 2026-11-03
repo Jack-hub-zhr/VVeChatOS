@@ -59,6 +59,7 @@ const TARGET = flag('url', 'https://vvechat.onrender.com/');
 const USER = flag('user', 'Jack');
 const PASS = flag('pass', 'Zhr121005');
 const THEME = flag('theme', 'light');
+const LANG = flag('lang', 'zh');
 const SCREEN = flag('screen', 'chats');
 const MOBILE = has('mobile');
 const EXTRA_WAIT = Number(flag('wait', 1200));
@@ -96,7 +97,7 @@ try {
     try {
       localStorage.setItem('vve:theme', ${JSON.stringify(THEME === '550c' ? 'dark' : THEME)});
       localStorage.setItem('vve:boot550c', ${JSON.stringify(THEME === '550c' ? '1' : '0')});
-      localStorage.setItem('vve:lang', 'zh');
+      localStorage.setItem('vve:lang', ${JSON.stringify(LANG)});
     } catch (e) {}
     return true;
   })()`);

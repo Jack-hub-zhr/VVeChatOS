@@ -821,51 +821,63 @@ function aiConfigSet(key, value) {
 const QWEN_PROVIDERS = {
   ovh: {
     label: 'OVH 公共端点',
+    labelEn: 'OVH Public Endpoint',
     base: 'https://oai.endpoints.kepler.ai.cloud.ovh.net/v1',
     path: '/chat/completions',
     needKey: false,
     env: [],
-    note: '匿名可用，无需密钥；同一 IP 每个模型 2 次/分钟'
+    note: '匿名可用，无需密钥；同一 IP 每个模型 2 次/分钟',
+    noteEn: 'Works anonymously with no key; 2 requests per minute per model per IP'
   },
   siliconflow: {
     label: 'SiliconFlow',
+    labelEn: 'SiliconFlow',
     base: 'https://api.siliconflow.cn/v1',
     path: '/chat/completions',
     needKey: true,
     env: ['RELAY_SILICONFLOW_KEY', 'SILICONFLOW_API_KEY'],
-    note: '注册送 14 元，Qwen3-8B 等模型永久免费'
+    note: '注册送 14 元，Qwen3-8B 等模型永久免费',
+    noteEn: 'Sign up for ¥14 in credit; models such as Qwen3-8B stay free'
   },
   modelscope: {
     label: '魔搭 ModelScope',
+    labelEn: 'ModelScope',
     base: 'https://api-inference.modelscope.cn/v1',
     path: '/chat/completions',
     needKey: true,
     env: ['RELAY_MODELSCOPE_KEY', 'MODELSCOPE_API_KEY'],
-    note: '魔搭社区推理 API，注册即免费（需绑定阿里云并实名）'
+    note: '魔搭社区推理 API，注册即免费（需绑定阿里云并实名）',
+    noteEn: 'ModelScope community inference API — free after signup (Alibaba Cloud and ID required)'
   },
   groq: {
     label: 'Groq',
+    labelEn: 'Groq',
     base: 'https://api.groq.com/openai/v1',
     path: '/chat/completions',
     needKey: true,
     env: ['RELAY_GROQ_KEY', 'GROQ_API_KEY'],
-    note: 'LPU 推理极快，免费额度 14400 次/天'
+    note: 'LPU 推理极快，免费额度 14400 次/天',
+    noteEn: 'LPU inference is blazing fast — 14,400 free requests per day'
   },
   cerebras: {
     label: 'Cerebras',
+    labelEn: 'Cerebras',
     base: 'https://api.cerebras.ai/v1',
     path: '/chat/completions',
     needKey: true,
     env: ['RELAY_CEREBRAS_KEY', 'CEREBRAS_API_KEY'],
-    note: '约 2600 tok/s，免费额度 100 万 token/天'
+    note: '约 2600 tok/s，免费额度 100 万 token/天',
+    noteEn: 'About 2,600 tok/s — 1M free tokens per day'
   },
   dashscope: {
     label: '阿里百炼',
+    labelEn: 'Alibaba Bailian',
     base: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     path: '/chat/completions',
     needKey: true,
     env: ['DASHSCOPE_API_KEY', 'RELAY_DASHSCOPE_KEY'],
-    note: '通义千问官方，新用户有免费额度；支持联网搜索与思考档位'
+    note: '通义千问官方，新用户有免费额度；支持联网搜索与思考档位',
+    noteEn: 'The official Tongyi Qianwen endpoint — free credit for new users, web search and thinking levels'
   }
 };
 
@@ -942,6 +954,7 @@ function aiModelCatalog() {
       desc: m.desc,
       provider: m.provider,
       providerLabel: p ? p.label : m.provider,
+      providerLabelEn: p ? (p.labelEn || p.label) : m.provider,
       thinking: m.thinking,
       search: m.search,
       ready: aiProviderReady(m.provider)
@@ -1572,6 +1585,7 @@ app.post('/api/ai/chat', rateLimit('write'), authRequired, async (req, res) => {
               type: 'source',
               source: entry.provider,
               provider: entry.providerLabel,
+              providerEn: entry.providerLabelEn || entry.providerLabel,
               model: entry.model,
               label: entry.label,
               free: true,
@@ -1671,7 +1685,9 @@ app.get('/api/ai/status', authRequired, (req, res) => {
     providers: Object.keys(QWEN_PROVIDERS).map((pid) => ({
       id: pid,
       label: QWEN_PROVIDERS[pid].label,
+      labelEn: QWEN_PROVIDERS[pid].labelEn || QWEN_PROVIDERS[pid].label,
       note: QWEN_PROVIDERS[pid].note,
+      noteEn: QWEN_PROVIDERS[pid].noteEn || QWEN_PROVIDERS[pid].note,
       needKey: QWEN_PROVIDERS[pid].needKey,
       ready: aiProviderReady(pid),
       hasKey: !!aiProviderKey(pid)
