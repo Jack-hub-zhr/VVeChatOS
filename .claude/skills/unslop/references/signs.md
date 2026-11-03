@@ -202,6 +202,10 @@ These are not slop, but they are what a cleaned up screen falls back to when nob
 - ⛔ **壁纸路径写错不报错**:`url('../frontend/assets/x.jpg')` 会命中 SPA 兜底,
   返回 200 + `text/html`,浏览器当图片解码失败 → 背景变死灰。
   验证:`curl -o /dev/null -w '%{content_type} %{size_download}'`。
+- ⛔ **壁纸要画在 `body::before` 上**。画在 body 上时,背景传播到 canvas 会让
+  Chrome 丢掉 `background-attachment: fixed`,而且 body 自己的背景会盖住负 z-index 的
+  `::before` —— 结果是一块死灰,状态码和资源都正常,肉眼看截图很难发现。
+  **验壁纸要取像素比,别靠眼睛。**
 
 ---
 

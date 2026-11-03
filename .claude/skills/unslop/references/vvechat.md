@@ -158,6 +158,40 @@ VVeChatOS/
 验证办法:`curl -s -o /dev/null -w '%{content_type} %{size_download}' <url>`,
 要看到 `image/jpeg` 和几百 KB,而不是 `text/html`。
 
+### 壁纸要画在 `body::before` 上,不是 `body` 上
+
+控制台的壁纸一开始写的是 `body { background: #EBF2FA url('../assets/wall-light.jpg') center/cover fixed no-repeat; }`,
+**结果壁纸永远不显示**,背景是一块死灰的 #EBF2FA。两个原因叠在一起:
+
+1. body 的背景会被「传播」到 canvas,Chrome 在这种情况下**丢掉了
+   `background-attachment: fixed`**,只画出那个纯色兜底色。
+2. 就算改成 `scroll`,body 自己画的背景也会**盖在负 z-index 的 `::before` 上面**。
+
+正确写法(主应用早就是这个结构):
+
+```css
+html { background: #EBF2FA; }        /* 兜底色 */
+body { background: transparent; position: relative; }
+body::before {
+  content: ""; position: fixed; inset: 0; z-index: -1;
+  background: url('../assets/wall-light.jpg') center/cover no-repeat;
+  pointer-events: none;
+}
+body:not(.dark)::after {             /* 压一层暗,让浅色壁纸上的字能读 */
+  content: ""; position: fixed; inset: 0; z-index: -1;
+  background: rgba(0,0,0,0.16); pointer-events: none;
+}
+```
+
+**验证壁纸有没有真的画出来,不要靠肉眼看截图** —— 那张壁纸浅色区域本来就接近纯色。
+要取像素比:
+
+```python
+im = Image.open('shot.png').convert('RGB')
+im.getpixel((700, 700))   # 平的兜底色是 (235,242,250);有壁纸时明显不同
+```
+
+
 ## 七之三、双语(i18n)
 
 主界面有中英切换,词条表在 `frontend/app.js` 顶部的 `STRINGS = { zh: {...}, en: {...} }`。

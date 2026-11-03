@@ -20,11 +20,46 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
   color: var(--ink);
   min-height: 100vh;
-  background: #EBF2FA url('../assets/wall-light.jpg') center/cover fixed no-repeat;
+  position: relative;
+  /* The body background must stay transparent — see the ::before note. */
+  background: transparent;
   padding-top: env(safe-area-inset-top);
 }
-body.dark { background-color: #0F172A; color: #E2E8F0; }
-body.dark { background-image: url('../assets/wall-dark.jpg'); }
+html { background: #EBF2FA; }
+body.dark { background: transparent; }
+
+/* The wallpaper lives on a fixed ::before layer, exactly like the main app.
+   Two traps, both found the hard way:
+   1. `background-attachment: fixed` on the body is dropped by Chrome once
+      the body background is propagated to the canvas — only the flat
+      fallback colour is painted, the wallpaper silently never appears.
+   2. A body background (even a transparent-but-painted one) is painted
+      OVER a negative-z-index ::before, so the wallpaper would be hidden
+      again. The body therefore paints nothing; the ::before layer does
+      the whole background job. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: url('../assets/wall-light.jpg') center/cover no-repeat;
+  z-index: -1;
+  pointer-events: none;
+}
+/* Same trick for the darkening veil the main app uses to keep the
+   light wallpaper readable. */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: rgba(0, 0, 0, 0);
+}
+body:not(.dark)::after { background: rgba(0, 0, 0, 0.16); }
+body.dark::after { background: rgba(0, 0, 0, 0); }
+
+body.dark::before { background-image: url('../assets/wall-dark.jpg'); }
+body.dark { color: #E2E8F0; }
 body.dark { --ink: #e2e8f0; --ink-2: #cbd5e1; --muted: #94a3b8; --glass: rgba(20,24,32,0.62); --glass-soft: rgba(20,24,32,0.34); --border: rgba(255,255,255,0.12); --border-soft: rgba(255,255,255,0.08); }
 
 .hidden { display: none !important; }
@@ -42,10 +77,10 @@ input { font: inherit; color: inherit; }
   -webkit-backdrop-filter: saturate(180%);
   position: sticky; top: 0; z-index: 20;
 }
-.brand { display: inline-flex; align-items: baseline; gap: 6px; font-weight: 800; font-size: 20px; }
+.brand { display: inline-flex; align-items: baseline; gap: 6px; font-weight: 800; font-size: 20px; white-space: nowrap; }
 .brand-name { color: var(--ink); }
 .brand-sub {
-  font-size: 11px; padding: 2px 8px; border-radius: 6px;
+  font-size: 11px; padding: 2px 8px; border-radius: 6px; white-space: nowrap;
   background: var(--glass-soft); border: 1px solid var(--border-soft); color: var(--muted); font-weight: 600;
 }
 .topbar-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -204,17 +239,24 @@ body.dark .gate-card input { background: rgba(255,255,255,0.08); }
   .convo { padding: 16px 18px; }
 }
 
-/* 平板及以上:每个区块自己是一块玻璃卡 —— 标题和空状态就不会直接压在壁纸的亮丝带上 */
+/* 每个区块都是一块玻璃卡 —— 标题和说明文字不会直接压在壁纸的亮丝带上。
+   手机上也一样,不然窄屏的提示语会糊在白丝带上读不出来。 */
+.block {
+  background: rgba(255, 255, 255, 0.34);
+  border: 1px solid var(--border-soft);
+  border-radius: 18px;
+  padding: 14px 14px 16px;
+}
+body.dark .block { background: rgba(28, 33, 44, 0.34); }
+.block h2 { margin-bottom: 4px; }
+.block .hint { margin-bottom: 14px; }
+
+/* 平板及以上:卡片再舒展一点 */
 @media (min-width: 620px) {
   .block {
-    background: rgba(255, 255, 255, 0.34);
-    border: 1px solid var(--border-soft);
     border-radius: 22px;
     padding: 18px 20px 20px;
   }
-  body.dark .block { background: rgba(28, 33, 44, 0.34); }
-  .block h2 { margin-bottom: 4px; }
-  .block .hint { margin-bottom: 14px; }
 }
 
 /* iPad 竖屏 / 小平板:单栏,但别那么窄 */
