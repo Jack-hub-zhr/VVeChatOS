@@ -16,7 +16,13 @@
 
   var SVGNS = 'http://www.w3.org/2000/svg';
   var XLINK = 'http://www.w3.org/1999/xlink';
-  var PARAMS = { ref: 1, edge: 1, rad: 0.6, tint: 0.08, blur: 0.25 };
+  var PARAMS = {
+    ref: 0.22,     // 折射强度:面板边缘最多把背景往中心拉的比例
+    blur: 0.25,
+    band: 22,      // 折射环宽度(px)
+    maxPull: 20,   // 位移上限(px) —— 再多就会把面板自己的内容卷进背景
+    disp: 2        // 色散:R/B 通道各偏移多少 px(0 = 不色散)
+  };
 
   /* ---------- 工具 ---------- */
   function smoothStep(a, b, t) {
@@ -88,16 +94,62 @@
     filter.setAttribute('width', String(W)); filter.setAttribute('height', String(H));
 
     var feImage = document.createElementNS(SVGNS, 'feImage');
+    feImage.setAttribute('id', fid + '_map');   // 位移贴图 —— in2 靠这个 id 引用
     feImage.setAttribute('preserveAspectRatio', 'none');
     feImage.setAttribute('width', String(W)); feImage.setAttribute('height', String(H));
+    filter.appendChild(feImage);
 
+    // 滤镜链（顺序是踩坑踩出来的，别改）：
+    //   feImage(位移贴图) → 拆 R/G/B → 各偏移 → lighten 合成 → feDisplacementMap(折射)
+    //
+    // 1) 折射只有「一个」feDisplacementMap。之前用过三条支路（每支路一个位移图），
+    //    Chrome 里第二、三条支路的采样会错位，面板右缘整条出现洋红脏影 ——
+    //    纯灰背景下照样出现，说明不是背景内容的问题，是滤镜链自己坏了。
+    // 2) 色散用「拆通道 + 各自偏移 + feBlend lighten 合成」做：
+    //    lighten 对「只有一个通道有值」的图是精确的 max(R,0)=R，三张合起来就是原色。
+    //    不能用 feComposite arithmetic —— alpha 会累加，颜色被预乘/反预乘搞坏。
+    // 3) 位移图必须放在最后。放在拆通道之前，位移出来的半透明像素会被
+    //    lighten 按 alpha 加权求和，整个面板发紫（实测）。
+    var chans = ['R', 'G', 'B'].map(function (name, i) {
+      var cm = document.createElementNS(SVGNS, 'feColorMatrix');
+      cm.setAttribute('type', 'matrix');
+      cm.setAttribute('in', 'SourceGraphic');
+      var rows = ['0 0 0 0 0', '0 0 0 0 0', '0 0 0 0 0', '0 0 0 1 0'];
+      rows[i] = ['1 0 0 0 0', '0 1 0 0 0', '0 0 1 0 0'][i];
+      cm.setAttribute('values', rows.join(' '));
+      cm.setAttribute('result', 'c' + name);
+      filter.appendChild(cm);
+      return 'c' + name;
+    });
+    // 红蓝各偏一点 → 边缘裂出彩边（真实色散，不是贴一条彩虹）
+    var split = { R: 'cR', G: 'cG', B: 'cB' };
+    ['R', 'B'].forEach(function (name, i) {
+      if (!PARAMS.disp) return;
+      var off = document.createElementNS(SVGNS, 'feOffset');
+      off.setAttribute('in', 'c' + name);
+      off.setAttribute('dx', String(i === 0 ? -PARAMS.disp : PARAMS.disp));
+      off.setAttribute('dy', '0');
+      off.setAttribute('result', 'o' + name);
+      filter.appendChild(off);
+      split[name] = 'o' + name;
+    });
+    // 合成回一张图
+    var prevRes = split.R;
+    [split.G, split.B].forEach(function (nm, i) {
+      var bl = document.createElementNS(SVGNS, 'feBlend');
+      bl.setAttribute('mode', 'lighten');
+      bl.setAttribute('in', prevRes); bl.setAttribute('in2', nm);
+      prevRes = 'x' + i;
+      bl.setAttribute('result', prevRes);
+      filter.appendChild(bl);
+    });
+    // 折射：一个位移图，把上面合成好的图整体掰弯
     var feDisp = document.createElementNS(SVGNS, 'feDisplacementMap');
-    feDisp.setAttribute('in', 'SourceGraphic');
+    feDisp.setAttribute('in', prevRes);
     feDisp.setAttribute('in2', fid + '_map');
     feDisp.setAttribute('xChannelSelector', 'R');
     feDisp.setAttribute('yChannelSelector', 'G');
-
-    filter.appendChild(feImage); filter.appendChild(feDisp);
+    filter.appendChild(feDisp);
     svg.appendChild(filter);
     ensureSvgHost().appendChild(svg);
 
@@ -106,39 +158,56 @@
     var ctx = canvas.getContext('2d');
     var data = new Uint8ClampedArray(MAP * MAP * 4);
     var raw = new Float32Array(MAP * MAP * 2);
-    var maxScale = 0, i, x, y, d, px, py, dx, dy;
+    var maxScale = 0, i, x, y, d, dx, dy;
 
     function buildMap() {
       W = Math.max(2, el.offsetWidth || W);
       H = Math.max(2, el.offsetHeight || H);
       filter.setAttribute('width', String(W)); filter.setAttribute('height', String(H));
       feImage.setAttribute('width', String(W)); feImage.setAttribute('height', String(H));
+      // 折射环贴着面板自己的圆角矩形走 —— 用元素真实的圆角，
+      // 长条面板的边缘才不会歪。
+      var rad = 0;
+      try { rad = parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0; } catch (_) {}
+      rad = Math.min(rad, Math.min(W, H) / 2);
+      var bandPx = Math.min(PARAMS.band, Math.min(W, H) * 0.45);
       maxScale = 0;
       var idx = 0;
       for (i = 0; i < data.length; i += 4) {
         x = (i / 4) % MAP; y = Math.floor(i / 4 / MAP);
-        var ix = x / MAP - 0.5, iy = y / MAP - 0.5;
-        // SDF 用元素的真实宽高比算，不然长条面板的折射边缘会歪。
-        var aspect = W / Math.max(1, H);
-        var hw = 0.5 / Math.sqrt(aspect), hh = 0.5 * Math.sqrt(aspect);
-        d = roundedRectSDF(ix, iy, hw, hh, PARAMS.rad * Math.min(hw, hh));
-        var disp = smoothStep(0.8, 0, d - 0.15 / PARAMS.edge);
-        var s2 = smoothStep(0, 1, disp);
-        px = (ix * s2 + 0.5) * MAP; py = (iy * s2 + 0.5) * MAP;
-        dx = px - x; dy = py - y;
+        // 元素像素坐标（中心为原点）。位移量必须是 CSS px ——
+        // feDisplacementMap 的 scale 走的是 user space，
+        // 用贴图像素算会差好几倍（贴图被拉伸过）。
+        var ex = (x / MAP - 0.5) * W, ey = (y / MAP - 0.5) * H;
+        // 到面板边框的距离：边上 0，往里为正。
+        // SDF 必须按面板自己的形状算 —— 撑满写法会让位移场恒为 1，折射直接消失。
+        d = -roundedRectSDF(ex, ey, W / 2, H / 2, rad);
+        // 边上一圈最强，往里 bandPx 过渡回「不折射」，中间保持平坦（放大感）。
+        var s2 = 1 - PARAMS.ref * (1 - smoothStep(0, bandPx, d));
+        dx = ex * (s2 - 1); dy = ey * (s2 - 1);
+        // 拉不动太远：面板自己的内容（头像、角标）会被卷进背景采样，
+        // 在边缘拉出一条脏影。所以位移上限压在 maxPull。
+        var mag = Math.hypot(dx, dy);
+        if (mag > PARAMS.maxPull) {
+          var k = PARAMS.maxPull / mag;
+          dx *= k; dy *= k;
+        }
         maxScale = Math.max(maxScale, Math.abs(dx), Math.abs(dy));
         raw[idx++] = dx; raw[idx++] = dy;
       }
-      maxScale *= 0.5;
+      // 贴图用满 0..1，不裁剪：R=0.5 是「不位移」，
+      // 位移量 = scale × (R-0.5)，所以 scale 取两倍最大值。
+      var enc = maxScale > 0 ? 2 * maxScale : 1;
       idx = 0;
       for (i = 0; i < data.length; i += 4) {
-        data[i] = (raw[idx++] / maxScale + 0.5) * 255;
-        data[i + 1] = (raw[idx++] / maxScale + 0.5) * 255;
+        data[i] = (raw[idx++] / enc + 0.5) * 255;
+        data[i + 1] = (raw[idx++] / enc + 0.5) * 255;
         data[i + 2] = 0; data[i + 3] = 255;
       }
       ctx.putImageData(new ImageData(data, MAP, MAP), 0, 0);
       feImage.setAttributeNS(XLINK, 'href', canvas.toDataURL());
-      feDisp.setAttribute('scale', String(maxScale * PARAMS.ref));
+      // 一个位移图就是全部折射：scale × (R-0.5) = 贴图里存的位移量。
+      feDisp.setAttribute('scale', String(enc));
     }
 
     // 元素原本的模糊/饱和度要留着 —— 只加折射是不够的，
