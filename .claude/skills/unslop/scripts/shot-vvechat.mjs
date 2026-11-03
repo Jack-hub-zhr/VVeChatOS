@@ -48,7 +48,7 @@ const flag = (n, d) => {
 };
 const has = n => argv.includes(`--${n}`);
 
-if (has('--list-screens')) {
+if (has('list-screens')) {
   console.log('screens: chats | ai | discover | more | group-info | profile | auth');
   console.log('themes : light | dark | 550c | auto');
   process.exit(0);
@@ -60,7 +60,7 @@ const USER = flag('user', 'Jack');
 const PASS = flag('pass', 'Zhr121005');
 const THEME = flag('theme', 'light');
 const SCREEN = flag('screen', 'chats');
-const MOBILE = has('--mobile');
+const MOBILE = has('mobile');
 const EXTRA_WAIT = Number(flag('wait', 1200));
 const W = Number(flag('width', MOBILE ? 390 : 1280));
 const H = Number(flag('height', MOBILE ? 844 : 860));
@@ -80,13 +80,16 @@ async function evaluate(expr) {
 try {
   await send('Page.enable');
   await send('Runtime.enable');
-  await send('Emulation.setDeviceMetricsOverride', {
-    width: W, height: H, deviceScaleFactor: MOBILE ? 2 : 1, mobile: MOBILE,
-  });
 
   // 1. 先落到真实 origin,再写 localStorage(否则 SecurityError)
   await send('Page.navigate', { url: TARGET });
   await sleep(2200);
+
+  // 视口覆盖要在导航之后补一次,导航会把之前的 emulation 重置
+  const setViewport = () => send('Emulation.setDeviceMetricsOverride', {
+    width: W, height: H, deviceScaleFactor: MOBILE ? 2 : 1, mobile: MOBILE,
+  });
+  await setViewport();
 
   // 2. 主题:550C 是独立开关,优先于 light/dark
   await evaluate(`(() => {
@@ -172,6 +175,8 @@ try {
   }
 
   await sleep(EXTRA_WAIT);
+  await setViewport();
+  await sleep(200);
 
   // 6. 截图
   mkdirSync(dirname(OUT), { recursive: true });

@@ -112,6 +112,7 @@
       } catch (_) {}
       $('#gate').classList.add('hidden');
       $('#panel').classList.remove('hidden');
+      document.querySelectorAll('.topbar-right .pill').forEach(b => { b.disabled = false; });
       await load();
     } catch (e) {
       msg.textContent = e.message;
@@ -258,6 +259,10 @@
       const t = localStorage.getItem('vve:theme');
       if (t === 'dark') document.body.classList.add('dark');
     } catch (_) {}
+    // 顶栏的按钮在登录前不可用 —— 否则点了会拿到 "missing token"
+    const topbarBtns = Array.from(document.querySelectorAll('.topbar-right .pill'));
+    const setTopbarEnabled = (on) => topbarBtns.forEach(b => { b.disabled = !on; });
+    setTopbarEnabled(false);
     // restore an admin session if we have one
     try {
       const t = sessionStorage.getItem('vve-ctl-token');
@@ -269,6 +274,7 @@
         $('#panel').classList.remove('hidden');
         render(probe);
         $('#stamp').textContent = '更新于 ' + fmtTime(probe.generated_at);
+        setTopbarEnabled(true);
       }
     } catch (_) {
       state.token = '';

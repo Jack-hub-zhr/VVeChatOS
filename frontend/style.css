@@ -232,29 +232,10 @@ input::placeholder, textarea::placeholder { color: var(--muted-2); }
 .hidden { display: none !important; }
 
 /* ============================================================
-   BACKGROUND DECORATION (floating orbs)
+   BACKGROUND DECORATION
+   .bg-decor(漂浮光球)已删除:壁纸现在直接挂在 body 上,
+   这块是没人用的遗留代码,还带着两个无限循环动画。
    ============================================================ */
-.bg-decor {
-  /* Wallpaper is now on the body itself; hide the floating orbs to avoid double-stacking */
-  display: none;
-}
-.bg-decor::before, .bg-decor::after {
-  content: ""; position: absolute; border-radius: 50%; filter: blur(80px);
-  animation: bgFloat1 16s ease-in-out infinite;
-}
-.bg-decor::before {
-  width: 420px; height: 420px;
-  background: rgba(59, 130, 246, 0.18);
-  top: -120px; left: -100px;
-}
-.bg-decor::after {
-  width: 360px; height: 360px;
-  background: rgba(14, 165, 233, 0.16);
-  bottom: -80px; right: -80px;
-  animation: bgFloat2 20s ease-in-out infinite;
-}
-@keyframes bgFloat1 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(40px,30px)} }
-@keyframes bgFloat2 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(-30px,-40px)} }
 
 /* ============================================================
    SOFT LIGHT GLASS UTILITY
@@ -365,8 +346,8 @@ body.dark .auth-card { background: rgba(20, 24, 32, 0.60); border-color: rgba(25
 }
 .brand-mark-text {
   font-family: var(--font-display);
-  font-size: 19px; font-weight: 800;
-  color: #ffffff; letter-spacing: -0.5px;
+  font-size: 18px; font-weight: 800;
+  color: #ffffff; letter-spacing: 0;
   position: relative; z-index: 1;
 }
 /* Plain-text brand for the auth card (no logo) */
@@ -374,7 +355,7 @@ body.dark .auth-card { background: rgba(20, 24, 32, 0.60); border-color: rgba(25
   margin: 0;
   font-family: var(--font-display);
   font-size: 30px; font-weight: 800;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
   background: var(--accent-grad);
   -webkit-background-clip: text;
   background-clip: text;
@@ -390,12 +371,12 @@ body.dark .auth-card { background: rgba(20, 24, 32, 0.60); border-color: rgba(25
   /* Leave some air between the wordmark and the capsule. */
   margin-left: 9px;
   min-width: 28px; height: 26px; padding: 0 8px;
-  font-size: 10.5px;
+  font-size: 11px;
   align-self: center;
 }
 
 .brand-tagline {
-  font-size: 13.5px; color: var(--muted);
+  font-size: 13px; color: var(--muted);
   text-align: center; margin: -4px 0 6px;
 }
 
@@ -409,7 +390,7 @@ body.dark .auth-card { background: rgba(20, 24, 32, 0.60); border-color: rgba(25
 .tab {
   flex: 1; height: 36px;
   border-radius: var(--r-pill);
-  font-size: 13.5px; font-weight: 600;
+  font-size: 13px; font-weight: 600;
   color: var(--muted);
   transition: background 0.25s, color 0.25s, box-shadow 0.25s;
 }
@@ -441,7 +422,7 @@ body.dark .auth-card { background: rgba(20, 24, 32, 0.60); border-color: rgba(25
   box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.08);
 }
 
-.auth-msg { font-size: 12.5px; color: var(--danger); min-height: 16px; }
+.auth-msg { font-size: 13px; color: var(--danger); min-height: 16px; }
 
 /* ============================================================
    BUTTONS
@@ -455,8 +436,8 @@ body.dark .auth-card { background: rgba(20, 24, 32, 0.60); border-color: rgba(25
   white-space: nowrap;
 }
 .btn:active { transform: scale(0.97); }
-.btn-lg { padding: 14px 24px; font-size: 15px; }
-.btn-sm { padding: 7px 14px; font-size: 12.5px; }
+.btn-lg { padding: 14px 24px; font-size: 14px; }
+.btn-sm { padding: 7px 14px; font-size: 13px; }
 
 .btn-primary {
   background: var(--accent-grad);
@@ -580,7 +561,7 @@ body.theme-dark .beta-tag {
   border-radius: var(--r-pill);
   background: var(--danger);
   color: #ffffff;
-  font-size: 10px; font-weight: 700;
+  font-size: 11px; font-weight: 700;
   display: flex; align-items: center; justify-content: center;
   box-shadow: 0 2px 6px rgba(255, 59, 48, 0.4);
   border: 2px solid rgba(255, 255, 255, 0.9);
@@ -630,7 +611,7 @@ body.dark .topbar { background: rgba(20, 24, 32, 0.30); border-bottom-color: rgb
 
 .brand-name {
   font-weight: 800; font-size: 18px;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
   color: var(--ink);
   text-shadow: 0 1px 2px rgba(255, 255, 255, 0.4);
 }
@@ -747,7 +728,7 @@ body.dark .list-pane {
 body.dark .list-me .avatar.md { color: #e6ecf5; }
 .list-me-text { flex: 1; min-width: 0; }
 .list-me-name {
-  font-size: 13.5px; font-weight: 700; color: var(--ink);
+  font-size: 13px; font-weight: 700; color: var(--ink);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .list-me-sub {
@@ -762,8 +743,8 @@ body.dark .list-me .avatar.md { color: #e6ecf5; }
   padding: 12px 12px 6px;
 }
 .list-title {
-  font-size: 15px; font-weight: 700; color: var(--ink);
-  letter-spacing: -0.01em;
+  font-size: 14px; font-weight: 700; color: var(--ink);
+  letter-spacing: 0;
   padding: 0 6px 8px;
 }
 /* The search box belongs to the chat list only. */
@@ -798,7 +779,7 @@ body.dark .tabbar { background: rgba(255, 255, 255, 0.06); }
   flex: 0 0 auto; height: 30px; padding: 0 16px;
   display: flex; align-items: center; justify-content: center; gap: 6px;
   border-radius: var(--r-pill);
-  font-size: 12.5px; font-weight: 600;
+  font-size: 13px; font-weight: 600;
   color: var(--muted);
   background: transparent;
   transition: background 0.2s, color 0.2s, box-shadow 0.2s;
@@ -880,7 +861,7 @@ body.dark #chats-list, body.dark #groups-list, body.dark #friends-list {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .list-item .sub, .chat-item .sub {
-  font-size: 11.5px; color: var(--muted);
+  font-size: 12px; color: var(--muted);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   margin-top: 2px;
 }
@@ -897,38 +878,15 @@ body.dark #chats-list, body.dark #groups-list, body.dark #friends-list {
 .empty-hint {
   padding: 36px 24px; text-align: center;
   color: var(--muted);
-  font-size: 13.5px;
+  font-size: 13px;
 }
 .empty-hint p { margin: 0; font-weight: 600; color: var(--ink-2); }
-.empty-hint small { display: block; margin-top: 6px; font-size: 12.5px; }
+.empty-hint small { display: block; margin-top: 6px; font-size: 13px; }
 .empty-hint.small { padding: 20px 16px; }
-.empty-illus {
-  width: 64px; height: 64px;
-  margin: 0 auto 14px;
-  border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 32px;
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.18), rgba(96, 165, 250, 0.16));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.30);
-  animation: emptyBreathe 4s ease-in-out infinite;
-}
-@keyframes emptyBreathe {
-  0%, 100% { transform: scale(1); }
-  50%      { transform: scale(1.06); }
-}
+/* .empty-illus 和 .btn.primary.small 已删除:两处都是没人用的遗留样式,
+   而且带着紫色渐变 + 无限呼吸动画 —— 上游 unslop 点名的头号 slop。
+   空状态现在用 .chat-empty-mark(玻璃方块)。 */
 .empty-hint .btn { margin-top: 18px; }
-.btn.primary.small {
-  padding: 8px 18px;
-  font-size: 13px;
-  border-radius: 999px;
-  background: linear-gradient(135deg, #8b5cf6, #60a5fa);
-  color: #fff;
-  border: none;
-  box-shadow: 0 6px 18px rgba(139, 92, 246, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.30);
-  cursor: pointer;
-  font-weight: 600;
-}
-.btn.primary.small:active { transform: scale(0.96); }
 
 /* Chat list item internals (rendered by app.js) — iOS Settings style with chevron */
 #chats-list li,
@@ -1001,7 +959,7 @@ body.dark #friends-list li.active { background: rgba(96, 165, 250, 0.15); }
   box-shadow: 0 2px 6px rgba(255, 59, 48, 0.35);
 }
 .preview {
-  font-size: 12.5px; color: var(--muted);
+  font-size: 13px; color: var(--muted);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   margin-top: 2px;
 }
@@ -1054,7 +1012,7 @@ body.dark .right-pane {
   margin-bottom: 8px;
 }
 .chat-empty h2 { font-size: 18px; font-weight: 700; color: var(--ink); }
-.chat-empty p { font-size: 13.5px; color: var(--muted); max-width: 340px; }
+.chat-empty p { font-size: 13px; color: var(--muted); max-width: 340px; }
 
 .chat-window {
   flex: 1; display: flex; flex-direction: column; min-height: 0;
@@ -1077,12 +1035,12 @@ body.dark .chat-header { background: rgba(20, 24, 32, 0.30); border-bottom-color
   margin: 0; font-size: 16px; font-weight: 700;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.chat-header-text small { font-size: 12.5px; color: var(--muted); }
+.chat-header-text small { font-size: 13px; color: var(--muted); }
 
 /* Group name and its subtitle share the same left edge and baseline, with
    the subtitle deliberately one step smaller so the name reads first. */
 .chat-sub {
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.3;
   color: var(--muted);
   margin-top: 1px;
@@ -1113,7 +1071,7 @@ body.dark .chat-header { background: rgba(20, 24, 32, 0.30); border-bottom-color
 /* The title block (name + subtitle) shares one left edge with the avatar. */
 .chat-header-text > * { text-align: left; }
 .chat-header-text small.online { color: var(--online); }
-.chat-header-text .typing { font-size: 12.5px; color: var(--accent); font-weight: 600; }
+.chat-header-text .typing { font-size: 13px; color: var(--accent); font-weight: 600; }
 
 .chat-messages {
   flex: 1; overflow-y: auto; min-height: 0;
@@ -1434,7 +1392,7 @@ body.dark .chat-composer { background: rgba(20, 24, 32, 0.30); border-top-color:
   border: 1px solid var(--glass-border-soft);
   border-left: 3px solid var(--accent);
   border-radius: 14px;
-  font-size: 12.5px;
+  font-size: 13px;
 }
 .reply-preview .info { flex: 1; min-width: 0; }
 .reply-preview .name { font-weight: 600; color: var(--ink-2); }
@@ -1459,7 +1417,7 @@ body.dark .chat-composer { background: rgba(20, 24, 32, 0.30); border-top-color:
   border: 1px solid var(--glass-border-soft);
   border-left: 3px solid var(--accent);
   border-radius: 14px;
-  font-size: 12.5px;
+  font-size: 13px;
 }
 .mention-preview .info { flex: 1; min-width: 0; }
 .mention-preview .name { font-weight: 600; color: var(--ink-2); }
@@ -1522,7 +1480,7 @@ body.dark .mention-hint-bar { background: rgba(255, 255, 255, 0.05); }
   padding: 7px 9px;
   border-radius: 11px;
   cursor: pointer;
-  font-size: 13.5px;
+  font-size: 13px;
   color: var(--ink-2);
 }
 /* The little "what is this" line at the top of the picker. */
@@ -1530,7 +1488,7 @@ body.dark .mention-hint-bar { background: rgba(255, 255, 255, 0.05); }
   padding: 3px 9px 7px;
   margin-bottom: 4px;
   border-bottom: 1px solid rgba(0, 0, 0, 0.07);
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--muted);
   letter-spacing: 0.01em;
 }
@@ -1567,7 +1525,7 @@ body.dark .mention-hint-bar { background: rgba(255, 255, 255, 0.05); }
   30% { transform: translateY(-4px); opacity: 0.9; }
 }
 
-.mention-item .tag { font-size: 10.5px; color: var(--muted); }
+.mention-item .tag { font-size: 11px; color: var(--muted); }
 /* The assistant's badge in the @ picker — it should read as a helper,
    not as another member of the group. */
 .mention-item .tag-bot {
@@ -1577,7 +1535,7 @@ body.dark .mention-hint-bar { background: rgba(255, 255, 255, 0.05); }
   border-radius: 6px;
   padding: 1px 6px;
 }
-.mention-menu .mention-empty { padding: 10px; font-size: 12.5px; color: var(--muted); }
+.mention-menu .mention-empty { padding: 10px; font-size: 13px; color: var(--muted); }
 
 /* The @name inside a message bubble. */
 .mention {
@@ -1726,7 +1684,7 @@ body.dark .mention-hint-bar { background: rgba(255, 255, 255, 0.05); }
 /* "管理员 / 开发者" label under Jack's messages */
 .msg-jack-label {
   display: inline-block;
-  font-size: 9.5px; font-weight: 600;
+  font-size: 11px; font-weight: 600;
   color: #b45309;
   background: linear-gradient(135deg, rgba(255, 220, 100, 0.20), rgba(255, 180, 0, 0.18));
   border: 1px solid rgba(245, 158, 11, 0.35);
@@ -1798,7 +1756,7 @@ body.dark .msg-action-bar {
   position: relative;
 }
 .msg-action-label {
-  font-size: 10.5px; font-weight: 500; color: var(--ink-2); line-height: 1;
+  font-size: 11px; font-weight: 500; color: var(--ink-2); line-height: 1;
 }
 .msg-action-btn:hover { background: rgba(255, 255, 255, 0.40); }
 .msg-action-btn:active { transform: scale(0.92); }
@@ -1810,7 +1768,7 @@ body.dark .msg-action-bar {
 .msg-action-forward:hover { background: rgba(59, 130, 246, 0.12); color: #1d4ed8; }
 .msg-action-reply { color: #8b5cf6; }
 .msg-action-reply .msg-action-label { color: #8b5cf6; }
-.msg-action-reply:hover { background: rgba(167, 139, 250, 0.12); color: #7c3aed; }
+.msg-action-reply:hover { background: var(--accent-soft); color: var(--accent); }
 .msg-action-copy { color: #10b981; }
 .msg-action-copy .msg-action-label { color: #10b981; }
 .msg-action-copy:hover { background: rgba(52, 199, 89, 0.12); color: #059669; }
@@ -1853,7 +1811,7 @@ body.dark .msg-action-bar {
   font-weight: 800;
   letter-spacing: -0.04em;
   line-height: 1;
-  background: linear-gradient(135deg, #5eead4 0%, #60a5fa 45%, #c084fc 100%);
+  background: linear-gradient(135deg, #29C3D6 0%, #5B7CFF 60%, #4C6FFF 100%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -1867,7 +1825,7 @@ body.dark .hello-splash {
   -webkit-backdrop-filter: blur(40px) saturate(180%);
 }
 body.dark .hello-splash-text {
-  background: linear-gradient(135deg, #67e8f9 0%, #93c5fd 50%, #d8b4fe 100%);
+  background: linear-gradient(135deg, #45CFE0 0%, #7C9CFF 60%, #4C6FFF 100%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -1908,18 +1866,12 @@ body.dark .hello-splash-hint {
   font-weight: 600;
   font-size: 14px;
   letter-spacing: 0.5px;
-  background: linear-gradient(90deg, #3B82F6, #0EA5E9, #3B82F6);
-  background-size: 200% 100%;
+  background: linear-gradient(90deg, #29C3D6, #5B7CFF, #29C3D6);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
   -webkit-text-fill-color: transparent;
-  animation: helloShimmer 4s linear infinite;
   margin: 0;
-}
-@keyframes helloShimmer {
-  0%, 100% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
 }
 
 /* Onboarding tour removed */
@@ -2015,7 +1967,7 @@ body.dark .modal-card { background: rgba(20, 24, 32, 0.70); border-color: rgba(2
 .modal-body::-webkit-scrollbar { width: 6px; }
 .modal-body::-webkit-scrollbar-thumb { background: rgba(30, 80, 150, 0.15); border-radius: 3px; }
 
-.modal-msg { font-size: 12.5px; color: var(--danger); min-height: 16px; margin-top: 8px; }
+.modal-msg { font-size: 13px; color: var(--danger); min-height: 16px; margin-top: 8px; }
 .modal-actions {
   display: flex; justify-content: flex-end; gap: 8px;
   margin-top: 18px;
@@ -2046,7 +1998,7 @@ body.dark .modal-card { background: rgba(20, 24, 32, 0.70); border-color: rgba(2
   flex-shrink: 0;
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.30);
 }
-.plus-action-title { font-size: 14.5px; font-weight: 600; color: var(--ink); }
+.plus-action-title { font-size: 14px; font-weight: 600; color: var(--ink); }
 .plus-action-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
 
 .req-item {
@@ -2101,7 +2053,7 @@ body.dark .modal-card { background: rgba(20, 24, 32, 0.70); border-color: rgba(2
   padding: 10px 20px;
   background: rgba(28, 42, 62, 0.92);
   color: #ffffff;
-  font-size: 13.5px; font-weight: 500;
+  font-size: 13px; font-weight: 500;
   border-radius: var(--r-pill);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.30);
   z-index: 300;
@@ -2120,7 +2072,7 @@ body.dark .modal-card { background: rgba(20, 24, 32, 0.70); border-color: rgba(2
   border-radius: var(--r-pill);
   background: rgba(255, 59, 48, 0.95);
   color: #ffffff;
-  font-size: 12.5px; font-weight: 600;
+  font-size: 13px; font-weight: 600;
   z-index: 400;
   box-shadow: 0 8px 24px rgba(255, 59, 48, 0.35);
   animation: toastIn 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
@@ -2156,7 +2108,7 @@ body.dark .modal-card { background: rgba(20, 24, 32, 0.70); border-color: rgba(2
   display: block; width: 100%;
   padding: 8px 14px;
   border-radius: 10px;
-  font-size: 13.5px; font-weight: 500;
+  font-size: 13px; font-weight: 500;
   text-align: left;
   color: var(--ink);
   transition: background 0.15s;
@@ -2192,7 +2144,7 @@ body.dark .modal-card { background: rgba(20, 24, 32, 0.70); border-color: rgba(2
   flex-shrink: 0;
   overflow: hidden;
 }
-.theme-toggle:hover { background: rgba(255, 255, 255, 0.85); color: var(--accent); transform: scale(1.05); }
+.theme-toggle:hover { background: rgba(255, 255, 255, 0.85); color: var(--accent); }
 .theme-toggle:active { transform: scale(0.92); }
 /* Icon swap based on current mode */
 .theme-toggle .ico-auto,
@@ -2243,7 +2195,7 @@ body.dark .theme-menu { background: rgba(20, 24, 32, 0.92); border-color: rgba(2
   .list-pane { width: 320px; }
   .rail-pane { width: 78px; }
   .messages { padding: 20px 32px 12px; }
-  .msg-bubble { font-size: 14.5px; line-height: 1.55; padding: 10px 14px; max-width: 520px; }
+  .msg-bubble { font-size: 13px; line-height: 1.55; padding: 10px 14px; max-width: 520px; }
   .chat-header { height: 64px; padding: 0 24px; }
   .chat-composer { padding: 12px 24px 16px; }
   .app-body { gap: 0; }
@@ -2328,7 +2280,7 @@ body.dark .theme-menu { background: rgba(20, 24, 32, 0.92); border-color: rgba(2
      so every iPhone rule below it (including .theme-toggle) escaped into
      the global scope and applied at every screen size. The orphan is gone
      and the media query now closes where it should. */
-  .beta-tag { height: 18px; padding: 0 8px; font-size: 10px; }
+  .beta-tag { height: 18px; padding: 0 8px; font-size: 11px; }
   .composer-row .emoji-btn, .composer-row .attach-btn { width: 34px; height: 34px; font-size: 17px; }
   .composer-row .mention-btn { width: 34px; height: 34px; padding: 0; font-size: 16px; }
   /* Root terminal on mobile: nearly full-screen */
@@ -2336,38 +2288,38 @@ body.dark .theme-menu { background: rgba(20, 24, 32, 0.92); border-color: rgba(2
   /* Auth card on iPhone: iOS-alert style — compact centered, NOT full-screen */
   .auth-card { padding: 22px 20px 20px; max-width: 320px; width: calc(100% - 40px); gap: 14px; border-radius: 20px; max-height: calc(100dvh - 48px); margin: 24px auto; }
   .auth-card .brand-text { font-size: 24px; }
-  #hello-cycler { font-size: 12.5px; min-width: 110px; min-height: 18px; }
+  #hello-cycler { font-size: 13px; min-width: 110px; min-height: 18px; }
   .auth-card .tabs { padding: 3px; }
-  .auth-card .tab { height: 32px; font-size: 12.5px; }
+  .auth-card .tab { height: 32px; font-size: 13px; }
   .auth-card .field { gap: 4px; }
-  .auth-card .field-label { font-size: 11.5px; }
-  .auth-card .field input { padding: 10px 14px; font-size: 13.5px; }
+  .auth-card .field-label { font-size: 12px; }
+  .auth-card .field input { padding: 10px 14px; font-size: 13px; }
   .auth-card .btn-lg { padding: 11px 18px; font-size: 14px; }
   .brand-name { font-size: 16px; }
   .list-pane { padding: 2px 4px; }
   .tabbar { margin: 6px 6px 2px; padding: 3px; }
-  .tab2 { height: 26px; padding: 0 10px; font-size: 11.5px; }
+  .tab2 { height: 26px; padding: 0 10px; font-size: 12px; }
   .search { margin: 2px 6px 6px; padding: 7px 10px; }
-  .search input { font-size: 12.5px; }
-  .section-title { padding: 10px 8px 4px; font-size: 10px; }
+  .search input { font-size: 13px; }
+  .section-title { padding: 10px 8px 4px; font-size: 11px; }
   #chats-list, #groups-list, #friends-list { border-radius: 10px; }
   #chats-list li, #groups-list li, #friends-list li { padding: 7px 8px; gap: 8px; }
   #chats-list li::before, #groups-list li::before,
-  #groups-list li::before, #friends-list li::before { right: 8px; font-size: 15px; }
+  #groups-list li::before, #friends-list li::before { right: 8px; font-size: 14px; }
   #chats-list li .meta .name, #groups-list li .meta .name, #friends-list li .meta .name { font-size: 13px; }
-  #chats-list li .meta .sub, #groups-list li .meta .sub, #friends-list li .meta .sub { font-size: 11.5px; }
+  #chats-list li .meta .sub, #groups-list li .meta .sub, #friends-list li .meta .sub { font-size: 12px; }
   /* Mobile chat: tighter padding + smaller text */
   .chat-messages { padding: 10px 12px; gap: 6px; }
   .msg-row { gap: 6px; }
   .msg-row .msg-avatar { width: 28px; height: 28px; font-size: 11px; }
-  .bubble { padding: 7px 12px; font-size: 13.5px; border-radius: 16px; }
+  .bubble { padding: 7px 12px; font-size: 13px; border-radius: 16px; }
   .bubble .img-msg { max-width: 200px; max-height: 200px; border-radius: 10px; }
-  .msg-quote { padding: 4px 6px; font-size: 11.5px; }
-  .msg-row .msg-meta { font-size: 10.5px; gap: 4px; }
+  .msg-quote { padding: 4px 6px; font-size: 12px; }
+  .msg-row .msg-meta { font-size: 11px; gap: 4px; }
   /* Mobile chat composer */
   .chat-composer { padding: 6px 8px 8px; gap: 6px; }
-  .chat-composer input[type="text"] { padding: 8px 12px; font-size: 13.5px; }
-  .chat-composer .btn-primary { padding: 8px 14px; font-size: 12.5px; }
+  .chat-composer input[type="text"] { padding: 8px 12px; font-size: 13px; }
+  .chat-composer .btn-primary { padding: 8px 14px; font-size: 13px; }
   .composer-row { gap: 4px; }
   .reply-preview, .img-preview { padding: 6px 8px; font-size: 12px; }
   /* Modal full-width on mobile */
@@ -2378,9 +2330,9 @@ body.dark .theme-menu { background: rgba(20, 24, 32, 0.92); border-color: rgba(2
      positioned; it lives in the normal flex flow now.) */
   .theme-toggle { width: 32px; height: 32px; }
   .theme-menu { min-width: 130px; }
-  .theme-menu-item { padding: 7px 8px; font-size: 12.5px; }
+  .theme-menu-item { padding: 7px 8px; font-size: 13px; }
   /* Floating toast above mobile keyboard */
-  .toast { bottom: 16px; font-size: 12.5px; padding: 8px 16px; }
+  .toast { bottom: 16px; font-size: 13px; padding: 8px 16px; }
   .auth-card { border-radius: 18px; }
 }  /* end of @media (max-width: 520px) */
 
@@ -2391,7 +2343,7 @@ body.dark .theme-menu { background: rgba(20, 24, 32, 0.92); border-color: rgba(2
   .msg-action-btn svg { width: 14px; height: 14px; }
   /* Onboarding tooltip: narrower on mobile */
   .onboard-tooltip { width: 220px; padding: 12px 14px; }
-  .onboard-text { font-size: 12.5px; }
+  .onboard-text { font-size: 13px; }
 }
 
 /* ============================================================
@@ -2533,11 +2485,11 @@ body.dark .ctx-item:hover { background: var(--accent-soft); }
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.10);
   transition: transform 0.18s, border-color 0.18s, box-shadow 0.18s;
 }
-.color-swatch:hover { transform: scale(1.10); }
+.color-swatch:hover { border-color: var(--muted); box-shadow: 0 3px 9px rgba(0, 0, 0, 0.14); }
 .color-swatch.active {
   border-color: var(--ink);
-  transform: scale(1.10);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.30), 0 4px 10px rgba(0, 0, 0, 0.15);
+  transform: scale(1.06);
+  box-shadow: 0 0 0 2px var(--accent-soft), 0 4px 10px rgba(0, 0, 0, 0.15);
 }
 body.dark .color-swatch.active { border-color: #ffffff; }
 
@@ -2609,7 +2561,7 @@ body.dark .settings-row:hover { background: rgba(255, 255, 255, 0.04); }
   height: 44px;
   border: none;
   border-radius: 12px;
-  font-size: 14.5px; font-weight: 600;
+  font-size: 14px; font-weight: 600;
   cursor: pointer;
   background: rgba(255, 255, 255, 0.50);
   color: var(--ink);
@@ -2623,7 +2575,7 @@ body.dark .settings-danger-btn, body.dark .settings-leave-btn { background: rgba
 
 .profile-head { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-bottom: 18px; }
 .profile-head .avatar { width: 80px; height: 80px; font-size: 28px; margin-bottom: 8px; }
-.profile-head .name { font-size: 17px; font-weight: 700; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.profile-head .name { font-size: 18px; font-weight: 700; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center; }
 .profile-head .bio { font-size: 13px; color: var(--muted); text-align: center; }
 
 /* Color palette — 8 preset color chips */
@@ -2649,9 +2601,9 @@ body.dark .settings-danger-btn, body.dark .settings-leave-btn { background: rgba
 }
 .color-picker-row { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
 .color-picker-row input[type="color"] { width: 38px; height: 30px; padding: 0; border: 1px solid var(--glass-border-soft); border-radius: 6px; cursor: pointer; background: transparent; }
-.field-hint { font-size: 11.5px; color: var(--muted); }
+.field-hint { font-size: 12px; color: var(--muted); }
 .avatar-upload-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.avatar-upload-hint { font-size: 11.5px; color: var(--muted); }
+.avatar-upload-hint { font-size: 12px; color: var(--muted); }
 .profile-actions { margin-top: 12px; }
 #edit-avatar-preview { transition: background 0.3s ease; }
 
@@ -2975,7 +2927,7 @@ body.dark .msg-dots:hover { background: rgba(255, 255, 255, 0.10); }
   /* Labels become visible inside the sheet on mobile. */
   .mobile-menu-sheet .mm-label {
     display: block !important;
-    font-size: 13.5px;
+    font-size: 13px;
     font-weight: 600;
     color: var(--ink);
     white-space: nowrap;
@@ -3093,7 +3045,7 @@ body.dark .msg-dots:hover { background: rgba(255, 255, 255, 0.10); }
   .msg-action-btn svg { width: 16px; height: 16px; }
   /* The floating label above each icon needs room; on narrow screens the
      label alone is enough — the icons are self-explanatory. */
-  .msg-action-btn .msg-action-label { font-size: 10px; }
+  .msg-action-btn .msg-action-label { font-size: 11px; }
 }
 
 /* ============================================================
@@ -3177,7 +3129,7 @@ body.dark .msg-dots:hover { background: rgba(255, 255, 255, 0.10); }
   border: 1px solid var(--glass-border-soft);
   background: rgba(255, 255, 255, 0.55);
   color: var(--ink-2);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
@@ -3221,7 +3173,7 @@ body.dark .plus-result-btn:hover { background: var(--accent); color: #0d1a12; }
 .rail-me:hover .rail-me-name { color: var(--accent); }
 .rail-me-name {
   font-size: 11px; font-weight: 700; color: var(--ink);
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
   max-width: 100%;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   transition: color 0.2s;
@@ -3306,7 +3258,7 @@ body.dark .seg { background: rgba(255, 255, 255, 0.07); }
   border-radius: 8px;
   padding: 4px 9px;
   font-family: inherit;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--muted);
   cursor: pointer;
@@ -3352,7 +3304,7 @@ body.dark .seg button.on { background: rgba(255, 255, 255, 0.14); color: #fff; }
   background: transparent;
   color: var(--ink-2);
   font-family: inherit;
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 600;
   cursor: pointer;
   text-align: center;
@@ -3396,7 +3348,7 @@ body.dark .side-nav-item.active .side-nav-ic { color: #0d1a12; }
 }
 .side-section-title {
   flex: 1;
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.07em;
   color: var(--muted-2);
@@ -3421,7 +3373,7 @@ body.dark .side-nav-item.active .side-nav-ic { color: #0d1a12; }
 /* The 官方 tag, now a soft glass chip instead of a hard amber box. */
 .tag-official {
   display: inline-block;
-  font-size: 9.5px; font-weight: 700;
+  font-size: 11px; font-weight: 700;
   padding: 2px 7px;
   border-radius: 7px;
   color: #b45309;
@@ -3460,12 +3412,12 @@ body.dark .tag-official { color: #fcd34d; background: rgba(245, 158, 11, 0.16); 
    desktop the same button already lives at the top of the list. */
 .ai-new-btn { display: none; }
 .ai-head-title {
-  font-size: 17px; font-weight: 800; color: var(--ink);
-  letter-spacing: -0.02em;
+  font-size: 16px; font-weight: 800; color: var(--ink);
+  letter-spacing: 0;
 }
 .ai-head-sub {
   margin-top: 2px;
-  font-size: 11.5px; color: var(--muted);
+  font-size: 12px; color: var(--muted);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .ai-head-sub.ok { color: var(--success); }
@@ -3530,9 +3482,9 @@ body.dark .side-nav-ic-qwen { background: rgba(255, 255, 255, 0.07); }
 
 .ai-welcome-title {
   margin: 0;
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 800;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
   color: #0b1220;
 }
 body.dark .ai-welcome-title { color: var(--ink); }
@@ -3594,7 +3546,7 @@ body.dark .ai-welcome-title { color: var(--ink); }
 .ai-think-title { font-size: 12px; font-weight: 700; color: var(--muted); }
 .ai-think-body {
   margin-top: 6px;
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.6;
   color: var(--muted);
   white-space: pre-wrap;
@@ -3609,7 +3561,7 @@ body.dark .ai-welcome-title { color: var(--ink); }
 .ai-waiting {
   align-self: flex-start;
   padding: 2px 2px 0;
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--muted);
   opacity: 0.75;
 }
@@ -3699,7 +3651,7 @@ body.dark .ai-welcome-title { color: var(--ink); }
   background-color: var(--glass-bg-soft);
   color: var(--ink-2);
   font-family: inherit;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   text-overflow: ellipsis;
@@ -3723,7 +3675,7 @@ body.dark .ai-welcome-title { color: var(--ink); }
   background: var(--glass-bg-soft);
   color: var(--ink-2);
   font-family: inherit;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
@@ -3763,7 +3715,7 @@ body.dark .ai-tool-btn.on { color: #0d1a12; }
   gap: 6px;
   padding: 4px 11px;
   border-radius: 999px;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--muted);
   background: var(--glass-bg-soft);
@@ -3858,7 +3810,7 @@ body.dark .ai-send { color: #0d1a12; }
   background: transparent;
   color: var(--muted);
   font-family: inherit;
-  font-size: 12.5px;
+  font-size: 13px;
   cursor: pointer;
 }
 .emoji-pick-clear:hover { color: var(--ink); background: var(--glass-bg-soft); }
@@ -3876,7 +3828,7 @@ body.dark .ai-send { color: #0d1a12; }
   background: var(--glass-bg-soft);
   border: 1px solid var(--glass-border-soft);
 }
-.ai-provider-name { font-size: 13.5px; font-weight: 700; color: var(--ink); }
+.ai-provider-name { font-size: 13px; font-weight: 700; color: var(--ink); }
 .ai-provider-note { font-size: 11px; color: var(--muted); line-height: 1.5; }
 .ai-provider input {
   margin-top: 5px;
@@ -3940,7 +3892,7 @@ body.dark .mobile-menu-scrim { background: rgba(0, 0, 0, 0.34); }
   flex-shrink: 0;
   padding: 4px 10px;
   border-radius: 999px;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: .02em;
   color: var(--success);
@@ -3964,13 +3916,13 @@ body.dark .mobile-menu-scrim { background: rgba(0, 0, 0, 0.34); }
   min-width: 0;
 }
 .more-row-title {
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--ink);
   line-height: 1.35;
 }
 .more-row-desc {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--muted);
   line-height: 1.5;
 }
@@ -4066,7 +4018,7 @@ body.dark .mobile-menu-scrim { background: rgba(0, 0, 0, 0.34); }
   background: var(--glass-bg-strong);
   color: var(--ink);
   font-family: inherit;
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   transition: background 0.18s, transform 0.12s, box-shadow 0.18s;
@@ -4106,7 +4058,7 @@ body.dark .mobile-menu-scrim { background: rgba(0, 0, 0, 0.34); }
 }
 .ai-chat-group {
   padding: 14px 10px 5px;
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
   color: var(--muted-2);
@@ -4219,7 +4171,7 @@ body.dark .mobile-menu-scrim { background: rgba(0, 0, 0, 0.34); }
      phone they read oversized. These are the sizes the reference app
      uses at the same width. */
   .brand-name { font-size: 16px; }
-  .beta-tag { height: 20px; padding: 0 10px; font-size: 10px; min-width: 24px; }
+  .beta-tag { height: 20px; padding: 0 10px; font-size: 11px; min-width: 24px; }
   .topbar { height: 44px; padding: 0 10px 0 12px; gap: 8px; }
   .icon-btn { width: 32px; height: 32px; }
   .icon-btn-sm { width: 30px; height: 30px; }
@@ -4228,35 +4180,35 @@ body.dark .mobile-menu-scrim { background: rgba(0, 0, 0, 0.34); }
   .list-me { display: flex; padding: 7px 10px 6px; gap: 8px; }
   .topbar .rail-me { display: none; }
   .list-me .avatar.md { width: 28px; height: 28px; font-size: 13px; }
-  .list-me-name { font-size: 12.5px; }
-  .list-me-sub { font-size: 10px; }
+  .list-me-name { font-size: 13px; }
+  .list-me-sub { font-size: 11px; }
   .list-me-arrow { font-size: 15px; }
 
   .list-head { padding: 6px 10px 4px; }
-  .list-title { font-size: 13.5px; padding: 0 4px 6px; }
+  .list-title { font-size: 13px; padding: 0 4px 6px; }
   .search { padding: 6px 10px; gap: 7px; }
   .search svg { width: 14px; height: 14px; }
 
   .side-section { padding: 10px 12px 4px; }
-  .side-section-title { font-size: 10px; letter-spacing: 0.06em; }
-  .side-badge { min-width: 17px; height: 17px; font-size: 10px; }
+  .side-section-title { font-size: 11px; letter-spacing: 0.06em; }
+  .side-badge { min-width: 17px; height: 17px; font-size: 11px; }
 
   .list-item { padding: 7px 10px; gap: 9px; }
   .list-item .name { font-size: 13px; }
   .list-item .preview { font-size: 11px; margin-top: 1px; }
-  .list-item .time { top: 7px; right: 9px; font-size: 10px; }
+  .list-item .time { top: 7px; right: 9px; font-size: 11px; }
   .list-item .avatar.sm { width: 34px; height: 34px; font-size: 14px; }
-  .chat-item .badge-num { min-width: 17px; height: 17px; font-size: 10px; }
+  .chat-item .badge-num { min-width: 17px; height: 17px; font-size: 11px; }
 
   .chat-header { height: 48px; padding: 0 10px; }
-  .chat-header h3 { font-size: 15px; }
+  .chat-header h3 { font-size: 16px; }
   .chat-header small { font-size: 11px; }
   .messages { padding: 12px 12px 8px; }
-  .msg-bubble { font-size: 13.5px; padding: 8px 12px; }
+  .msg-bubble { font-size: 13px; padding: 8px 12px; }
   .chat-composer { padding: 6px 8px 8px; }
   .composer-row .emoji-btn, .composer-row .attach-btn { width: 32px; height: 32px; font-size: 16px; }
   .composer-row .mention-btn { width: 32px; height: 32px; padding: 0; font-size: 15px; }
-  .chat-composer .btn-primary { padding: 8px 13px; font-size: 12.5px; }
+  .chat-composer .btn-primary { padding: 8px 13px; font-size: 13px; }
 
   .app-body {
     position: relative; gap: 0; flex-direction: column;
@@ -4297,7 +4249,7 @@ body.dark .mobile-menu-scrim { background: rgba(0, 0, 0, 0.34); }
     flex: 1;
     flex-direction: column; align-items: center; gap: 2px;
     width: auto; padding: 4px 2px 3px;
-    font-size: 9.5px; font-weight: 600;
+    font-size: 11px; font-weight: 600;
     border-radius: 22px;
   }
   .side-nav-item.active {
@@ -4312,7 +4264,7 @@ body.dark .mobile-menu-scrim { background: rgba(0, 0, 0, 0.34); }
     color: #fff;
     box-shadow: 0 2px 8px rgba(76, 111, 255, 0.28);
   }
-  .side-nav-label { font-size: 9.5px; }
+  .side-nav-label { font-size: 11px; }
 
   /* ---- the face lives at the top of the list column now ---- */
   .topbar .rail-me { display: none; }
@@ -4573,7 +4525,7 @@ body.dark .mobile-menu-scrim { background: rgba(0, 0, 0, 0.34); }
 .suggestion-hint {
   padding: 14px 12px;
   text-align: center;
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--muted);
 }
 
@@ -4688,13 +4640,13 @@ body.theme-dark .mention-preview .cancel:hover {
   padding: 4px 6px 12px;
 }
 .discover-title {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
   color: var(--ink);
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
 }
 .discover-sub {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--muted);
 }
 .discover-new { flex-shrink: 0; }
@@ -4761,7 +4713,7 @@ body.theme-dark .mention-preview .cancel:hover {
 .discover-empty.hidden { display: none; }
 .discover-empty-icon { color: var(--muted-2); opacity: .55; }
 .discover-empty-text { font-size: 13px; color: var(--muted); }
-.discover-empty-sub { font-size: 11.5px; color: var(--muted-2); }
+.discover-empty-sub { font-size: 12px; color: var(--muted-2); }
 
 /* ---- the discover switch inside the create-group dialog ---- */
 .cg-recommend {
@@ -4801,7 +4753,7 @@ body.theme-dark .mention-preview .cancel:hover {
   outline-offset: 2px;
 }
 .cg-recommend-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.cg-recommend-title { font-size: 13.5px; font-weight: 600; color: var(--ink); }
+.cg-recommend-title { font-size: 13px; font-weight: 600; color: var(--ink); }
 /* The small grey line under the switch. */
 .cg-recommend-note { font-size: 11px; color: var(--muted-2); line-height: 1.4; }
 
@@ -4872,7 +4824,7 @@ body.theme-dark .mention-preview .cancel:hover {
   background: transparent;
   color: var(--ink-2);
   font-family: inherit;
-  font-size: 13.5px; font-weight: 600;
+  font-size: 13px; font-weight: 600;
   text-align: left;
   cursor: pointer;
   transition: background 0.14s, color 0.14s;
@@ -4928,7 +4880,7 @@ body.theme-dark .mention-preview .cancel:hover {
   margin-top: 8px;
 }
 .cg-emoji-hint {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--muted-2);
   line-height: 1.4;
 }
@@ -5052,12 +5004,14 @@ body.theme-dark .mention-preview .cancel:hover {
   width: 100%;
   border-radius: 3px;
   background: var(--accent-grad);
-  transition: width .1s linear;
+  transform-origin: left center;
+  transform: scaleX(1);
+  transition: transform .1s linear;
 }
 .msg-popup-hint {
   flex-shrink: 0;
   margin: 7px 2px 2px;
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--muted);
   line-height: 1.35;
 }
@@ -5082,7 +5036,7 @@ body.theme-dark .mention-preview .cancel:hover {
 .msg-popup-empty {
   padding: 18px 8px;
   text-align: center;
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--muted-2);
 }
 /* mini 窗口里的气泡比主聊天小一号，不然塞不下 */
@@ -5095,7 +5049,7 @@ body.theme-dark .mention-preview .cancel:hover {
 }
 .msg-popup-log .msg-bubble {
   padding: 7px 11px;
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.4;
   border-radius: 12px;
   max-width: 82%;
@@ -5120,7 +5074,7 @@ body.theme-dark .mention-preview .cancel:hover {
   border: 1px solid var(--glass-border);
   background: var(--glass-bg-soft);
   color: var(--ink);
-  font-size: 13.5px;
+  font-size: 13px;
   font-family: inherit;
 }
 .msg-popup-input:focus {
