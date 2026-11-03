@@ -3218,7 +3218,26 @@ body.density-roomy .messages { padding-top: 18px; }
 body.density-roomy .msg-bubble { padding-top: 11px; padding-bottom: 11px; }
 body.density-roomy .side-section { padding-top: 18px; padding-bottom: 6px; }
 
-/* The text size scales the parts that carry the words. */
+/* The text size scales the parts that carry the words.
+   ⚠️ font-size 里的 "1em" 指的是【父元素】的字号,不是元素自己的。
+   直接写 calc(1em * var(--font-scale)) 会让这些元素统统掉回父级的 16px ——
+   小标题、消息气泡、副标题全变成 16px,基准字号根本不生效。
+   所以基准值必须存在 --fs-base 里,由这条规则统一乘上缩放系数。 */
+body .brand-name         { --fs-base: 18px; }
+body .list-title         { --fs-base: 14px; }
+body .list-item .name    { --fs-base: 13px; }
+body .list-me-name       { --fs-base: 13px; }
+body .chat-header h3     { --fs-base: 16px; }
+body .ai-head-title      { --fs-base: 16px; }
+body .msg-bubble         { --fs-base: 13px; }
+body .side-section-title { --fs-base: 11px; }
+body .list-item .meta    { --fs-base: 13px; }
+body .list-item .preview { --fs-base: 12px; }
+body .list-item .sub     { --fs-base: 12px; }
+body .msg-meta           { --fs-base: 11px; }
+body .ai-head-sub        { --fs-base: 12px; }
+body .chat-header small  { --fs-base: 11px; }
+
 body .brand-name,
 body .list-title,
 body .list-item .name,
@@ -3226,20 +3245,14 @@ body .list-me-name,
 body .chat-header h3,
 body .ai-head-title,
 body .msg-bubble,
-body .side-section-title {
-  font-size: calc(1em * var(--font-scale));
-}
-/* The preview sits inside .meta, whose own font-size was the browser
-   default — so "1em" resolved to 16px and the grey line came out BIGGER
-   than the conversation name above it. Pin the wrapper to the name's
-   size first, then let the scale apply on top of that. */
-body .list-item .meta { font-size: 13px; }
+body .side-section-title,
+body .list-item .meta,
 body .list-item .preview,
 body .list-item .sub,
 body .msg-meta,
 body .ai-head-sub,
 body .chat-header small {
-  font-size: calc(1em * var(--font-scale));
+  font-size: max(11px, calc(var(--fs-base) * var(--font-scale)));
 }
 
 /* The segmented pickers in the personalisation panel. */
