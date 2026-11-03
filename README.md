@@ -144,3 +144,24 @@ Build Command 留空，Publish Directory 填 `.`，域名设为 `vvechat-control
 - 删除好友（连带清除双方私聊记录）
 - 保活：每 5 分钟 ping 公网地址，避免免费实例休眠
 - 防火墙：CSP 安全头 + 跨域收紧 + 按 IP 限流（仅统计失败登录）
+
+---
+
+## 开发工具：unslop 技能
+
+`.claude/skills/unslop/` 是给 AI 编码助手用的 **unslop 技能**（上游 [heydamir/unslop](https://github.com/heydamir/unslop)，CC BY 4.0），已针对 VVeChat 改编。
+
+它用来收拾「一眼 AI」的界面：间距不齐、图标不统一、文案喊话、字号层级乱、动效无意义。**九层红线批注**：spacing → color → icons → copy → type → layout → details → visuals → motion。
+
+改编要点：**液态玻璃、`--accent-grad` 渐变、550C 终端主题、Qwen 发光环、群 emoji 头像都被明确豁免** —— 它们是 VVeChat 的品牌，不是要改掉的毛病。项目地图和豁免清单见 `.claude/skills/unslop/references/vvechat.md`。
+
+```bash
+# 截真实界面（登录 → 切主题 → 切屏幕）
+node .claude/skills/unslop/scripts/shot-vvechat.mjs --out shots/x.png --screen ai --theme dark --width 1280
+node .claude/skills/unslop/scripts/shot-vvechat.mjs --out shots/x.png --screen more --theme 550c --mobile
+
+# 扫一遍前端里上游点名的几类 slop
+node tools/slop-scan.js frontend/style.css frontend/liquid-glass.css frontend/boot550c.css
+```
+
+目前实测：**28 种字号、35 处文字小于 11px、9 处负字距、4 处 hover scale、3 处动画 width/height**。间距和颜色已经是设计过的（`:root` 里有文档），字号和动效是收益最大的两块。

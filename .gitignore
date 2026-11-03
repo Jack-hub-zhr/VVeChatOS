@@ -1,2 +1,6 @@
 vvechat.db*
 node_modules/
+
+# unslop skill 的本地截图输出
+shots/
+unslop-story/
