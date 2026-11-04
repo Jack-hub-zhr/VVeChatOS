@@ -8,9 +8,9 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="theme-color" content="#4C6FFF" />
   <title>VVeChat</title>
-  <link rel="stylesheet" href="style.css?v=20261104c" />
+  <link rel="stylesheet" href="style.css?v=20261104d" />
   <!-- 液态玻璃视觉层（移植自 xiaofangstudio/liquid-glass-web, MIT） -->
-  <link rel="stylesheet" href="liquid-glass.css?v=20261104c" />
+  <link rel="stylesheet" href="liquid-glass.css?v=20261104d" />
   <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><text x='32' y='44' font-family='system-ui' font-size='40' font-weight='800' text-anchor='middle' fill='%234C6FFF'>V</text></svg>" />
 </head>
 <body>
@@ -286,10 +286,22 @@
           <div id="pane-discover" class="pane">
             <div class="discover-head">
               <div class="discover-sub" data-i18n="discover_sub">看看大家在聊什么</div>
-              <button type="button" class="btn btn-primary btn-sm discover-new" id="btn-create-group">
-                <span data-i18n="discover_create">建个群</span>
-              </button>
             </div>
+            <!-- 建群入口:和「搜索 / 添加」面板里用的是同一张卡片、同一条流程,
+                 点开就是同一个建群表单。 -->
+            <button type="button" class="plus-action" data-action="group">
+              <div class="plus-action-icon">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+                  <circle cx="9" cy="7" r="3.4"/>
+                  <path d="M17.5 11.5h5"/><path d="M20 9v5"/>
+                </svg>
+              </div>
+              <div>
+                <div class="plus-action-title" data-i18n="plus_create_group">建个群聊</div>
+                <div class="plus-action-sub" data-i18n="plus_create_group_desc">拉人一起聊，自选群头像</div>
+              </div>
+            </button>
             <div class="discover-list" id="discover-list"></div>
             <div class="discover-empty hidden" id="discover-empty">
               <div class="discover-empty-icon">
@@ -806,7 +818,7 @@
   <!-- Socket.io client is served by this same Express app at /socket.io/socket.io.js,
        so there is no third-party CDN to fail (or be blocked). -->
   <script src="/socket.io/socket.io.js"></script>
-  <script src="config.js?v=20261104c"></script>
+  <script src="config.js?v=20261104d"></script>
   <!-- The 550C theme is ~60 KB. Only fetch it when it is actually on:
        localStorage says so right now, and app.js re-checks after login
        for the case where the account has it on but this browser does
@@ -824,7 +836,7 @@
        time even though the theme was enabled. -->
   <script>
   (function () {
-    try { window.__VV_ASSET_V = '20261104c'; } catch (e) { }
+    try { window.__VV_ASSET_V = '20261104d'; } catch (e) { }
     var V = window.__VV_ASSET_V || '';
     var on = false;
     try { on = localStorage.getItem('vve:boot550c') === '1'; } catch (e) { }
@@ -846,7 +858,7 @@
   })();
   </script>
   <!-- 液态玻璃引擎：折射 + 果冻物理 + 体积光 + 光照互通 -->
-  <script src="liquid-glass.js?v=20261104c"></script>
-  <script src="app.js?v=20261104c"></script>
+  <script src="liquid-glass.js?v=20261104d"></script>
+  <script src="app.js?v=20261104d"></script>
 </body>
 </html>

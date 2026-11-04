@@ -182,7 +182,6 @@
       nav_discover: '发现',
       discover_title: '发现',
       discover_sub: '看看大家在聊什么',
-      discover_create: '建个群',
       discover_empty: '还没有人推荐群聊',
       discover_empty_sub: '你可以自己建一个',
       cg_title: '建个群聊',
@@ -575,7 +574,6 @@
       nav_discover: 'Discover',
       discover_title: 'Discover',
       discover_sub: 'See what people are talking about',
-      discover_create: 'New group',
       discover_empty: 'No groups recommended yet',
       discover_empty_sub: 'You can make one yourself',
       cg_title: 'Create a group',
@@ -5098,7 +5096,7 @@
     if (_plusBound) return;
     _plusBound = true;
     document.addEventListener('click', (e) => {
-      const btn = e.target.closest('#modal-plus .plus-action');
+      const btn = e.target.closest('.plus-action');
       if (!btn) return;
       e.preventDefault(); e.stopPropagation();
       const act = btn.dataset.action;
@@ -5475,15 +5473,9 @@
       bindOnce(prefDiscover, 'keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
     }
 
-    // Discover: create a group. The switch in the dialog decides whether
-    // the group is listed in Discover — the owner can flip it later.
-    bindOnce($('#btn-create-group'), 'click', (e) => {
-      e.stopPropagation();
-      const name = $('#cg-name');
-      if (name) { name.value = ''; name.focus(); }
-      renderGroupEmojiPicker();
-      openModal('modal-create-group');
-    });
+    // Discover: create a group. The entry point is the SAME card as the one
+    // in the "搜索 / 添加" panel (class .plus-action), so the delegated
+    // handler above already covers it — no second code path to keep in sync.
     bindOnce($('#create-group-form'), 'submit', async (e) => {
       e.preventDefault();
       const name = ($('#cg-name')?.value || '').trim();

@@ -42,6 +42,12 @@
   --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.85);
   --glass-chromatic: 0 0 0 0.5px rgba(255, 90, 90, 0.10), 0 0 0 1px rgba(80, 80, 255, 0.06);
 
+  /* 分层玻璃:UI 层级越高,身后的背景越模糊。
+     第一层(主面板/壁纸)完全不糊 —— 折射要看得见;
+     卡片与控件第二层,弹窗与菜单第三层。 */
+  --blur-l2: 8px;
+  --blur-l3: 18px;
+
   /* Accent */
   --accent: #4C6FFF;
   --accent2: #22B8CF;
@@ -176,13 +182,17 @@ body::before {
   will-change: transform;
   transform: translate3d(0, 0, 0);
   backface-visibility: hidden;
+  /* 原图偏柔,加一点对比和饱和 —— 玻璃后面才看得清结构 */
+  filter: contrast(1.05) saturate(1.10);
   /* animation OFF by default (login page stays sharp & static) */
 }
 body.app-active::before {
   /* Slightly larger to prevent edges showing during animation */
   width: 110%; height: 110%;
   top: -5%; left: -5%;
-  animation: wallpaperDrift 30s linear infinite;
+  /* 慢速 + ease-in-out:速度从 0 渐渐增大再渐渐减小,
+     0% 与 100% 同位置同速度,循环处没有顿挫。 */
+  animation: wallpaperDrift 64s ease-in-out infinite;
 }
 body.dark::before,
 body.theme-dark::before {
@@ -201,9 +211,7 @@ body.dark::after      { background: rgba(0, 0, 0, 0); }       /* dark stays clea
 
 @keyframes wallpaperDrift {
   0%   { transform: translate3d(0%,    0%, 0); }
-  25%  { transform: translate3d(-2%,   -1%, 0); }
-  50%  { transform: translate3d(1%,    1.5%, 0); }
-  75%  { transform: translate3d(-1.5%, 0.5%, 0); }
+  50%  { transform: translate3d(-1.6%, -1%, 0); }
   100% { transform: translate3d(0%,    0%, 0); }
 }
 
@@ -476,8 +484,8 @@ body.dark .auth-card { background: rgba(20, 24, 32, 0.60); border-color: rgba(25
   border: 1px solid var(--glass-border-soft);
   color: var(--ink-2);
   transition: background 0.2s, color 0.2s, transform 0.15s, box-shadow 0.2s;
-  backdrop-filter: saturate(180%);
-  -webkit-backdrop-filter: saturate(180%);
+  backdrop-filter: blur(var(--blur-l2)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--blur-l2)) saturate(180%);
   box-shadow: var(--glass-highlight), 0 4px 12px rgba(30, 80, 150, 0.08);
   flex-shrink: 0;
 }
@@ -522,8 +530,8 @@ body.dark .auth-card { background: rgba(20, 24, 32, 0.60); border-color: rgba(25
   color: #12508f;
   border-radius: 999px;
   background: linear-gradient(135deg, rgba(146, 202, 255, 0.62), rgba(88, 158, 240, 0.44));
-  backdrop-filter: saturate(200%);
-  -webkit-backdrop-filter: saturate(200%);
+  backdrop-filter: blur(var(--blur-l2)) saturate(200%);
+  -webkit-backdrop-filter: blur(var(--blur-l2)) saturate(200%);
   border: 1px solid rgba(255, 255, 255, 0.78);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.95),
@@ -755,10 +763,11 @@ body.dark .list-me .avatar.md { color: #e6ecf5; }
   border-radius: 22px;
   border: 1px solid var(--glass-border);
   background: rgba(255, 255, 255, 0.12);
-  /* 聊天区留一点模糊:消息文字直接压在壁纸上,完全不清会花。
-     全站只此一处保留模糊,18px 把壁纸上那些亮丝带化成柔光,又不会糊成一片。 */
-  backdrop-filter: blur(18px) saturate(180%);
-  -webkit-backdrop-filter: blur(18px) saturate(180%);
+  /* 聊天区只留一点点模糊:消息文字直接压在壁纸上,完全不清会花,
+     但也不能多 —— 背景要看得清(第一层最透)。
+     4px 把壁纸上那些亮丝带化成柔光,结构还在。 */
+  backdrop-filter: blur(4px) saturate(180%);
+  -webkit-backdrop-filter: blur(4px) saturate(180%);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.20),
     0 8px 24px rgba(30, 80, 150, 0.08);
@@ -1314,8 +1323,8 @@ body.dark .chat-header { background: rgba(20, 24, 32, 0.30); border-bottom-color
   padding: 12px 16px 14px;
   border-top: 1px solid var(--glass-border-soft);
   background: rgba(255, 255, 255, 0.20);
-  backdrop-filter: saturate(180%);
-  -webkit-backdrop-filter: saturate(180%);
+  backdrop-filter: blur(var(--blur-l2)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--blur-l2)) saturate(180%);
   flex-shrink: 0;
   display: flex; flex-direction: column; gap: 8px;
 }
@@ -1468,8 +1477,8 @@ body.dark .mention-hint-bar { background: rgba(255, 255, 255, 0.05); }
   width: 260px; max-height: 230px; overflow-y: auto;
   padding: 6px;
   background: rgba(255, 255, 255, 0.88);
-  backdrop-filter: saturate(180%);
-  -webkit-backdrop-filter: saturate(180%);
+  backdrop-filter: blur(var(--blur-l2)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--blur-l2)) saturate(180%);
   border: 1px solid var(--glass-border);
   border-radius: 16px;
   box-shadow: var(--glass-shadow-lg);
@@ -1574,7 +1583,7 @@ body.dark .mention-hint-bar { background: rgba(255, 255, 255, 0.05); }
   width: 320px; max-height: 260px; overflow-y: auto;
   padding: 10px;
   background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: saturate(180%);
+  backdrop-filter: blur(var(--blur-l2)) saturate(180%);
   border: 1px solid var(--glass-border);
   border-radius: 18px;
   box-shadow: var(--glass-shadow-lg);
@@ -1625,8 +1634,8 @@ body.dark .mention-hint-bar { background: rgba(255, 255, 255, 0.05); }
   border-radius: 999px !important;
   border: 1px solid var(--glass-border-soft);
   box-shadow: var(--glass-highlight);
-  backdrop-filter: saturate(180%);
-  -webkit-backdrop-filter: saturate(180%);
+  backdrop-filter: blur(var(--blur-l2)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--blur-l2)) saturate(180%);
   flex-shrink: 0;
   cursor: default;
   /* Soft circular glow that follows the circle shape (no square clip) */
@@ -1713,8 +1722,8 @@ body.dark .msg-jack-label {
   display: flex; gap: 6px;
   padding: 7px 8px;
   background: rgba(255, 255, 255, 0.55);
-  backdrop-filter: saturate(200%);
-  -webkit-backdrop-filter: saturate(200%);
+  backdrop-filter: blur(var(--blur-l2)) saturate(200%);
+  -webkit-backdrop-filter: blur(var(--blur-l2)) saturate(200%);
   border: 1px solid rgba(255, 255, 255, 0.55);
   border-radius: 18px;
   box-shadow:
@@ -1793,8 +1802,8 @@ body.dark .msg-action-bar {
   align-items: center;
   justify-content: center;
   background: rgba(255, 255, 255, 0.78);
-  backdrop-filter: saturate(180%);
-  -webkit-backdrop-filter: saturate(180%);
+  backdrop-filter: blur(var(--blur-l2)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--blur-l2)) saturate(180%);
   cursor: pointer;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
@@ -1939,8 +1948,8 @@ body.dark .hello-splash-hint {
   display: flex; flex-direction: column;
   margin: 0 auto;
   background: rgba(255, 255, 255, 0.50);
-  backdrop-filter: saturate(180%);
-  -webkit-backdrop-filter: saturate(180%);
+  backdrop-filter: blur(var(--blur-l3)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--blur-l3)) saturate(180%);
   border: 1px solid var(--glass-border);
   border-radius: 24px;
   box-shadow:
@@ -1957,6 +1966,10 @@ body.dark .modal-card { background: rgba(20, 24, 32, 0.70); border-color: rgba(2
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 .modal-card-sm { width: min(84vw, 340px, 52vh); aspect-ratio: 1 / 1; }
+/* 建群表单比卡片宽,方形会把底部(推荐开关 + 创建按钮)裁掉,
+   而 <form> 挡在 .modal-body 前面,不给它弹性列,body 的滚动也永远不会生效。 */
+#modal-create-group .modal-card-sm { aspect-ratio: auto; width: min(90vw, 360px); max-height: 86vh; }
+#create-group-form { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 
 .modal-head {
   display: flex; align-items: center; gap: 10px;
@@ -2098,8 +2111,8 @@ body.dark .modal-card { background: rgba(20, 24, 32, 0.70); border-color: rgba(2
   min-width: 160px;
   padding: 6px;
   background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: saturate(200%);
-  -webkit-backdrop-filter: saturate(200%);
+  backdrop-filter: blur(var(--blur-l3)) saturate(200%);
+  -webkit-backdrop-filter: blur(var(--blur-l3)) saturate(200%);
   border: 1px solid var(--glass-border);
   border-radius: 16px;
   box-shadow: var(--glass-shadow-lg);
@@ -2139,8 +2152,8 @@ body.dark .modal-card { background: rgba(20, 24, 32, 0.70); border-color: rgba(2
   background: rgba(255, 255, 255, 0.55);
   border: 1px solid var(--glass-border-soft);
   color: var(--ink-2);
-  backdrop-filter: saturate(180%);
-  -webkit-backdrop-filter: saturate(180%);
+  backdrop-filter: blur(var(--blur-l2)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--blur-l2)) saturate(180%);
   box-shadow: 0 4px 14px rgba(30, 80, 150, 0.10), var(--glass-highlight);
   transition: background 0.2s, transform 0.2s, color 0.2s;
   flex-shrink: 0;
@@ -2163,8 +2176,8 @@ body.theme-auto:not(.theme-light):not(.theme-dark) .theme-toggle { color: var(--
   min-width: 150px;
   padding: 6px;
   background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: saturate(200%);
-  -webkit-backdrop-filter: saturate(200%);
+  backdrop-filter: blur(var(--blur-l3)) saturate(200%);
+  -webkit-backdrop-filter: blur(var(--blur-l3)) saturate(200%);
   border: 1px solid var(--glass-border);
   border-radius: 14px;
   box-shadow: 0 12px 36px rgba(30, 80, 150, 0.20), var(--glass-highlight);
@@ -2239,8 +2252,8 @@ body.dark .theme-menu { background: rgba(20, 24, 32, 0.92); border-color: rgba(2
     overflow: hidden;
     z-index: 10;
     background: rgba(255, 255, 255, 0.40);
-    backdrop-filter: saturate(180%);
-    -webkit-backdrop-filter: saturate(180%);
+    backdrop-filter: blur(4px) saturate(180%);
+    -webkit-backdrop-filter: blur(4px) saturate(180%);
     border: 1px solid var(--glass-border);
   }
   body.dark .right-pane { background: rgba(20, 24, 32, 0.50); }
@@ -3617,8 +3630,8 @@ body.dark .ai-welcome-title { color: var(--ink); }
   border-radius: 20px;
   background: var(--glass-bg-strong);
   border: 1px solid var(--glass-border-soft);
-  backdrop-filter: saturate(180%);
-  -webkit-backdrop-filter: saturate(180%);
+  backdrop-filter: blur(var(--blur-l2)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--blur-l2)) saturate(180%);
   box-shadow: var(--glass-highlight), var(--glass-shadow);
 }
 .ai-composer textarea {
@@ -4507,8 +4520,8 @@ body.dark .mobile-menu-scrim { background: rgba(0, 0, 0, 0.34); }
   padding: 6px;
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: saturate(190%);
-  -webkit-backdrop-filter: saturate(190%);
+  backdrop-filter: blur(var(--blur-l2)) saturate(190%);
+  -webkit-backdrop-filter: blur(var(--blur-l2)) saturate(190%);
   border: 1px solid var(--glass-border);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.85),
@@ -4667,7 +4680,6 @@ body.theme-dark .mention-preview .cancel:hover {
   font-size: 12px;
   color: var(--muted);
 }
-.discover-new { flex-shrink: 0; }
 
 .discover-list { display: flex; flex-direction: column; gap: 8px; padding: 0 2px; }
 .discover-card {
@@ -4807,8 +4819,8 @@ body.theme-dark .mention-preview .cancel:hover {
   padding: 8px;
   border-radius: 20px;
   background: var(--glass-bg-strong);
-  backdrop-filter: saturate(200%);
-  -webkit-backdrop-filter: saturate(200%);
+  backdrop-filter: blur(var(--blur-l3)) saturate(200%);
+  -webkit-backdrop-filter: blur(var(--blur-l3)) saturate(200%);
   border: 1px solid var(--glass-border);
   box-shadow: var(--glass-shadow-lg), var(--glass-highlight);
   animation: userMenuIn 0.16s cubic-bezier(0.22, 1, 0.36, 1) both;
@@ -4948,8 +4960,8 @@ body.theme-dark .mention-preview .cancel:hover {
   padding: 12px 12px 10px;
   border-radius: 26px;
   background: var(--glass-bg-strong);
-  backdrop-filter: saturate(200%);
-  -webkit-backdrop-filter: saturate(200%);
+  backdrop-filter: blur(var(--blur-l3)) saturate(200%);
+  -webkit-backdrop-filter: blur(var(--blur-l3)) saturate(200%);
   border: 1px solid var(--glass-border);
   box-shadow: var(--glass-shadow-lg), var(--glass-highlight);
   opacity: 0;
