@@ -21,7 +21,16 @@
     blur: 0.25,
     band: 22,      // 折射环宽度(px)
     maxPull: 20,   // 位移上限(px) —— 再多就会把面板自己的内容卷进背景
-    disp: 2        // 色散:R/B 通道各偏移多少 px(0 = 不色散)
+    disp: 3,       // 色散:R/B 通道各偏移多少 px(0 = 不色散)
+    // ---- 球面映射(来自附件的 Liquid Glass 放大镜)----
+    // 球心把背景放大 1/centerScale 倍,越靠边缘放大越少,
+    // 到球面归零 —— 这就是「玻璃球」的本体,不是一圈边缘折射。
+    centerScale: 0.65,
+    sphereP: 2.15,      // 球面映射的幂次(越大越接近球)
+    edgeStretch: 0.42,  // 边缘外扩(亮边)
+    outsideRange: 0.13, // 球面外还有多远开始受影响
+    outsideStrength: 0.22,
+    pull: 0.30          // 位移上限 = pull × 元素长边(球心放大位移可达几十 px)
   };
 
   /* ---------- 工具 ---------- */
@@ -154,18 +163,19 @@
     var ctx = canvas.getContext('2d');
     var data = new Uint8ClampedArray(MAP * MAP * 4);
     var raw = new Float32Array(MAP * MAP * 2);
-    var maxScale = 0, i, x, y, d, dx, dy;
+    var maxScale = 0, i, x, y, dx, dy;
 
     function buildMap() {
       W = Math.max(2, el.offsetWidth || W);
       H = Math.max(2, el.offsetHeight || H);
       filter.setAttribute('width', String(W)); filter.setAttribute('height', String(H));
       feImage.setAttribute('width', String(W)); feImage.setAttribute('height', String(H));
-      // 玻璃球:球体被拉伸成面板自己的宽高(椭圆),
-      // 折射环贴着这条椭圆走 —— 面板越扁,两端越像被拉长的透镜。
-      // 只有形状变了,折射/色散那套滤镜链一个字都没动。
-      var bandPx = Math.min(PARAMS.band, Math.min(W, H) * 0.45);
+      // 玻璃球:球体被拉伸成面板自己的宽高(椭圆)。
+      // 只有形状变了 —— 滤镜链(折射 + 色散)一个字都没动。
       var ax = W / 2, ay = H / 2;
+      // 球心放大时位移有几十 px,上限要跟着元素尺寸走,
+      // 否则中心的放大效果会被截掉(看着就还是「没放大」)。
+      var cap = Math.max(PARAMS.maxPull, PARAMS.pull * Math.max(W, H));
       maxScale = 0;
       var idx = 0;
       for (i = 0; i < data.length; i += 4) {
@@ -174,22 +184,33 @@
         // feDisplacementMap 的 scale 走的是 user space，
         // 用贴图像素算会差好几倍（贴图被拉伸过）。
         var ex = (x / MAP - 0.5) * W, ey = (y / MAP - 0.5) * H;
-        // 归一化到「球」里：r = 0 是球心，r = 1 是球面。
+        // 归一化到「球」里:r = 0 是球心,r = 1 是球面。
         var r = Math.sqrt((ex / ax) * (ex / ax) + (ey / ay) * (ey / ay));
-        // 到球面的距离（px）：局部半径 × (1 - r)。
-        // 局部半径用该点到面板中心的实际距离 —— 球面在这一片是平的，
-        // 所以这个近似就是真的距离。
-        var Rloc = Math.sqrt(ex * ex + ey * ey);
-        d = (1 - r) * Rloc;
-        // 边上一圈最强，往里 bandPx 过渡回「不折射」，中间保持平坦（放大感）。
-        var s2 = 1 - PARAMS.ref * (1 - smoothStep(0, bandPx, d));
-        dx = ex * (s2 - 1); dy = ey * (s2 - 1);
-        // 拉不动太远：面板自己的内容（头像、角标）会被卷进背景采样，
-        // 在边缘拉出一条脏影。所以位移上限压在 maxPull。
+        var k = 1;                       // 采样点的缩放系数
+        if (r <= 1) {
+          // 球面映射:球心放大(CENTER_SCALE),到球面收敛回 1,
+          // 边缘再轻轻外扩一点 —— 就是附件里那颗球的畸变。
+          var edge = smoothStep(0.62, 1, r);
+          var mapped = r * (PARAMS.centerScale + (1 - PARAMS.centerScale) * Math.pow(r, PARAMS.sphereP));
+          mapped += PARAMS.edgeStretch * edge * edge * (r - 0.62) * 0.42;
+          k = r > 1e-6 ? mapped / r : PARAMS.centerScale;
+        } else {
+          // 球面外(椭圆没盖到的角落)只轻轻往里收一点。
+          var outside = (r - 1) / PARAMS.outsideRange;
+          if (outside <= 1) {
+            var influence = 1 - smoothStep(0, 1, outside);
+            var src = r - influence * PARAMS.outsideStrength * 0.28;
+            k = src / r;
+          }
+        }
+        // 采样坐标 = 原坐标按 k 缩放(球心附近 = 背景被放大)。
+        dx = ex * (k - 1); dy = ey * (k - 1);
+        // 拉不动太远:面板自己的内容（头像、角标）会被卷进背景采样，
+        // 在边缘拉出一条脏影。所以位移上限压在 cap。
         var mag = Math.hypot(dx, dy);
-        if (mag > PARAMS.maxPull) {
-          var k = PARAMS.maxPull / mag;
-          dx *= k; dy *= k;
+        if (mag > cap) {
+          var kk = cap / mag;
+          dx *= kk; dy *= kk;
         }
         maxScale = Math.max(maxScale, Math.abs(dx), Math.abs(dy));
         raw[idx++] = dx; raw[idx++] = dy;
