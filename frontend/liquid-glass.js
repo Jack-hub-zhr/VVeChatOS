@@ -25,7 +25,7 @@
   var XLINK = 'http://www.w3.org/1999/xlink';
 
   var PARAMS = {
-    displacementScale: 70,  // 折射强度（像素）
+    displacementScale: 105, // 折射强度（像素）—— 边缘拉伸的强度
     aberration: 2,          // 色散：R/G/B 三条位移图的 scale 差
     blur: 2,                // 磨砂
     saturation: 140,        // 饱和度
