@@ -8,9 +8,9 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="theme-color" content="#4C6FFF" />
   <title>VVeChat</title>
-  <link rel="stylesheet" href="style.css?v=20261107a" />
+  <link rel="stylesheet" href="style.css?v=20261107b" />
   <!-- 液态玻璃视觉层（移植自 xiaofangstudio/liquid-glass-web, MIT） -->
-  <link rel="stylesheet" href="liquid-glass.css?v=20261107a" />
+  <link rel="stylesheet" href="liquid-glass.css?v=20261107b" />
   <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><text x='32' y='44' font-family='system-ui' font-size='40' font-weight='800' text-anchor='middle' fill='%234C6FFF'>V</text></svg>" />
 </head>
 <body>
@@ -829,7 +829,7 @@
   <!-- Socket.io client is served by this same Express app at /socket.io/socket.io.js,
        so there is no third-party CDN to fail (or be blocked). -->
   <script src="/socket.io/socket.io.js"></script>
-  <script src="config.js?v=20261107a"></script>
+  <script src="config.js?v=20261107b"></script>
   <!-- The 550C theme is ~60 KB. Only fetch it when it is actually on:
        localStorage says so right now, and app.js re-checks after login
        for the case where the account has it on but this browser does
@@ -847,7 +847,7 @@
        time even though the theme was enabled. -->
   <script>
   (function () {
-    try { window.__VV_ASSET_V = '20261107a'; } catch (e) { }
+    try { window.__VV_ASSET_V = '20261107b'; } catch (e) { }
     var V = window.__VV_ASSET_V || '';
     var on = false;
     try { on = localStorage.getItem('vve:boot550c') === '1'; } catch (e) { }
@@ -869,7 +869,7 @@
   })();
   </script>
   <!-- 液态玻璃引擎：折射 + 果冻物理 + 体积光 + 光照互通 -->
-  <script src="liquid-glass.js?v=20261107a"></script>
-  <script src="app.js?v=20261107a"></script>
+  <script src="liquid-glass.js?v=20261107b"></script>
+  <script src="app.js?v=20261107b"></script>
 </body>
 </html>

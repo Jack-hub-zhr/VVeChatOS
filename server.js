@@ -387,7 +387,11 @@ async function assistantAnswer(question, context, kind) {
   for (const c of context) {
     messages.push({ role: c.role === 'assistant' ? 'assistant' : 'user', content: c.content.slice(0, 1200) });
   }
-  messages.push({ role: 'user', content: question.slice(0, 2000) });
+  // 自主发言没有「问题」—— 塞一句指令当最后一轮,别给模型一个空的用户消息。
+  const ask = kind === 'chime'
+    ? '（群里正在聊天，你安静地插一句。）'
+    : String(question || '').slice(0, 2000);
+  messages.push({ role: 'user', content: ask });
 
   for (const entry of catalog) {
     const provider = QWEN_PROVIDERS[entry.provider];

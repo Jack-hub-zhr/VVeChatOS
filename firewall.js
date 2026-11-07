@@ -46,7 +46,6 @@ const BODY_RULES = [
 
 const UA_RULES = [
   { re: /sqlmap|nikto|acunetix|nessus|masscan|zgrab|nuclei|wpscan|joomscan|arachni|havij|gobuster|dirbuster|metsploit|burp|metasploit|zaproxy|commix|xsser/i, kind: 'scanner_ua', sev: 'high' },
-  { re: /python-urllib|python-requests|go-http-client|okhttp|java\/.*apache-httpclient|libwww-perl|lwp-trivial/i, kind: 'bot_ua', sev: 'low' },
 ];
 
 const BAD_METHODS = ['TRACE', 'TRACK', 'CONNECT', 'DEBUG'];
