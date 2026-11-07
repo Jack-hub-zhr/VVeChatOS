@@ -24,9 +24,13 @@
     // 液态玻璃的关键是**边缘那一圈把背景掰弯**:窄边带里采样点往中心收,
     // 边带外面原样,中间干净。边带和拉距都跟着元素尺寸走,
     // 小按钮不能糊成一团,大面板也不能细得看不见。
-    bandRatio: 0.07, bandMin: 7, bandMax: 22,   // 边带宽度(px)
-    pullRatio: 0.12, pullMin: 10, pullMax: 34,  // 边缘往中心拉的距离(px)
-    centerScale: 0.80,   // 中心轻微放大(1/centerScale 倍)
+    //
+    // 铁律:**拉距必须小于边带**(pullRatio < 1)。
+    // 拉距大于边带时,边带里的采样方向会反转(Jacobian 变负),
+    // 背景会被镜像 —— 斜纹被切成碎片,看着像撕裂而不是弯。
+    bandRatio: 0.107, bandMin: 6, bandMax: 60,  // 边带宽度(px)
+    pullRatio: 0.5,                            // 拉距 = 边带 × 这个比例(必须 < 1)
+    centerScale: 0.92,   // 中心轻微放大(1/centerScale ≈ 1.09×)
     sphereP: 2.0         // 中心放大的幂次
   };
 
@@ -192,11 +196,12 @@
       // 只有形状变了 —— 滤镜链(折射 + 色散)一个字都没动。
       var ax = W / 2, ay = H / 2;
       var mn = Math.min(W, H);
-      // 液态玻璃边:边带宽度和拉距跟着元素尺寸走。
-      // 小按钮(44px)边带只有 7px,大面板(800px)封顶 22px ——
+      // 液态玻璃边:边带宽度跟着元素尺寸走。
+      // 小按钮(44px)边带只有 6px,大面板(900px)封顶 60px ——
       // 固定值要么把按钮糊成一团,要么在大面板上细得看不见。
       var band = clamp(PARAMS.bandRatio * mn, PARAMS.bandMin, PARAMS.bandMax);
-      var pull = clamp(PARAMS.pullRatio * mn, PARAMS.pullMin, PARAMS.pullMax);
+      // 拉距 = 边带 × pullRatio,恒小于边带 ⇒ 边缘内容不会被镜像。
+      var pull = band * PARAMS.pullRatio;
       var radius = readRadius(el, W, H);
       maxScale = 0;
       var idx = 0;
