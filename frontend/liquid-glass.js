@@ -17,26 +17,44 @@
   var SVGNS = 'http://www.w3.org/2000/svg';
   var XLINK = 'http://www.w3.org/1999/xlink';
   var PARAMS = {
-    ref: 0.22,     // 折射强度:面板边缘最多把背景往中心拉的比例
     blur: 0.25,
-    band: 22,      // 折射环宽度(px)
-    maxPull: 20,   // 位移上限(px) —— 再多就会把面板自己的内容卷进背景
     disp: 3,       // 色散:R/B 通道各偏移多少 px(0 = 不色散)
-    // ---- 球面映射(来自附件的 Liquid Glass 放大镜)----
-    // 球心把背景放大 1/centerScale 倍,越靠边缘放大越少,
-    // 到球面归零 —— 这就是「玻璃球」的本体,不是一圈边缘折射。
-    centerScale: 0.65,
-    sphereP: 2.15,      // 球面映射的幂次(越大越接近球)
-    edgeStretch: 0.42,  // 边缘外扩(亮边)
-    outsideRange: 0.13, // 球面外还有多远开始受影响
-    outsideStrength: 0.22,
-    pull: 0.30          // 位移上限 = pull × 元素长边(球心放大位移可达几十 px)
+    // ---- 液态玻璃边(照 shuding/liquid-glass 的做法改)----
+    // 之前只有「球心放大」,边缘只是收敛回去 —— 看着像放大镜,不像玻璃。
+    // 液态玻璃的关键是**边缘那一圈把背景掰弯**:窄边带里采样点往中心收,
+    // 边带外面原样,中间干净。边带和拉距都跟着元素尺寸走,
+    // 小按钮不能糊成一团,大面板也不能细得看不见。
+    bandRatio: 0.07, bandMin: 7, bandMax: 22,   // 边带宽度(px)
+    pullRatio: 0.12, pullMin: 10, pullMax: 34,  // 边缘往中心拉的距离(px)
+    centerScale: 0.80,   // 中心轻微放大(1/centerScale 倍)
+    sphereP: 2.0         // 中心放大的幂次
   };
 
   /* ---------- 工具 ---------- */
   function smoothStep(a, b, t) {
     t = Math.max(0, Math.min(1, (t - a) / (b - a)));
     return t * t * (3 - 2 * t);
+  }
+  function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
+  // 圆角矩形 SDF(px 空间,中心为原点):负 = 内部
+  function rrectSDF(x, y, hw, hh, r) {
+    r = Math.min(r, Math.min(hw, hh));
+    var qx = Math.abs(x) - hw + r, qy = Math.abs(y) - hh + r;
+    return Math.min(Math.max(qx, qy), 0) + Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) - r;
+  }
+  // 元素的圆角:px 直接取,百分比按尺寸换算,取不到就 0
+  function readRadius(el, W, H) {
+    var v = '';
+    try {
+      var cs = getComputedStyle(el);
+      v = cs.borderTopLeftRadius || cs.borderRadius || '';
+      if (!v || v === '0%' || v === '0px') return 0;
+      if (v.indexOf('%') >= 0) {
+        var p = parseFloat(v) / 100;
+        return Math.min(p * W, p * H);
+      }
+      return parseFloat(v) || 0;
+    } catch (_) { return 0; }
   }
   function shade(hex, p) {
     var m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex || '');
@@ -173,9 +191,13 @@
       // 玻璃球:球体被拉伸成面板自己的宽高(椭圆)。
       // 只有形状变了 —— 滤镜链(折射 + 色散)一个字都没动。
       var ax = W / 2, ay = H / 2;
-      // 球心放大时位移有几十 px,上限要跟着元素尺寸走,
-      // 否则中心的放大效果会被截掉(看着就还是「没放大」)。
-      var cap = Math.max(PARAMS.maxPull, PARAMS.pull * Math.max(W, H));
+      var mn = Math.min(W, H);
+      // 液态玻璃边:边带宽度和拉距跟着元素尺寸走。
+      // 小按钮(44px)边带只有 7px,大面板(800px)封顶 22px ——
+      // 固定值要么把按钮糊成一团,要么在大面板上细得看不见。
+      var band = clamp(PARAMS.bandRatio * mn, PARAMS.bandMin, PARAMS.bandMax);
+      var pull = clamp(PARAMS.pullRatio * mn, PARAMS.pullMin, PARAMS.pullMax);
+      var radius = readRadius(el, W, H);
       maxScale = 0;
       var idx = 0;
       for (i = 0; i < data.length; i += 4) {
@@ -184,34 +206,23 @@
         // feDisplacementMap 的 scale 走的是 user space，
         // 用贴图像素算会差好几倍（贴图被拉伸过）。
         var ex = (x / MAP - 0.5) * W, ey = (y / MAP - 0.5) * H;
-        // 归一化到「球」里:r = 0 是球心,r = 1 是球面。
+        // 中心放大用椭圆半径(r = 0 是中心,r = 1 是球面)
         var r = Math.sqrt((ex / ax) * (ex / ax) + (ey / ay) * (ey / ay));
-        var k = 1;                       // 采样点的缩放系数
-        if (r <= 1) {
-          // 球面映射:球心放大(CENTER_SCALE),到球面收敛回 1,
-          // 边缘再轻轻外扩一点 —— 就是附件里那颗球的畸变。
-          var edge = smoothStep(0.62, 1, r);
-          var mapped = r * (PARAMS.centerScale + (1 - PARAMS.centerScale) * Math.pow(r, PARAMS.sphereP));
-          mapped += PARAMS.edgeStretch * edge * edge * (r - 0.62) * 0.42;
-          k = r > 1e-6 ? mapped / r : PARAMS.centerScale;
-        } else {
-          // 球面外(椭圆没盖到的角落)只轻轻往里收一点。
-          var outside = (r - 1) / PARAMS.outsideRange;
-          if (outside <= 1) {
-            var influence = 1 - smoothStep(0, 1, outside);
-            var src = r - influence * PARAMS.outsideStrength * 0.28;
-            k = src / r;
-          }
+        // 边缘弯折用圆角矩形 SDF(px 空间)—— 边带要贴着面板真实轮廓走,
+        // 椭圆的话四个角会被拉成一个大圆角,不像玻璃。
+        var d = rrectSDF(ex, ey, ax, ay, radius);
+        // 中心轻微放大:球心把背景放大 1/centerScale 倍,到边缘收敛回 1。
+        var f = PARAMS.centerScale + (1 - PARAMS.centerScale) * Math.pow(r, PARAMS.sphereP);
+        // 液态玻璃边:面板内侧一圈边带里,采样点往中心收 —— 背景被掰弯。
+        // 边带外原样,中间干净。收的距离封顶 pull,别拉过中心。
+        var t = smoothStep(-band, 0, d);
+        if (t > 0) {
+          var plen = Math.hypot(ex, ey);
+          var p = Math.min(pull, plen * 0.6);
+          f *= 1 - (t * p) / Math.max(plen, 1e-6);
         }
-        // 采样坐标 = 原坐标按 k 缩放(球心附近 = 背景被放大)。
-        dx = ex * (k - 1); dy = ey * (k - 1);
-        // 拉不动太远:面板自己的内容（头像、角标）会被卷进背景采样，
-        // 在边缘拉出一条脏影。所以位移上限压在 cap。
-        var mag = Math.hypot(dx, dy);
-        if (mag > cap) {
-          var kk = cap / mag;
-          dx *= kk; dy *= kk;
-        }
+        // 采样坐标 = 原坐标按 f 缩放(f<1 = 往中心收 = 背景被放大/掰弯)
+        dx = ex * (f - 1); dy = ey * (f - 1);
         maxScale = Math.max(maxScale, Math.abs(dx), Math.abs(dy));
         raw[idx++] = dx; raw[idx++] = dy;
       }
