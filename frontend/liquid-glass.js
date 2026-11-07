@@ -1,253 +1,190 @@
 /* ============================================================
-   LIQUID GLASS — 液态玻璃
+   LIQUID GLASS — 液态玻璃折射引擎
    ------------------------------------------------------------
-   视觉语言移植自:
-     xiaofangstudio/liquid-glass-web  (MIT)
-     折射引擎源自 shuding/liquid-glass (MIT, © Shu Ding)
-     动效标准参考 Apple WWDC25《Meet Liquid Glass》
-   本文件在原引擎之上加了一层「可复用到整个应用」的封装:
-     · 果冻按压物理(springEase 弹簧回弹 + 定向拉伸)
-     · 体积光(光晕贴着元素轮廓)
-     · 光照互通(按下一块玻璃,附近���玻璃跟着亮)
-     · 真折射(SVG 位移贴图)—— 只给关键面板用,成本高
+   移植自 rdev/liquid-glass-react（MIT）
+   https://github.com/rdev/liquid-glass-react
+   原实现是 React 组件，这里是同构的原生 JS 版（VVeChat 不用框架）。
+
+   它和之前那套自研位移贴图的根本区别：
+     · 位移场不是自己算的，是 rdev 自带的 256×256 平滑贴图
+       （standard / polar / prominent），随元素尺寸拉伸，永远不变形。
+     · 滤镜链是 3 条 feDisplacementMap：R/G/B 用略微不同的 scale，
+       于是边缘天然带色散 —— 这才是「真的色散」，不是贴一条彩虹。
+     · 一张边缘遮罩（EDGE_MASK）把折射限制在边缘一圈，
+       中间保持干净清晰，文字不受影响。
+     · 贴图是静态的 ⇒ 元素改尺寸不需要重算，整页只建一次滤镜。
+
+   ⚠️ 三条 feDisplacementMap 在 Chrome 里没问题：它们各自读
+   SourceGraphic（不是串行接力），最后用 feBlend screen 合成。
+   之前出洋红是因为三条支路各自带位移图再混合 —— 结构不一样。
    ============================================================ */
 (function () {
   'use strict';
 
   var SVGNS = 'http://www.w3.org/2000/svg';
   var XLINK = 'http://www.w3.org/1999/xlink';
+
   var PARAMS = {
-    blur: 0.25,
-    disp: 3,       // 色散:R/B 通道各偏移多少 px(0 = 不色散)
-    // ---- 液态玻璃边(照 shuding/liquid-glass 的做法改)----
-    // 之前只有「球心放大」,边缘只是收敛回去 —— 看着像放大镜,不像玻璃。
-    // 液态玻璃的关键是**边缘那一圈把背景掰弯**:窄边带里采样点往中心收,
-    // 边带外面原样,中间干净。边带和拉距都跟着元素尺寸走,
-    // 小按钮不能糊成一团,大面板也不能细得看不见。
-    //
-    // 铁律:**拉距必须小于边带**(pullRatio < 1)。
-    // 拉距大于边带时,边带里的采样方向会反转(Jacobian 变负),
-    // 背景会被镜像 —— 斜纹被切成碎片,看着像撕裂而不是弯。
-    bandRatio: 0.107, bandMin: 6, bandMax: 60,  // 边带宽度(px)
-    pullRatio: 0.5,                            // 拉距 = 边带 × 这个比例(必须 < 1)
-    centerScale: 0.92,   // 中心轻微放大(1/centerScale ≈ 1.09×)
-    sphereP: 2.0         // 中心放大的幂次
+    displacementScale: 70,  // 折射强度（像素）
+    aberration: 2,          // 色散：R/G/B 三条位移图的 scale 差
+    blur: 2,                // 磨砂
+    saturation: 140,        // 饱和度
+    mode: 'standard',       // standard | polar | prominent
+    ringWidth: 1.5          // 边缘高光线的粗细
   };
 
   /* ---------- 工具 ---------- */
-  function smoothStep(a, b, t) {
-    t = Math.max(0, Math.min(1, (t - a) / (b - a)));
-    return t * t * (3 - 2 * t);
-  }
-  function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
-  // 圆角矩形 SDF(px 空间,中心为原点):负 = 内部
-  function rrectSDF(x, y, hw, hh, r) {
-    r = Math.min(r, Math.min(hw, hh));
-    var qx = Math.abs(x) - hw + r, qy = Math.abs(y) - hh + r;
-    return Math.min(Math.max(qx, qy), 0) + Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) - r;
-  }
-  // 元素的圆角:px 直接取,百分比按尺寸换算,取不到就 0
-  function readRadius(el, W, H) {
-    var v = '';
-    try {
-      var cs = getComputedStyle(el);
-      v = cs.borderTopLeftRadius || cs.borderRadius || '';
-      if (!v || v === '0%' || v === '0px') return 0;
-      if (v.indexOf('%') >= 0) {
-        var p = parseFloat(v) / 100;
-        return Math.min(p * W, p * H);
-      }
-      return parseFloat(v) || 0;
-    } catch (_) { return 0; }
-  }
-  function shade(hex, p) {
-    var m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex || '');
-    if (!m) return hex;
-    var c = [1, 2, 3].map(function (i) {
-      var v = parseInt(m[i], 16);
-      v = p < 0 ? Math.round(v * (1 + p / 100)) : Math.round(v + (255 - v) * (p / 100));
-      return Math.max(0, Math.min(255, v)).toString(16).padStart(2, '0');
-    });
-    return '#' + c.join('');
+  function el(name, attrs, parent) {
+    var n = document.createElementNS(SVGNS, name);
+    for (var k in attrs) if (attrs.hasOwnProperty(k)) n.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(n);
+    return n;
   }
 
-  /* 真折射不是所有浏览器都支持 —— Chrome/Edge 有，Firefox/Safari 会退化成
-     普通毛玻璃。先问一句，别白跑一遍像素循环。 */
   var SUPPORTS_REFRACTION = (function () {
     try {
       return !!(window.CSS && CSS.supports &&
-        (CSS.supports('backdrop-filter', 'url(#x)') || CSS.supports('-webkit-backdrop-filter', 'url(#x)')));
+        (CSS.supports('backdrop-filter', 'url(#x)') ||
+         CSS.supports('-webkit-backdrop-filter', 'url(#x)')));
     } catch (_) { return false; }
   })();
 
-  /* ============================================================
-     1. 折射引擎
-     ============================================================ */
-  var _uid = 0;
-  var _svgHost = null;
-
+  /* 所有滤镜放在同一个 <svg> 里 */
+  var svgHost = null;
   function ensureSvgHost() {
-    if (_svgHost && _svgHost.isConnected) return _svgHost;
-    _svgHost = document.createElementNS(SVGNS, 'svg');
-    _svgHost.setAttribute('width', '0');
-    _svgHost.setAttribute('height', '0');
-    _svgHost.setAttribute('aria-hidden', 'true');
-    _svgHost.style.cssText = 'position:fixed;top:0;left:0;pointer-events:none;z-index:1;';
-    document.body.appendChild(_svgHost);
-    return _svgHost;
+    if (svgHost) return svgHost;
+    svgHost = document.createElementNS(SVGNS, 'svg');
+    svgHost.setAttribute('width', '0');
+    svgHost.setAttribute('height', '0');
+    svgHost.setAttribute('aria-hidden', 'true');
+    svgHost.style.cssText = 'position:fixed;top:0;left:0;pointer-events:none;z-index:-1';
+    document.body.appendChild(svgHost);
+    return svgHost;
   }
 
-  /**
-   * 给一个元素装上真折射。
-   * 成本：一次 W×H 的像素循环 + 一次 canvas.toDataURL()。
-   * 所以只给关键面板用，不要给列表里每一个元素都装。
-   */
+  function maps() { return window.__LG_MAPS || {}; }
+
+  /* ============================================================
+     滤镜链 —— 和 rdev 一一对应
+     ============================================================ */
+  function buildFilter(fid, mapUrl) {
+    var o = PARAMS;
+    var svg = ensureSvgHost();
+    var defs = el('defs', {}, svg);
+    var filter = el('filter', {
+      id: fid,
+      x: '-35%', y: '-35%', width: '170%', height: '170%',
+      colorInterpolationFilters: 'sRGB'
+    }, defs);
+
+    // 1) 位移贴图
+    el('feImage', {
+      id: fid + '_map', x: '0', y: '0', width: '100%', height: '100%',
+      result: 'DISPLACEMENT_MAP',
+      preserveAspectRatio: 'xMidYMid slice'
+    }, filter).setAttributeNS(XLINK, 'href', mapUrl);
+
+    // 2) 用贴图本身算出「边缘强度」→ 边缘遮罩
+    el('feColorMatrix', {
+      in: 'DISPLACEMENT_MAP', type: 'matrix',
+      values: '0.3 0.3 0.3 0 0  0.3 0.3 0.3 0 0  0.3 0.3 0.3 0 0  0 0 0 1 0',
+      result: 'EDGE_INTENSITY'
+    }, filter);
+    var ct = el('feComponentTransfer', { in: 'EDGE_INTENSITY', result: 'EDGE_MASK' }, filter);
+    el('feFuncA', { type: 'discrete', tableValues: '0 ' + (o.aberration * 0.05) + ' 1' }, ct);
+
+    // 3) 没被折射的原始图 —— 中心用它
+    el('feOffset', { in: 'SourceGraphic', dx: '0', dy: '0', result: 'CENTER_ORIGINAL' }, filter);
+
+    // 4) 三条位移图：scale 依次递减 → 边缘自然裂出彩边
+    var dir = -1;  // 静态贴图方向和 shader 模式相反
+    var chans = [['R', 'RED', 0], ['G', 'GREEN', o.aberration * 0.05], ['B', 'BLUE', o.aberration * 0.1]];
+    chans.forEach(function (c) {
+      var name = c[0], label = c[1], ab = c[2];
+      el('feDisplacementMap', {
+        in: 'SourceGraphic', in2: 'DISPLACEMENT_MAP',
+        scale: String(o.displacementScale * (dir - ab)),
+        xChannelSelector: 'R', yChannelSelector: 'B',
+        result: label + '_DISPLACED'
+      }, filter);
+      var rows = ['0 0 0 0 0', '0 0 0 0 0', '0 0 0 0 0', '0 0 0 1 0'];
+      rows[name === 'R' ? 0 : name === 'G' ? 1 : 2] = name === 'R' ? '1 0 0 0 0' : name === 'G' ? '0 1 0 0 0' : '0 0 1 0 0';
+      el('feColorMatrix', { in: label + '_DISPLACED', type: 'matrix', values: rows.join(' '), result: label + '_CHANNEL' }, filter);
+    });
+
+    // 5) screen 合成三条通道（screen 对「只剩一个通道」的图是精确的）
+    el('feBlend', { in: 'GREEN_CHANNEL', in2: 'BLUE_CHANNEL', mode: 'screen', result: 'GB_COMBINED' }, filter);
+    el('feBlend', { in: 'RED_CHANNEL', in2: 'GB_COMBINED', mode: 'screen', result: 'RGB_COMBINED' }, filter);
+
+    // 6) 轻微模糊，柔化色散
+    el('feGaussianBlur', {
+      in: 'RGB_COMBINED',
+      stdDeviation: String(Math.max(0.1, 0.5 - o.aberration * 0.1)),
+      result: 'ABERRATED_BLURRED'
+    }, filter);
+
+    // 7) 只保留边缘的折射
+    el('feComposite', { in: 'ABERRATED_BLURRED', in2: 'EDGE_MASK', operator: 'in', result: 'EDGE_ABERRATION' }, filter);
+
+    // 8) 中心用原图
+    var ct2 = el('feComponentTransfer', { in: 'EDGE_MASK', result: 'INVERTED_MASK' }, filter);
+    el('feFuncA', { type: 'table', tableValues: '1 0' }, ct2);
+    el('feComposite', { in: 'CENTER_ORIGINAL', in2: 'INVERTED_MASK', operator: 'in', result: 'CENTER_CLEAN' }, filter);
+
+    // 9) 合并
+    el('feComposite', { in: 'EDGE_ABERRATION', in2: 'CENTER_CLEAN', operator: 'over' }, filter);
+  }
+
+  /* ============================================================
+     高光层 —— rdev 的「边缘吃光」：跟着鼠标走的渐变描边
+     ============================================================ */
+  function makeRing(host) {
+    var ring = document.createElement('span');
+    ring.className = 'lg-ring';
+    ring.style.cssText =
+      'position:absolute;inset:0;border-radius:inherit;pointer-events:none;' +
+      'padding:' + PARAMS.ringWidth + 'px;' +
+      '-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);' +
+      '-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);' +
+      'mask-composite:exclude;' +
+      'background:linear-gradient(135deg,rgba(255,255,255,0) 0%,' +
+      'rgba(255,255,255,.34) 38%,rgba(255,255,255,.72) 66%,rgba(255,255,255,0) 100%);' +
+      'box-shadow:0 0 0 .5px rgba(255,255,255,.5) inset,0 1px 3px rgba(255,255,255,.25) inset;' +
+      'mix-blend-mode:screen;opacity:.55;transition:opacity .25s ease;z-index:2;';
+    host.appendChild(ring);
+    return ring;
+  }
+
+  /* 鼠标靠近时，边缘高光跟着转 —— 和 rdev 的方向光一致 */
+  function bindLight(ring, host) {
+    host.addEventListener('pointermove', function (e) {
+      var r = host.getBoundingClientRect();
+      var mx = ((e.clientX - r.left) / Math.max(1, r.width)) * 100 - 50;
+      var my = ((e.clientY - r.top) / Math.max(1, r.height)) * 100 - 50;
+      ring.style.background =
+        'linear-gradient(' + (135 + mx * 1.2) + 'deg,' +
+        'rgba(255,255,255,0) 0%,' +
+        'rgba(255,255,255,' + (0.18 + Math.abs(mx) * 0.006).toFixed(3) + ') ' + Math.max(10, 38 + my * 0.3).toFixed(1) + '%,' +
+        'rgba(255,255,255,' + (0.45 + Math.abs(mx) * 0.008).toFixed(3) + ') ' + Math.min(92, 68 + my * 0.4).toFixed(1) + '%,' +
+        'rgba(255,255,255,0) 100%)';
+    });
+  }
+
+  /* ============================================================
+     挂载
+     ============================================================ */
+  var registry = [];
+
   function makeGlass(el, opts) {
     opts = opts || {};
     if (!SUPPORTS_REFRACTION) return null;
-    var W = Math.max(2, el.offsetWidth || 100);
-    var H = Math.max(2, el.offsetHeight || 100);
-    // 位移贴图不必跟元素一样大：折射只发生在边缘一圈，
-    // 贴图缩到一半尺寸既省 4 倍算力，肉眼看不出差别。
-    var MAP = Math.min(220, Math.max(64, Math.round(Math.max(W, H) / 2)));
+    var M = maps();
+    var mapUrl = M[opts.mode || PARAMS.mode] || M.standard;
+    if (!mapUrl) return null;
+
     var fid = 'lg-' + (++_uid);
+    buildFilter(fid, mapUrl);
 
-    var svg = document.createElementNS(SVGNS, 'svg');
-    var filter = document.createElementNS(SVGNS, 'filter');
-    filter.setAttribute('id', fid + '_filter');
-    filter.setAttribute('filterUnits', 'userSpaceOnUse');
-    filter.setAttribute('colorInterpolationFilters', 'sRGB');
-    filter.setAttribute('x', '0'); filter.setAttribute('y', '0');
-    filter.setAttribute('width', String(W)); filter.setAttribute('height', String(H));
-
-    var feImage = document.createElementNS(SVGNS, 'feImage');
-    feImage.setAttribute('id', fid + '_map');   // 位移贴图 —— in2 靠这个 id 引用
-    feImage.setAttribute('preserveAspectRatio', 'none');
-    feImage.setAttribute('width', String(W)); feImage.setAttribute('height', String(H));
-    filter.appendChild(feImage);
-
-    // 滤镜链（顺序是踩坑踩出来的，别改）：
-    //   feImage(位移贴图) → 拆 R/G/B → 各偏移 → lighten 合成 → feDisplacementMap(折射)
-    //
-    // 1) 折射只有「一个」feDisplacementMap。之前用过三条支路（每支路一个位移图），
-    //    Chrome 里第二、三条支路的采样会错位，面板右缘整条出现洋红脏影 ——
-    //    纯灰背景下照样出现，说明不是背景内容的问题，是滤镜链自己坏了。
-    // 2) 色散用「拆通道 + 各自偏移 + feBlend lighten 合成」做：
-    //    lighten 对「只有一个通道有值」的图是精确的 max(R,0)=R，三张合起来就是原色。
-    //    不能用 feComposite arithmetic —— alpha 会累加，颜色被预乘/反预乘搞坏。
-    // 3) 位移图必须放在最后。放在拆通道之前，位移出来的半透明像素会被
-    //    lighten 按 alpha 加权求和，整个面板发紫（实测）。
-    var chans = ['R', 'G', 'B'].map(function (name, i) {
-      var cm = document.createElementNS(SVGNS, 'feColorMatrix');
-      cm.setAttribute('type', 'matrix');
-      cm.setAttribute('in', 'SourceGraphic');
-      var rows = ['0 0 0 0 0', '0 0 0 0 0', '0 0 0 0 0', '0 0 0 1 0'];
-      rows[i] = ['1 0 0 0 0', '0 1 0 0 0', '0 0 1 0 0'][i];
-      cm.setAttribute('values', rows.join(' '));
-      cm.setAttribute('result', 'c' + name);
-      filter.appendChild(cm);
-      return 'c' + name;
-    });
-    // 红蓝各偏一点 → 边缘裂出彩边（真实色散，不是贴一条彩虹）
-    var split = { R: 'cR', G: 'cG', B: 'cB' };
-    ['R', 'B'].forEach(function (name, i) {
-      if (!PARAMS.disp) return;
-      var off = document.createElementNS(SVGNS, 'feOffset');
-      off.setAttribute('in', 'c' + name);
-      off.setAttribute('dx', String(i === 0 ? -PARAMS.disp : PARAMS.disp));
-      off.setAttribute('dy', '0');
-      off.setAttribute('result', 'o' + name);
-      filter.appendChild(off);
-      split[name] = 'o' + name;
-    });
-    // 合成回一张图
-    var prevRes = split.R;
-    [split.G, split.B].forEach(function (nm, i) {
-      var bl = document.createElementNS(SVGNS, 'feBlend');
-      bl.setAttribute('mode', 'lighten');
-      bl.setAttribute('in', prevRes); bl.setAttribute('in2', nm);
-      prevRes = 'x' + i;
-      bl.setAttribute('result', prevRes);
-      filter.appendChild(bl);
-    });
-    // 折射：一个位移图，把上面合成好的图整体掰弯
-    var feDisp = document.createElementNS(SVGNS, 'feDisplacementMap');
-    feDisp.setAttribute('in', prevRes);
-    feDisp.setAttribute('in2', fid + '_map');
-    feDisp.setAttribute('xChannelSelector', 'R');
-    feDisp.setAttribute('yChannelSelector', 'G');
-    filter.appendChild(feDisp);
-    svg.appendChild(filter);
-    ensureSvgHost().appendChild(svg);
-
-    var canvas = document.createElement('canvas');
-    canvas.width = MAP; canvas.height = MAP;
-    var ctx = canvas.getContext('2d');
-    var data = new Uint8ClampedArray(MAP * MAP * 4);
-    var raw = new Float32Array(MAP * MAP * 2);
-    var maxScale = 0, i, x, y, dx, dy;
-
-    function buildMap() {
-      W = Math.max(2, el.offsetWidth || W);
-      H = Math.max(2, el.offsetHeight || H);
-      filter.setAttribute('width', String(W)); filter.setAttribute('height', String(H));
-      feImage.setAttribute('width', String(W)); feImage.setAttribute('height', String(H));
-      // 玻璃球:球体被拉伸成面板自己的宽高(椭圆)。
-      // 只有形状变了 —— 滤镜链(折射 + 色散)一个字都没动。
-      var ax = W / 2, ay = H / 2;
-      var mn = Math.min(W, H);
-      // 液态玻璃边:边带宽度跟着元素尺寸走。
-      // 小按钮(44px)边带只有 6px,大面板(900px)封顶 60px ——
-      // 固定值要么把按钮糊成一团,要么在大面板上细得看不见。
-      var band = clamp(PARAMS.bandRatio * mn, PARAMS.bandMin, PARAMS.bandMax);
-      // 拉距 = 边带 × pullRatio,恒小于边带 ⇒ 边缘内容不会被镜像。
-      var pull = band * PARAMS.pullRatio;
-      var radius = readRadius(el, W, H);
-      maxScale = 0;
-      var idx = 0;
-      for (i = 0; i < data.length; i += 4) {
-        x = (i / 4) % MAP; y = Math.floor(i / 4 / MAP);
-        // 元素像素坐标（中心为原点）。位移量必须是 CSS px ——
-        // feDisplacementMap 的 scale 走的是 user space，
-        // 用贴图像素算会差好几倍（贴图被拉伸过）。
-        var ex = (x / MAP - 0.5) * W, ey = (y / MAP - 0.5) * H;
-        // 中心放大用椭圆半径(r = 0 是中心,r = 1 是球面)
-        var r = Math.sqrt((ex / ax) * (ex / ax) + (ey / ay) * (ey / ay));
-        // 边缘弯折用圆角矩形 SDF(px 空间)—— 边带要贴着面板真实轮廓走,
-        // 椭圆的话四个角会被拉成一个大圆角,不像玻璃。
-        var d = rrectSDF(ex, ey, ax, ay, radius);
-        // 中心轻微放大:球心把背景放大 1/centerScale 倍,到边缘收敛回 1。
-        var f = PARAMS.centerScale + (1 - PARAMS.centerScale) * Math.pow(r, PARAMS.sphereP);
-        // 液态玻璃边:面板内侧一圈边带里,采样点往中心收 —— 背景被掰弯。
-        // 边带外原样,中间干净。收的距离封顶 pull,别拉过中心。
-        var t = smoothStep(-band, 0, d);
-        if (t > 0) {
-          var plen = Math.hypot(ex, ey);
-          var p = Math.min(pull, plen * 0.6);
-          f *= 1 - (t * p) / Math.max(plen, 1e-6);
-        }
-        // 采样坐标 = 原坐标按 f 缩放(f<1 = 往中心收 = 背景被放大/掰弯)
-        dx = ex * (f - 1); dy = ey * (f - 1);
-        maxScale = Math.max(maxScale, Math.abs(dx), Math.abs(dy));
-        raw[idx++] = dx; raw[idx++] = dy;
-      }
-      // 贴图用满 0..1，不裁剪：R=0.5 是「不位移」，
-      // 位移量 = scale × (R-0.5)，所以 scale 取两倍最大值。
-      var enc = maxScale > 0 ? 2 * maxScale : 1;
-      idx = 0;
-      for (i = 0; i < data.length; i += 4) {
-        data[i] = (raw[idx++] / enc + 0.5) * 255;
-        data[i + 1] = (raw[idx++] / enc + 0.5) * 255;
-        data[i + 2] = 0; data[i + 3] = 255;
-      }
-      ctx.putImageData(new ImageData(data, MAP, MAP), 0, 0);
-      feImage.setAttributeNS(XLINK, 'href', canvas.toDataURL());
-      // 一个位移图就是全部折射：scale × (R-0.5) = 贴图里存的位移量。
-      feDisp.setAttribute('scale', String(enc));
-    }
-
-    // 元素原本的模糊/饱和度要留着 —— 只加折射是不够的，
-    // 没有模糊的折射看起来是「塑料片」，不是玻璃。
     var prevBackdrop = '';
     try {
       var cs = getComputedStyle(el);
@@ -255,217 +192,74 @@
       if (!prevBackdrop || prevBackdrop === 'none') prevBackdrop = '';
     } catch (_) {}
 
-    function apply() {
-      var bf = 'url(#' + fid + '_filter)';
-      if (prevBackdrop) bf += ' ' + prevBackdrop;
-      else bf += ' blur(' + PARAMS.blur + 'px) contrast(1.2) brightness(1.05) saturate(1.1)';
-      el.style.backdropFilter = bf;
-      el.style.webkitBackdropFilter = bf;
-    }
+    var bf = 'url(#' + fid + '_filter)';
+    bf += ' blur(' + PARAMS.blur + 'px) saturate(' + PARAMS.saturation + '%)';
+    el.style.backdropFilter = bf;
+    el.style.webkitBackdropFilter = bf;
 
-    buildMap();
-    apply();
-    // 尺寸变了要重算贴图，但别一帧算一次。
-    var pending = null;
-    var ro = new ResizeObserver(function () {
-      if (pending) return;
-      pending = setTimeout(function () { pending = null; buildMap(); apply(); }, 160);
-    });
-    ro.observe(el);
-    return { update: buildMap, destroy: function () { ro.disconnect(); svg.remove(); } };
-  }
+    // 元素得是定位容器，高光层才贴得住
+    var pos = '';
+    try { pos = getComputedStyle(el).position; } catch (_) {}
+    if (!pos || pos === 'static') el.classList.add('lg-glass');
 
-  /* ============================================================
-     2. 光照系统 —— 体积光 + 光照互通
-     ============================================================ */
-  var litTargets = [];
-
-  function setLit(el, cx, cy, it) {
-    var g = el.__litGlow;
-    if (!g) return;
-    if (it <= 0.02) { g.style.opacity = '0'; return; }
-    var r = el.getBoundingClientRect();
-    g.style.setProperty('--lx', ((cx - r.left) / Math.max(1, r.width) * 100) + '%');
-    g.style.setProperty('--ly', ((cy - r.top) / Math.max(1, r.height) * 100) + '%');
-    g.style.opacity = it.toFixed(2);
-  }
-  function illuminate(src, cx, cy, radius, base) {
-    for (var i = 0; i < litTargets.length; i++) {
-      var o = litTargets[i];
-      if (o.el === src) continue;
-      var r = o.el.getBoundingClientRect();
-      var dist = Math.hypot(r.left + r.width / 2 - cx, r.top + r.height / 2 - cy);
-      setLit(o.el, cx, cy, base * Math.max(0, 1 - dist / radius));
-    }
-  }
-  function clearLit(src) {
-    for (var i = 0; i < litTargets.length; i++) {
-      if (litTargets[i].el !== src) setLit(litTargets[i].el, 0, 0, 0);
-    }
-  }
-
-  /* ============================================================
-     3. 果冻物理
-     ============================================================ */
-  function springEase(t) { return 1 - Math.exp(-5 * t) * Math.cos(9 * t); }
-
-  function applyJelly(el, k, deg, tx, ty) {
-    var base = el.__lgTransform || '';
-    var t = base;
-    if (tx || ty) t += ' translate3d(' + (tx || 0) + 'px,' + (ty || 0) + 'px,0)';
-    if (k && k >= 0.001) {
-      t += ' rotate(' + deg + 'deg) scale(' + (1 + k) + ',' + (1 - k * 0.45) + ') rotate(' + (-deg) + 'deg)';
-    }
-    el.style.transform = t;
-  }
-  function jellyBack(el, from, dur, onDone) {
-    var t0 = performance.now();
-    (function step(now) {
-      var t = Math.min(1, (now - t0) / dur);
-      applyJelly(el, from * (1 - springEase(t)), 0, 0, 0);
-      if (t < 1) requestAnimationFrame(step);
-      else {
-        el.style.transform = el.__lgOwnTransform || '';
-        if (onDone) onDone();
-      }
-    })(t0);
-  }
-
-  /* 按下去时的一圈光晕，贴着按钮轮廓。 */
-  function volumeLight(cx, cy, r) {
-    var v = document.createElement('div');
-    v.className = 'lg-volume-light';
-    v.style.cssText = 'position:fixed;pointer-events:none;z-index:2000;border-radius:50%;' +
-      'left:' + (cx - r) + 'px;top:' + (cy - r) + 'px;width:' + r * 2 + 'px;height:' + r * 2 + 'px;' +
-      'background:radial-gradient(circle,rgba(255,255,255,0.42) 0%,rgba(255,255,255,0.12) 40%,transparent 66%);' +
-      'mix-blend-mode:screen;opacity:1;transition:opacity .9s ease-out,transform 1.4s cubic-bezier(0.16,1,0.3,1);transform:scale(0.4);';
-    document.body.appendChild(v);
-    requestAnimationFrame(function () {
-      v.style.transform = 'scale(1.25)';
-      v.style.opacity = '0';
-      setTimeout(function () { v.remove(); }, 1500);
-    });
-  }
-
-  /* ============================================================
-     4. 注册与按压绑定
-     ============================================================ */
-  var registry = [];
-  var pressed = null;
-
-  function ensureGlow(el) {
-    if (el.__litGlow) return el.__litGlow;
-    var g = document.createElement('div');
-    g.className = 'lg-lit-glow';
-    el.appendChild(g);
-    el.__litGlow = g;
-    return g;
+    var ring = makeRing(el);
+    bindLight(ring, el);
+    var rec = { el: el, fid: fid, ring: ring, prev: prevBackdrop };
+    registry.push(rec);
+    return rec;
   }
 
   function register(el, opts) {
     opts = opts || {};
     if (!el) return;
-    if (el.__lgRegistered) {
-      // 已经注册过 —— 把这次的选项补上去(折射和按压可以同时要)。
-      if (opts.press && !el.classList.contains('lg-pressable')) {
-        el.classList.add('lg-pressable');
-        bindPress(el);
-      }
-      return;
-    }
+    if (el.__lgRegistered) return;
     el.__lgRegistered = true;
-    // 记下元素当前的几何变换（CSS 里的 translate/scale 也要保住，
-    // 不然按下去的时候果冻形变会把布局顶歪）。
-    var computed = '';
-    try { computed = getComputedStyle(el).transform; } catch (_) {}
-    el.__lgTransform = (computed && computed !== 'none') ? computed : '';
-    el.__lgOwnTransform = el.style.transform || '';
-    // 只给「本来没有定位」的元素加 position:relative —— 直接给所有元素
-    // 加会把 position:fixed 的浮层（用户二级菜单、弹窗）拉回文档流，
-    // 菜单会直接掉到屏幕外面去。
-    var pos = '';
-    try { pos = getComputedStyle(el).position; } catch (_) {}
-    if (opts.glow || opts.refract) {
+    if (opts.refract) el.__lgGlass = makeGlass(el, opts);
+    else if (opts.glow) {
+      var pos = '';
+      try { pos = getComputedStyle(el).position; } catch (_) {}
       if (!pos || pos === 'static') el.classList.add('lg-glass');
-      else el.classList.add('lg-lit-host');   // 已经定位过了,只加隔离层
-    }
-    if (opts.press) el.classList.add('lg-pressable');
-    if (opts.glow) {
-      ensureGlow(el);
-      litTargets.push({ el: el });
-    }
-    if (opts.press) bindPress(el);
-    if (opts.refract) {
-      el.__lgRefract = makeGlass(el, opts);
+      el.__lgRing = makeRing(el);
+      bindLight(el.__lgRing, el);
     }
   }
 
-  function bindPress(el) {
-    el.addEventListener('pointerdown', function (e) {
-      if (pressed) return;
-      pressed = el;
-      el.classList.add('lg-pressed');
-      var r = el.getBoundingClientRect();
-      // 局部鼓包：按下的位置把「变形中心」推向指针的反侧。
-      var dx = (e.clientX - (r.left + r.width / 2)) / Math.max(1, r.width / 2);
-      var dy = (e.clientY - (r.top + r.height / 2)) / Math.max(1, r.height / 2);
-      var deg = Math.atan2(dy, dx) * 180 / Math.PI;
-      var k = 0.06 + Math.min(0.05, Math.hypot(dx, dy) * 0.04);
-      applyJelly(el, k, deg, 0, 0);
-      if (opts_glow(el)) {
-        volumeLight(r.left + r.width / 2, r.top + r.height / 2, r.width * 1.15);
-        illuminate(el, e.clientX, e.clientY, 460, 0.9);
+  var _uid = 0;
+
+  function setTheme(theme) {
+    var off = theme === '550c';
+    document.body.classList.toggle('lg-liquid', !off);
+    registry.forEach(function (rec) {
+      if (off) {
+        rec.el.style.backdropFilter = rec.prev || '';
+        rec.el.style.webkitBackdropFilter = rec.prev || '';
+        if (rec.ring) rec.ring.style.display = 'none';
+      } else {
+        var bf = 'url(#' + rec.fid + '_filter)';
+        bf += ' blur(' + PARAMS.blur + 'px) saturate(' + PARAMS.saturation + '%)';
+        rec.el.style.backdropFilter = bf;
+        rec.el.style.webkitBackdropFilter = bf;
+        if (rec.ring) rec.ring.style.display = '';
       }
     });
-    var release = function () {
-      if (pressed !== el) return;
-      pressed = null;
-      el.classList.remove('lg-pressed');
-      jellyBack(el, 0.08, 520);
-      clearLit(el);
-    };
-    window.addEventListener('pointerup', release);
-    window.addEventListener('pointercancel', release);
-  }
-  // 体积光是纯装饰 —— 在低性能设备上关掉
-  function opts_glow() {
-    try { return !window.matchMedia('(prefers-reduced-motion: reduce)').matches; }
-    catch (_) { return true; }
   }
 
-  /* ============================================================
-     5. 对外接口
-     ============================================================ */
-  var API = {
+  window.LiquidGlass = {
     register: register,
-    makeGlass: makeGlass,
-    illuminate: illuminate,
-    volumeLight: volumeLight,
+    setTheme: setTheme,
     supportsRefraction: SUPPORTS_REFRACTION,
-    /** 扫一遍容器里的玻璃元素并注册 */
+    markDirty: function () { /* 贴图是静态的，改尺寸不用重算 */ },
     scan: function (root) {
       root = root || document;
       var nodes = root.querySelectorAll('[data-glass], [data-glass-press]');
       for (var i = 0; i < nodes.length; i++) {
-        var el = nodes[i];
-        register(el, {
-          glow: el.hasAttribute('data-glass-glow'),
-          press: el.hasAttribute('data-glass-press') || el.hasAttribute('data-glass'),
-          refract: el.hasAttribute('data-glass-refract')
+        register(nodes[i], {
+          glow: nodes[i].hasAttribute('data-glass-glow'),
+          press: nodes[i].hasAttribute('data-glass-press') || nodes[i].hasAttribute('data-glass'),
+          refract: nodes[i].hasAttribute('data-glass-refract')
         });
       }
       return nodes.length;
-      return nodes.length;
-    },
-    /**
-     * 只有 550C 终端主题要关掉液态玻璃 —— 终端是硬边、等宽、
-     * 琥珀色的另一种语言,跟玻璃混在一起会脏。
-     * 浅色和深色都保留：深色背景上的玻璃反而更有质感。
-     */
-    setTheme: function (theme) {
-      document.body.classList.toggle('lg-liquid', theme !== '550c');
     }
   };
-
-  window.LiquidGlass = API;
 })();
