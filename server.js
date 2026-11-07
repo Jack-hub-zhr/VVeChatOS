@@ -14,6 +14,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const Database = require('better-sqlite3');
 const { Server: SocketIOServer } = require('socket.io');
+const { createFirewall } = require('./firewall.js');
 
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'vvechat-dev-secret-change-me';
@@ -207,7 +208,15 @@ ensureColumn('messages', 'is_deleted', "INTEGER NOT NULL DEFAULT 0");
 function now() { return Date.now(); }
 // The assistant's account name. Declared up here because userPublic()
 // needs it and userPublic() is defined above the seed block.
-const ASSISTANT_NAME = 'Qwen';
+// 群里它叫 Jacky Bot(助手页面还是 Qwen —— 那是另一套语境)。
+const ASSISTANT_NAME = 'Jacky Bot';
+// 老库里那条 username='Qwen' 的账号就地改名,历史消息里的名字也跟着变。
+// 撞名(已经有人叫 Jacky Bot)就让老名字留着,不影响别的功能。
+try {
+  db.prepare("UPDATE users SET username = 'Jacky Bot' WHERE username = 'Qwen'").run();
+} catch (e) {
+  console.warn('[VVeChat] assistant rename skipped:', e.message);
+}
 function userPublic(u) {
   return {
     id: u.id,
@@ -347,22 +356,32 @@ try {
 }
 
 // Is this message calling the assistant by name?
+// 群里它叫 Jacky Bot,老的 @Qwen 也还认。
 function mentionsAssistant(text) {
-  return /(^|[^\w@])@(qwen|助手|千问)(?![a-z0-9_])/i.test(String(text || ''));
+  return /(^|[^\w@])@(qwen|jacky[\s]?bot|助手|千问)(?![a-z0-9_])/i.test(String(text || ''));
 }
 
 // Ask the model, with the group chat as the context.
-async function assistantAnswer(question, context) {
+async function assistantAnswer(question, context, kind) {
   const catalog = aiModelCatalog().filter((m) => m.ready);
   if (!catalog.length) return null;
 
-  const system = [
-    '你叫 Qwen，是这个群聊里的一位成员。大家聊天时会喊你一声，你就把话接过来。',
-    '请像真人一样回话：口语、简短、直接，最多两三句话。',
-    '不要出现「作为一个AI」「作为一个助手」这类说法，也不要罗列要点或加小标题。',
-    '如果上下文里找不到答案，就直接说没看到相关信息，别编。',
-    '默认用简体中文。'
-  ].join('\n');
+  const system = kind === 'chime'
+    ? [
+      '你叫 Jacky Bot，是这个群聊里的一位成员。',
+      '此刻没有人问你话 —— 你只是坐在群里，听到大家聊得热闹，想接一两句。',
+      '接话要自然：一两句就够，绝不超过三句；不要提问、不要罗列要点、不要加小标题。',
+      '内容要对得上刚才大家在聊的事，别凭空另开一个话题。',
+      '不要出现「作为一个AI」「作为一个助手」这类说法。',
+      '默认用简体中文。'
+    ].join('\n')
+    : [
+      '你叫 Jacky Bot，是这个群聊里的一位成员。大家聊天时会喊你一声，你就把话接过来。',
+      '请像真人一样回话：口语、简短、直接，最多两三句话。',
+      '不要出现「作为一个AI」「作为一个助手」这类说法，也不要罗列要点或加小标题。',
+      '如果上下文里找不到答案，就直接说没看到相关信息，别编。',
+      '默认用简体中文。'
+    ].join('\n');
 
   const messages = [{ role: 'system', content: system }];
   for (const c of context) {
@@ -449,6 +468,68 @@ function groupContext(groupId, limit) {
     role: r.sender_id === assistantId ? 'assistant' : 'user',
     content: (r.username || '某人') + '：' + String(r.content || '')
   }));
+}
+
+// ============================================================
+// 助手自主发言 —— 24 小时待命的那位
+// ------------------------------------------------------------
+// 每 2 分钟巡一圈:看看哪些群正在热闹(最近有人说话),
+// 有的话就自己接一两句,像一直坐在群里的那个人。
+// 「不定时」= 每轮按概率决定说不说,不会每两分钟准点冒泡。
+// 设 AUTO_CHIME=off 可以整个关掉。
+// ============================================================
+const AUTO_CHIME_ON = String(process.env.AUTO_CHIME || '').toLowerCase() !== 'off';
+const AUTO_CHIME_INTERVAL = 2 * 60 * 1000;   // 2 分钟一圈
+const AUTO_CHIME_PROB = 0.35;               // 每轮参与的随机概率
+const AUTO_CHIME_ACTIVE = 10 * 60 * 1000;   // 10 分钟内有人说话才算「有热闹」
+const AUTO_CHIME_MIN_HUMAN = 3;             // 至少这么多条真人消息才接话
+const AUTO_CHIME_COOLDOWN = 20 * 60 * 1000; // 同一个群 20 分钟只接一次
+
+let _chimeBusy = false;
+async function assistantAutoChime() {
+  if (_chimeBusy || !assistantId) return;
+  _chimeBusy = true;
+  try {
+    const groups = db.prepare(
+      'SELECT group_id FROM group_members WHERE user_id = ?'
+    ).all(assistantId);
+    const since = now() - AUTO_CHIME_ACTIVE;
+    for (const g of groups) {
+      const gid = String(g.group_id);
+      const recent = db.prepare(`
+        SELECT sender_id FROM messages
+        WHERE conv_type = 'group' AND conv_id = ? AND is_deleted = 0 AND type = 'text' AND created_at >= ?
+      `).all(gid, since);
+      const human = recent.filter((r) => r.sender_id !== assistantId);
+      if (human.length < AUTO_CHIME_MIN_HUMAN) continue;      // 群里没人说话
+      const mine = db.prepare(`
+        SELECT created_at FROM messages
+        WHERE conv_type = 'group' AND conv_id = ? AND sender_id = ? AND is_deleted = 0
+        ORDER BY id DESC LIMIT 1
+      `).get(gid, assistantId);
+      if (mine && now() - mine.created_at < AUTO_CHIME_COOLDOWN) continue;  // 刚说过
+      if (Math.random() > AUTO_CHIME_PROB) continue;           // 不定时
+      const ctx = groupContext(gid, 20);
+      if (!ctx.length) continue;
+      const answer = await assistantAnswer('', ctx, 'chime');
+      if (!answer) continue;
+      const info = db.prepare(
+        'INSERT INTO messages (conv_type, conv_id, sender_id, content, type, meta, reply_to, is_deleted, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)'
+      ).run('group', gid, assistantId, answer.slice(0, 4000), 'text', null, null, now());
+      const row = db.prepare('SELECT * FROM messages WHERE id = ?').get(info.lastInsertRowid);
+      broadcastMessage(buildMessage({ ...row, sender_username: ASSISTANT_NAME }), 'group', g.group_id, assistantId);
+      console.log('[VVeChat] Jacky Bot joined the talk in group', g.group_id);
+      return;   // 一轮只接一句,别刷屏
+    }
+  } catch (e) {
+    console.warn('[VVeChat] auto chime failed:', e.message);
+  } finally {
+    _chimeBusy = false;
+  }
+}
+if (AUTO_CHIME_ON) {
+  setInterval(assistantAutoChime, AUTO_CHIME_INTERVAL).unref();
+  setTimeout(assistantAutoChime, 30 * 1000).unref();   // 启动半分钟后先看一眼
 }
 
 
@@ -569,6 +650,8 @@ function rateLimit(kind) {
 
 // Called by the login/register handlers when authentication fails.
 function noteAuthFailure(req) {
+  // 登录爆破:连续失败太多次,防火墙直接把这个 IP 封掉。
+  try { firewall.noteAuthFailure(req); } catch (_) {}
   const ip = clientIp(req);
   const b = RATE_BUCKETS.get(ip);
   if (!b) return;
@@ -579,6 +662,29 @@ setInterval(() => {
   const cutoff = Date.now() - RATE_LIMIT.windowMs * 2;
   for (const [ip, b] of RATE_BUCKETS) if (b.start < cutoff) RATE_BUCKETS.delete(ip);
 }, 60 * 1000).unref();
+
+// ---------- VVeChat 防火墙 ----------
+// 挡在所有路由前面:路径穿越、敏感文件探测、注入载荷、扫描器、
+// 登录爆破……每一次拦截都记一条事件(带来源 IP),控制台能看到。
+const firewall = createFirewall({
+  db,
+  getIp: clientIp,
+  log: (...a) => console.warn('[VVeChat]', ...a)
+});
+app.use(firewall.middleware);
+
+// 24 小时待命的安全 agent:每 5 分钟自检一遍防火墙还活着没,
+// 有异常就写进事件表 —— 控制台那边立刻能看到。
+const firewallAgentGet = async (url) => {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 8000);
+  try {
+    const r = await fetch(url, { signal: ctrl.signal, headers: { 'User-Agent': 'VVeChat-SelfCheck' } });
+    try { await r.text(); } catch (_) {}
+    return { status: r.status };
+  } finally { clearTimeout(timer); }
+};
+firewall.startAgent(firewallAgentGet, 'http://127.0.0.1:' + PORT);
 
 app.get('/api/health', (_, res) => res.json({ ok: true, name: 'VVeChat' }));
 
@@ -624,9 +730,10 @@ app.post('/api/admin/wipe', rateLimit('write'), authRequired, requireAdmin, (req
 // Full snapshot: every user, every 1:1 conversation with its messages.
 app.get('/api/control/snapshot', authRequired, requireAdmin, (req, res) => {
   const users = db.prepare(`
-    SELECT id, username, avatar, avatar_color, bio, created_at
+    SELECT id, username, avatar, avatar_color, bio, created_at,
+           CASE WHEN username = ? THEN 1 ELSE 0 END AS is_assistant
     FROM users ORDER BY id ASC
-  `).all();
+  `).all(ASSISTANT_NAME);
 
   // 1:1 conversations: friend pairs + every user-to-user conversation
   const convos = db.prepare(`
@@ -732,6 +839,32 @@ app.post('/api/control/format-all', rateLimit('write'), authRequired, requireAdm
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// ============================================================
+// 防火墙 —— 控制台的安全中心
+//   GET  /api/security/overview  概览 + 最近的事件(带攻击 IP)
+//   POST /api/security/unblock   解封一个 IP
+//   POST /api/security/scan      立刻跑一次安全 agent 自检
+// ============================================================
+app.get('/api/security/overview', authRequired, requireAdmin, (req, res) => {
+  const limit = Math.min(Number(req.query.limit) || 60, 200);
+  res.json({
+    ok: true,
+    stats: firewall.snapshot(),
+    events: firewall.listEvents(limit)
+  });
+});
+app.post('/api/security/unblock', rateLimit('write'), authRequired, requireAdmin, (req, res) => {
+  const ip = String((req.body || {}).ip || '').trim();
+  if (!ip) return res.status(400).json({ error: '缺少 ip' });
+  const had = firewall.unblock(ip);
+  firewall.record({ ip, kind: 'manual_unblock', severity: 'low', action: 'logged', detail: '管理员手动解封' });
+  res.json({ ok: true, removed: had });
+});
+app.post('/api/security/scan', rateLimit('write'), authRequired, requireAdmin, async (req, res) => {
+  await firewall.runAgentCheck(firewallAgentGet, 'http://127.0.0.1:' + PORT);
+  res.json({ ok: true, stats: firewall.snapshot() });
 });
 
 app.get('/api/admin/stats', authRequired, requireAdmin, (req, res) => {
@@ -2684,7 +2817,7 @@ app.post('/api/messages', rateLimit('write'), authRequired, (req, res) => {
   if (conv_type === 'group' && msgType === 'text' && aiInGroups && mentionsAssistant(content)) {
     const gid = normalizedConvId;
     const question = String(content)
-      .replace(/@(qwen|助手|千问)/gi, '')
+      .replace(/@(qwen|jacky[\s]?bot|助手|千问)/gi, '')
       .replace(/^\s*[,，:：]\s*/, '')
       .trim() || String(content);
     const context = groupContext(gid, 24);

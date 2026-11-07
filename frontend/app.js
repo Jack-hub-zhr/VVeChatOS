@@ -217,7 +217,7 @@
       pref_12h: '12 小时',
       pref_assistant: '助手',
       pref_ai_groups: '群里可以叫助手',
-      pref_ai_groups_desc: '在群聊里 @Qwen，它会读完上下文再回答',
+      pref_ai_groups_desc: '在群聊里 @Jacky Bot，它会读完上下文再回答',
       pref_ai_groups_always: '始终开启',
       pref_lang: '语言',
       pref_lang_desc: '界面语言',
@@ -229,7 +229,7 @@
       list_sessions: '会话',
       list_empty: '还没有群聊或好友',
       list_search_ph: '搜索好友 / 群聊 / 用户',
-      hint_assistant_call: '点击我 让Qwen也一起来聊',
+      hint_assistant_call: '点击我 让 Jacky Bot 也一起来聊',
       ai_new_chat: '新对话',
       ai_welcome: '有什么可以帮你？',
       ai_input_ph: '给 Qwen 发消息…（Enter 发送，Shift+Enter 换行）',
@@ -288,7 +288,7 @@
       removed_member: '已移出 {0}',
       group_name: '群名称',
       mention_pick_hint: '选择要 @ 的群成员',
-      mention_preview_text: '这条消息会 @ 他',
+      mention_preview_text: '这条消息会 @ 他/她',
       mention_members_title: '@ 群成员',
       mention_only_group: '只有群聊才能 @ 人',
       view_profile: '查看资料',
@@ -609,7 +609,7 @@
       pref_12h: '12-hour',
       pref_assistant: 'Assistant',
       pref_ai_groups: 'Let the assistant join groups',
-      pref_ai_groups_desc: '@Qwen in a group reads the conversation, then answers',
+      pref_ai_groups_desc: '@Jacky Bot in a group reads the conversation, then answers',
       pref_ai_groups_always: 'Always on',
       pref_lang: 'Language',
       pref_lang_desc: 'Interface language',
@@ -621,7 +621,7 @@
       list_sessions: 'Conversations',
       list_empty: 'No groups or friends yet',
       list_search_ph: 'Search friends / groups / people',
-      hint_assistant_call: 'Tap me — let Qwen join the chat',
+      hint_assistant_call: 'Tap me — let Jacky Bot join the chat',
       ai_new_chat: 'New chat',
       ai_welcome: 'What can I help with?',
       ai_input_ph: 'Message Qwen… (Enter to send, Shift+Enter for a newline)',
@@ -680,7 +680,7 @@
       removed_member: 'Removed {0}',
       group_name: 'Group name',
       mention_pick_hint: 'Pick a group member to @',
-      mention_preview_text: 'This message will @ them',
+      mention_preview_text: 'This message will @ him/her',
       mention_members_title: '@ Members',
       mention_only_group: 'You can only @ people in a group chat',
       view_profile: 'View profile',
@@ -972,8 +972,12 @@
   // 不列进成员名册、不计入人数;可它出现的地方(会话列表、聊天气泡、
   // @ 选择器)要用跟侧边栏「助手」按钮一样的发光圆环当头像。
   const ASSISTANT_NAME = 'Qwen';
+  // 群里它叫 Jacky Bot(助手页面还是 Qwen —— 那是另一套语境)。
+  // 两个名字都要认,头像上的发光圆环才不会掉。
+  const ASSISTANT_ALIASES = ['qwen', 'jacky bot'];
   function isAssistant(name) {
-    return String(name || '').trim().toLowerCase() === ASSISTANT_NAME.toLowerCase();
+    const n = String(name || '').trim().toLowerCase();
+    return n === ASSISTANT_NAME.toLowerCase() || ASSISTANT_ALIASES.indexOf(n) >= 0;
   }
   // 发光圆环:白晕 + 细白环 + 主色环。滤镜 #qwenGlow 定义在 index.html
   // 里那一处隐藏的 <svg>,所以随便内联多少次都不会撞 id。
@@ -1271,7 +1275,13 @@
     // 会互相照亮的玻璃面板 —— 现在开真折射。
     // 以前这些面板只有「受光 + 磨砂」,折射被那一层 backdrop blur 冲掉了,
     // 看上去就是一块磨砂板;把模糊关掉之后,边缘的折射才看得出来。
-    const panels = ['.topbar', '.list-pane', '.side-nav', '.mobile-tabbar', '.rail-pane'];
+    // 玻璃球被拉伸成每个面板自己的宽高:宽的(输入条、弹窗)两端像透镜,
+    // 高的(聊天列)上下两端鼓出来 —— 折射环跟着这条弧度走。
+    const panels = [
+      '.topbar', '.list-pane', '.side-nav', '.mobile-tabbar', '.rail-pane',
+      '.right-pane', '.chat-composer', '.ai-composer',
+      '.modal-card', '.theme-menu', '.emoji-picker', '.mention-menu', '.plus-action'
+    ];
     for (const sel of panels) {
       document.querySelectorAll(sel).forEach(el => LG.register(el, { glow: true, refract: true }));
     }
@@ -2278,16 +2288,65 @@
       if (dateStr !== lastDate) {
         const sep = document.createElement('div'); sep.className='msg-system'; sep.textContent=dateStr; wrap.appendChild(sep); lastDate=dateStr;
       }
-      wrap.appendChild(renderMessageRow(m));
+      // 历史消息整页重建 —— 不播入场动画(否则每次刷新全屏跳一遍)。
+      wrap.appendChild(renderMessageRow(m, false));
     }
   }
-  function renderMessageRow(m) {
+
+  // 增量追加一条消息:新到的消息才播「从下到上」的入场动画,
+  // 历史消息保持原样 —— 整页重建会把动画重播一遍,也会让滚动位置乱跳。
+  function appendMessageRow(m, animate) {
+    const wrap = $('#chat-messages');
+    if (!wrap) return null;
+    const d = new Date(m.created_at);
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const seps = wrap.querySelectorAll('.msg-system');
+    const lastDate = seps.length ? seps[seps.length - 1].textContent : '';
+    if (dateStr !== lastDate) {
+      const sep = document.createElement('div');
+      sep.className = 'msg-system';
+      sep.textContent = dateStr;
+      wrap.appendChild(sep);
+    }
+    const row = renderMessageRow(m, !!animate);
+    wrap.appendChild(row);
+    return row;
+  }
+
+  // 后台静默同步:重新拉一次当前对话的消息,把缺的补上。
+  // 只追加、不重建,所以用户看不到「刷新」的任何痕迹 ——
+  // 没有白屏、没有滚动跳动、没有历史的动画重播。
+  let _syncTimer = null;
+  function softSyncMessages() {
+    if (!state.currentChat) return;
+    const { type, id } = state.currentChat;
+    if (_syncTimer) clearTimeout(_syncTimer);
+    _syncTimer = setTimeout(async () => {
+      _syncTimer = null;
+      if (!state.currentChat || state.currentChat.type !== type || String(state.currentChat.id) !== String(id)) return;
+      try {
+        const key = convKey(type, id);
+        const r = await api(`/messages?conv_type=${type}&conv_id=${encodeURIComponent(id)}&limit=60`);
+        const list = (r && r.messages) || [];
+        if (!list.length) return;
+        const known = new Set((state.messagesByConv[key] || []).map(x => x.id));
+        const fresh = list.filter(m => !known.has(m.id));
+        // 先补齐数据,再上屏 —— 顺序对了,动画才从下往上依次弹。
+        state.messagesByConv[key] = list.concat((state.messagesByConv[key] || []).filter(m => !known.has(m.id)));
+        for (const m of fresh) appendMessageRow(m, true);
+        if (fresh.length) scrollBottom();
+      } catch (_) { /* 同步失败就静默跳过,下次再来 */ }
+    }, 260);
+  }
+  function renderMessageRow(m, animate) {
     const row = document.createElement('div');
     const mine = m.sender_id === state.user.id;
     const ctype = state.currentChat.type;
     // WeChat style: my messages on the right, others' on the left.
     // The receiver sees my message on THEIR left (mirror view).
     row.className = `msg-row ${mine ? 'me' : ''}`;
+    // 只有「刚到的新消息」才播入场动画。
+    if (animate) row.classList.add('msg-enter');
     row.dataset.msgId = m.id;
     // avatar — always show. Jack's avatar (sent OR received) gets the gold glow.
     const u = mine ? state.user : userInfo(m.sender_id, m);
@@ -2422,6 +2481,8 @@
         </svg>
       </button>`;
     document.body.appendChild(bar);
+    // 消息操作条也是一块玻璃 —— 球被拉成它这个扁扁的宽条。
+    applyLiquidGlassToCard(bar);
     const rect = rowEl.getBoundingClientRect();
     const barWidth = bar.offsetWidth || 320;
     const left = rect.left + rect.width / 2 - barWidth / 2;
@@ -2617,7 +2678,12 @@
       if (!msg) return;
       const arr = state.messagesByConv[key] || (state.messagesByConv[key] = []);
       if (!arr.find(x => x.id === msg.id)) arr.push(msg);
-      renderMessages(); scrollBottom();
+      // 自己发的消息也要有「从下往上」的入场动画。
+      // socket 可能先到(那时已经画过了),所以先查 DOM 再画,别画两次。
+      if (!document.querySelector(`#chat-messages .msg-row[data-msg-id="${msg.id}"]`)) {
+        appendMessageRow(msg, true);
+      }
+      scrollBottom();
       refreshConversations();
     };
 
@@ -3287,13 +3353,25 @@
       toast(lang === 'en' ? `Group “${name}” was disbanded` : `群「${name}」已解散`);
     });
   }
+  // 当前打开的对话是不是就是它?
+  // 注意:服务端发来的群 conv_id 是字符串,currentChat.id 是数字 ——
+  // 用 === 比较永远不相等,结果助手(和群友)的回复都落进了「不在当前对话」
+  // 的分支:消息进了数组却没上屏,页面上看不到。
+  function isCurrentConv(type, id) {
+    const ct = state.currentChat;
+    if (!ct || ct.type !== type) return false;
+    return String(ct.id) === String(id);
+  }
+
   function onSocketMessage(msg) {
     const isMine = msg.sender_id === state.user.id;
     const peerId = currentPeerId(msg);
     const key = convKey(msg.conv_type, msg.conv_type==='user' ? peerId : msg.conv_id);
     const arr = state.messagesByConv[key] || [];
-    if (!arr.find(x => x.id === msg.id)) arr.push(msg);
+    const isNew = !arr.find(x => x.id === msg.id);
+    if (isNew) arr.push(msg);
     state.messagesByConv[key] = arr;
+    const inChat = isCurrentConv(msg.conv_type, msg.conv_type === 'user' ? peerId : msg.conv_id);
     if (!isMine) {
       // They just spoke — clear their typing bubble.
       if (state.typingUsers.has(msg.sender_id)) {
@@ -3302,16 +3380,24 @@
         state.typingUsers.delete(msg.sender_id);
         renderTyping();
       }
-      const inChat = state.currentChat && state.currentChat.type===msg.conv_type &&
-        ((msg.conv_type==='user' && state.currentChat.id===peerId) ||
-         (msg.conv_type==='group' && state.currentChat.id===msg.conv_id));
-      if (inChat) { renderMessages(); scrollBottom(); sendReadReceipt(msg); }
-      else {
+      if (inChat) {
+        // 增量追加 —— 整页重建会把历史的入场动画重播一遍,滚动也会跳。
+        if (isNew) appendMessageRow(msg, true);
+        scrollBottom(); sendReadReceipt(msg);
+        // 助手(Jacky Bot)回完话以后,后台再静默同步一次 ——
+        // 万一 socket 漏了某条,这里悄悄补上,用户看不到任何刷新痕迹。
+        if (isAssistant(msg.sender_username)) softSyncMessages();
+      } else {
         refreshConversations();
-        // 这条消息用户还没看到 —— 弹个小窗提示一下，可以直接快速回复。
-        showMessagePopup(msg, peerId);
+        // 这条消息用户还没看到 —— 顶上滑下一条横幅,点一下可以快速回复。
+        showMessageBanner(msg, peerId);
       }
     } else {
+      // 自己发的:socket 那边可能先到,这里补上(已经有了就不重复画)。
+      if (inChat && isNew && !document.querySelector(`#chat-messages .msg-row[data-msg-id="${msg.id}"]`)) {
+        appendMessageRow(msg, true);
+        scrollBottom();
+      }
       refreshConversations();
     }
   }
@@ -3382,13 +3468,11 @@
     requestAnimationFrame(() => { log.scrollTop = log.scrollHeight; });
   }
 
-  async function showMessagePopup(msg, peerId) {
-    const box = $('#msg-popup');
-    if (!box) return;
+  // 收到的这条消息是谁、在哪个对话 —— 横幅和快速回复窗共用。
+  function describeIncoming(msg, peerId) {
     const convType = msg.conv_type;
     const convId = convType === 'user' ? peerId : msg.conv_id;
     const isGroup = convType === 'group';
-
     // 标题：私聊是对方，群聊是群名
     let title = msg.sender_username || '';
     let avatarText = initials(title);
@@ -3402,6 +3486,71 @@
       const u = (state.friends || []).find(x => Number(x.id) === Number(peerId));
       if (u) { avatarText = initials(u.username); avatarBg = avatarStyle(u); }
     }
+    return { convType, convId, title, avatarText, avatarBg, isGroup };
+  }
+
+  // ============================================================
+  // 新消息横幅 —— 手机通知那样从顶上滑下来
+  // ------------------------------------------------------------
+  // 收到「当前对话之外」的新消息时,顶部滑下一条横条:
+  // 头像 + 谁发的 + 消息摘要。点一下弹出快速回复窗。
+  // 5 秒没人理就自己滑回去。
+  // ============================================================
+  const MSG_BANNER_LIFE = 5000;
+  let _msgBannerTimer = null;
+  let _msgBannerMsg = null;
+
+  function closeMessageBanner() {
+    const b = $('#msg-banner');
+    if (b) {
+      b.classList.remove('show');
+      setTimeout(() => { if (!b.classList.contains('show')) b.classList.add('hidden'); }, 300);
+    }
+    if (_msgBannerTimer) { clearTimeout(_msgBannerTimer); _msgBannerTimer = null; }
+    _msgBannerMsg = null;
+  }
+
+  function showMessageBanner(msg, peerId) {
+    const box = $('#msg-banner');
+    if (!box) return;
+    const d = describeIncoming(msg, peerId);
+    _msgBannerMsg = { msg, peerId };
+    const av = $('#msg-banner-avatar');
+    if (av) { av.textContent = d.avatarText; av.style.cssText = d.avatarBg; }
+    const ti = $('#msg-banner-title');
+    if (ti) ti.textContent = d.title;
+    const bo = $('#msg-banner-body');
+    if (bo) bo.textContent = msg.type === 'image' ? t('type_image') : String(msg.content || '').replace(/\s+/g, ' ').slice(0, 60);
+    box.classList.remove('hidden');
+    // 下一帧再加 show,才有从顶上滑下来的动画。
+    requestAnimationFrame(() => box.classList.add('show'));
+    if (_msgBannerTimer) clearTimeout(_msgBannerTimer);
+    _msgBannerTimer = setTimeout(closeMessageBanner, MSG_BANNER_LIFE);
+  }
+
+  function bindMessageBanner() {
+    const box = $('#msg-banner');
+    if (!box || box.__bound) return;
+    box.__bound = true;
+    box.addEventListener('click', (e) => {
+      if (e.target.closest('#msg-banner-close')) {
+        e.stopPropagation();
+        closeMessageBanner();
+        return;
+      }
+      const d = _msgBannerMsg;
+      if (!d) return;
+      closeMessageBanner();
+      // 点横幅 → 弹出快速回复窗(带输入框和最近几条)。
+      showMessagePopup(d.msg, d.peerId);
+    });
+  }
+
+  async function showMessagePopup(msg, peerId) {
+    const box = $('#msg-popup');
+    if (!box) return;
+    const d = describeIncoming(msg, peerId);
+    const { convType, convId, title, avatarText, avatarBg, isGroup } = d;
 
     const from = $('#msg-popup-from'); if (from) from.textContent = title;
     const sub = $('#msg-popup-sub');
@@ -4996,6 +5145,7 @@
     ensureModalCloseBound();
     ensurePlusActionsBound();
     bindMessagePopup();
+    bindMessageBanner();
     applyLiquidGlass();
     ensureWipeBound();
     ensureBellBound();
@@ -5100,6 +5250,13 @@
       if (!btn) return;
       e.preventDefault(); e.stopPropagation();
       const act = btn.dataset.action;
+      // 「发现」页里的入口 = 顶栏放大镜(搜索 / 添加)的 1:1 复刻:
+      // 点它弹出的就是同一个面板,后面每一步都和放大镜完全一样。
+      // 发现页自己那条「直达建群表单」的路已经删掉了。
+      if (act === 'plus') {
+        openModal('modal-plus');
+        return;
+      }
       closeModal('modal-plus');
       if (act === 'group') {
         // 「搜索 / 添加」里也能直接建群

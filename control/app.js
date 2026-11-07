@@ -134,6 +134,106 @@
     } catch (e) {
       toast('加载失败：' + e.message);
     }
+    await loadSecurity();
+  }
+
+  // ---------------- 防火墙 / 安全中心 ----------------
+  async function loadSecurity() {
+    const box = $('#fw-stats');
+    try {
+      const d = await api('/api/security/overview?limit=60');
+      state.security = d;
+      renderSecurity(d);
+    } catch (e) {
+      if (box) box.innerHTML = '<div class="empty-note">安全数据读取失败：' + esc(e.message) + '</div>';
+    }
+  }
+
+  function renderSecurity(d) {
+    const s = d.stats || {};
+    const agent = s.agent || {};
+    const badge = $('#fw-badge');
+    if (badge) {
+      badge.textContent = s.enabled ? '运行中' : '已关闭';
+      badge.style.color = s.enabled ? '' : 'var(--red)';
+    }
+    const st = $('#fw-state');
+    const stt = $('#fw-state-text');
+    if (st && stt) {
+      const ok = s.enabled && agent.lastCheckOk !== false;
+      st.classList.toggle('bad', !ok);
+      stt.textContent = ok ? '防火墙运行中' : '防火墙异常';
+    }
+    const agentEl = $('#fw-agent');
+    if (agentEl) {
+      agentEl.textContent = 'agent · 自检 ' + agent.checks + ' 次 · 失败 ' + agent.failures +
+        ' 次 · 上次 ' + (agent.lastCheckAt ? fmtTime(agent.lastCheckAt) : '—') +
+        (agent.lastCheckOk === false ? ' · ⚠ 自检未通过' : ' · 正常');
+    }
+
+    const box = $('#fw-stats');
+    if (!box) return;
+    box.innerHTML = '';
+    const stat = (k, v, cls) => {
+      const n = el('div', { class: 'stat' });
+      n.innerHTML = '<div class="k">' + esc(k) + '</div><div class="v' + (cls ? ' ' + cls : '') + '">' + esc(String(v)) + '</div>';
+      return n;
+    };
+    box.appendChild(stat('已扫描请求', s.scanned || 0));
+    box.appendChild(stat('已拦截', s.blocked || 0, (s.blocked || 0) > 0 ? 'warn' : ''));
+    box.appendChild(stat('24 小时事件', s.events24h || 0, (s.events24h || 0) > 0 ? 'warn' : ''));
+    box.appendChild(stat('当前封禁 IP', (s.blockedIps || []).length, (s.blockedIps || []).length ? 'bad' : ''));
+
+    // 封禁名单
+    const ips = s.blockedIps || [];
+    if (ips.length) {
+      const wrap = el('div', { class: 'events' });
+      wrap.appendChild(el('h3', { class: 'sub-title' }, '当前封禁的 IP'));
+      for (const b of ips) {
+        const row = el('div', { class: 'event' });
+        row.innerHTML =
+          '<span class="t">' + (b.until ? fmtTime(b.until) : '—') + '</span>' +
+          '<span class="ip">' + esc(b.ip) + '</span>' +
+          '<span class="d">' + esc(b.reason || '') + ' · ' + (b.count || 1) + ' 次</span>' +
+          '<span class="a blocked">封禁中</span>';
+        const btn = el('button', { class: 'unblock' }, '解封');
+        btn.addEventListener('click', async () => {
+          btn.disabled = true;
+          try {
+            await api('/api/security/unblock', { method: 'POST', body: { ip: b.ip } });
+            toast('已解封 ' + b.ip);
+            await loadSecurity();
+          } catch (e) {
+            toast('解封失败：' + e.message);
+            btn.disabled = false;
+          }
+        });
+        row.appendChild(btn);
+        wrap.appendChild(row);
+      }
+      box.appendChild(wrap);
+    }
+
+    // 最近事件
+    const ev = $('#fw-events');
+    if (!ev) return;
+    ev.innerHTML = '';
+    const events = d.events || [];
+    if (!events.length) {
+      ev.appendChild(el('div', { class: 'empty-note' }, '暂无安全事件 —— 一切正常'));
+      return;
+    }
+    for (const e of events) {
+      const row = el('div', { class: 'event' });
+      row.innerHTML =
+        '<span class="t">' + fmtTime(e.ts) + '</span>' +
+        '<span class="ip">' + esc(e.ip) + '</span>' +
+        '<span class="k">' + esc(e.kind) + '</span>' +
+        '<span class="d">' + esc(e.detail || '') + '</span>' +
+        '<span class="a ' + (e.action === 'blocked' ? 'blocked' : 'logged') + '">' +
+        (e.action === 'blocked' ? '已拦截' : '已记录') + '</span>';
+      ev.appendChild(row);
+    }
   }
 
   function render(d) {
@@ -151,7 +251,9 @@
           <div class="u-name">${esc(u.username)}${isJack ? ' <span class="jack-tag">管理员</span>' : ''}</div>
           <div class="u-sub">ID ${u.id} · 注册于 ${fmtTime(u.created_at)}${u.bio ? ' · ' + esc(u.bio) : ''}</div>
         </div>`;
-      if (!isJack) {
+      // 助手账号(Jacky Bot)是系统账号,不给注销按钮 ——
+      // 删了群里的机器人就没了。
+      if (!isJack && !u.is_assistant) {
         const kill = el('button', { class: 'kill', 'data-id': u.id }, '注销');
         kill.addEventListener('click', async () => {
           const ok = await askConfirm(
@@ -232,6 +334,20 @@
   // ---------------- actions ----------------
   $('#btn-refresh').addEventListener('click', load);
 
+  $('#btn-scan').addEventListener('click', async () => {
+    const btn = $('#btn-scan');
+    btn.disabled = true;
+    try {
+      await api('/api/security/scan', { method: 'POST', body: {} });
+      toast('自检完成');
+      await loadSecurity();
+    } catch (e) {
+      toast('自检失败：' + e.message);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
   $('#btn-format').addEventListener('click', async () => {
     const ok = await askConfirm(
       '格式化一切信息',
@@ -275,6 +391,7 @@
         render(probe);
         $('#stamp').textContent = '更新于 ' + fmtTime(probe.generated_at);
         setTopbarEnabled(true);
+        await loadSecurity();
       }
     } catch (_) {
       state.token = '';

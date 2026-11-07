@@ -1,276 +1,249 @@
-/* VVeChat 控制台 */
+/* ============================================================
+   VVeChat 控制台 —— 黑底 / 白色直角边框 / 白+绿 字体
+   ------------------------------------------------------------
+   这是一块「值班室」,不是展示页:
+   黑背景让白字和绿字都发亮,直角边框(没有圆角)让它像终端,
+   绿 = 正常 / 白 = 中性 / 红 = 要处理。
+   ============================================================ */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --ink: #1c2a3e;
-  --ink-2: #2c3e5c;
-  --muted: #6b7d99;
-  --accent: #4C6FFF;
-  --accent-grad: linear-gradient(135deg, #5B7CFF, #29C3D6);
-  --accent-soft: rgba(76, 111, 255, 0.13);
-  --danger: #ef4444;
-  --glass: rgba(255, 255, 255, 0.62);
-  --glass-soft: rgba(255, 255, 255, 0.34);
-  --border: rgba(255, 255, 255, 0.70);
-  --border-soft: rgba(210, 230, 250, 0.55);
-  --radius: 16px;
-
-  /* 分层玻璃:UI 层级越高,身后的背景越模糊(和主应用同一套规则)。
-     第一层(顶栏)不糊;玻璃卡第二层;确认弹窗第三层。 */
-  --blur-l2: 8px;
-  --blur-l3: 18px;
+  --bg: #000000;
+  --bg-2: #050806;
+  --line: rgba(255, 255, 255, 0.82);
+  --line-soft: rgba(255, 255, 255, 0.22);
+  --ink: #ffffff;
+  --ink-2: #c8d6cf;
+  --green: #22e37f;
+  --green-dim: #0f9d58;
+  --red: #ff5f56;
+  --amber: #ffc451;
+  --radius: 0;
 }
 
+html { background: var(--bg); }
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "PingFang SC", monospace;
   color: var(--ink);
+  background: var(--bg);
   min-height: 100vh;
   position: relative;
-  /* The body background must stay transparent — see the ::before note. */
-  background: transparent;
   padding-top: env(safe-area-inset-top);
 }
-html { background: #EBF2FA; }
-body.dark { background: transparent; }
-
-/* The wallpaper lives on a fixed ::before layer, exactly like the main app.
-   Two traps, both found the hard way:
-   1. `background-attachment: fixed` on the body is dropped by Chrome once
-      the body background is propagated to the canvas — only the flat
-      fallback colour is painted, the wallpaper silently never appears.
-   2. A body background (even a transparent-but-painted one) is painted
-      OVER a negative-z-index ::before, so the wallpaper would be hidden
-      again. The body therefore paints nothing; the ::before layer does
-      the whole background job. */
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  background: url('../assets/wall-light.jpg') center/cover no-repeat;
-  z-index: -1;
-  pointer-events: none;
-}
-/* Same trick for the darkening veil the main app uses to keep the
-   light wallpaper readable. */
-body::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background: rgba(0, 0, 0, 0);
-}
-body:not(.dark)::after { background: rgba(0, 0, 0, 0.16); }
-body.dark::after { background: rgba(0, 0, 0, 0); }
-
-body.dark::before { background-image: url('../assets/wall-dark.jpg'); }
-body.dark { color: #E2E8F0; }
-body.dark { --ink: #e2e8f0; --ink-2: #cbd5e1; --muted: #94a3b8; --glass: rgba(20,24,32,0.62); --glass-soft: rgba(20,24,32,0.34); --border: rgba(255,255,255,0.12); --border-soft: rgba(255,255,255,0.08); }
+body.dark { background: var(--bg); }
 
 .hidden { display: none !important; }
 button { cursor: pointer; font: inherit; color: inherit; }
 input { font: inherit; color: inherit; }
+a { color: var(--green); }
 
-/* topbar */
+/* ---------- topbar ---------- */
 .topbar {
   display: flex; align-items: center; justify-content: space-between;
   gap: 12px; padding: 12px 18px;
-  background: var(--glass);
-  border-bottom: 1px solid var(--border-soft);
-  /* 和主应用统一:不再糊。壁纸直接透过来,玻璃才像玻璃。 */
-  backdrop-filter: saturate(180%);
-  -webkit-backdrop-filter: saturate(180%);
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
   position: sticky; top: 0; z-index: 20;
 }
-.brand { display: inline-flex; align-items: baseline; gap: 6px; font-weight: 800; font-size: 20px; white-space: nowrap; }
+.brand { display: inline-flex; align-items: baseline; gap: 8px; font-weight: 800; font-size: 19px; white-space: nowrap; }
 .brand-name { color: var(--ink); }
 .brand-sub {
-  font-size: 11px; padding: 2px 8px; border-radius: 6px; white-space: nowrap;
-  background: var(--glass-soft); border: 1px solid var(--border-soft); color: var(--muted); font-weight: 600;
+  font-size: 11px; padding: 1px 7px; white-space: nowrap;
+  background: transparent; border: 1px solid var(--green); color: var(--green); font-weight: 700;
 }
-.topbar-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.stamp { font-size: 11px; color: var(--muted); }
+.topbar-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.stamp { font-size: 11px; color: var(--green); }
+
+.fw-state {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11px; color: var(--green);
+  border: 1px solid var(--line-soft); padding: 3px 9px;
+}
+.fw-state .dot { width: 7px; height: 7px; background: var(--green); display: inline-block; }
+.fw-state.bad { color: var(--red); border-color: var(--red); }
+.fw-state.bad .dot { background: var(--red); }
 
 .pill {
-  padding: 7px 14px; border-radius: 999px;
-  background: var(--glass); border: 1px solid var(--border);
-  font-size: 13px; font-weight: 600;
-  transition: transform .12s, background .15s;
+  padding: 7px 14px;
+  background: transparent; border: 1px solid var(--line);
+  font-size: 13px; font-weight: 700; color: var(--ink);
+  transition: background .15s, color .15s;
 }
-.pill:hover { transform: translateY(-1px); }
-.pill.danger { color: var(--danger); border-color: rgba(239,68,68,0.35); background: rgba(239,68,68,0.10); }
-.pill:disabled { opacity: .5; cursor: wait; }
+.pill:hover { background: var(--ink); color: var(--bg); }
+.pill.danger { color: var(--red); border-color: var(--red); }
+.pill.danger:hover { background: var(--red); color: var(--bg); }
+.pill:disabled { opacity: .45; cursor: wait; }
 
-/* gate */
-.gate { min-height: calc(100vh - 60px); display: flex; align-items: center; justify-content: center; padding: 24px; }
+/* ---------- gate ---------- */
+.gate { min-height: calc(100vh - 56px); display: flex; align-items: center; justify-content: center; padding: 24px; }
 .gate-card {
-  width: 100%; max-width: 380px; padding: 34px 30px;
-  background: var(--glass); border: 1px solid var(--border);
-  border-radius: 28px; box-shadow: 0 20px 60px rgba(30,80,150,0.20);
-  backdrop-filter: blur(var(--blur-l2)) saturate(180%);
-  -webkit-backdrop-filter: blur(var(--blur-l2)) saturate(180%);
+  width: 100%; max-width: 400px; padding: 30px 28px;
+  background: var(--bg-2); border: 1px solid var(--line);
   text-align: center;
 }
-.gate-card h1 { font-size: 24px; margin-bottom: 6px; }
-.gate-sub { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+.gate-card h1 { font-size: 22px; margin-bottom: 6px; }
+.gate-sub { color: var(--green); font-size: 12px; margin-bottom: 20px; }
 .gate-card input {
-  display: block; width: 100%; padding: 11px 14px; margin-bottom: 10px;
-  border-radius: 12px; border: 1px solid var(--border-soft);
-  background: rgba(255,255,255,0.72);
+  display: block; width: 100%; padding: 11px 13px; margin-bottom: 10px;
+  border: 1px solid var(--line-soft); border-radius: var(--radius);
+  background: #000; color: var(--ink);
 }
-body.dark .gate-card input { background: rgba(255,255,255,0.08); }
-.gate-msg { color: var(--danger); font-size: 13px; min-height: 20px; margin: 4px 0 8px; }
+.gate-card input:focus { outline: none; border-color: var(--green); }
+.gate-msg { color: var(--red); font-size: 13px; min-height: 20px; margin: 4px 0 8px; }
 
-/* buttons */
+/* ---------- buttons ---------- */
 .btn {
-  padding: 10px 18px; border-radius: 12px; border: 1px solid var(--border);
-  background: var(--glass); font-weight: 600;
+  padding: 10px 18px; border: 1px solid var(--line);
+  background: transparent; font-weight: 700; color: var(--ink);
+  transition: background .15s, color .15s;
 }
-.btn.primary { background: var(--accent-grad); color: #fff; border: none; }
-.btn.danger { background: var(--danger); color: #fff; border: none; }
-.btn.ghost { background: transparent; }
-.btn:hover { transform: translateY(-1px); }
-.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn:hover { background: var(--ink); color: var(--bg); }
+.btn.primary { background: var(--green); color: #000; border-color: var(--green); }
+.btn.primary:hover { background: #000; color: var(--green); }
+.btn.danger { background: var(--red); color: #000; border-color: var(--red); }
+.btn.danger:hover { background: #000; color: var(--red); }
+.btn.ghost { background: transparent; color: var(--ink-2); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
 
-/* panel */
-.panel { max-width: 1000px; margin: 0 auto; padding: 22px 18px 60px; display: flex; flex-direction: column; gap: 26px; }
-.block h2 { font-size: 16px; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+/* ---------- panel ---------- */
+.panel { max-width: 1000px; margin: 0 auto; padding: 22px 18px 60px; display: flex; flex-direction: column; gap: 22px; }
+.block {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  padding: 16px 16px 18px;
+}
+.block h2 { font-size: 15px; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+.sub-title { font-size: 12px; color: var(--green); margin: 16px 0 8px; font-weight: 700; }
 .count {
-  font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 999px;
-  background: var(--glass-soft); border: 1px solid var(--border-soft); color: var(--muted);
+  font-size: 11px; font-weight: 700; padding: 1px 7px;
+  background: transparent; border: 1px solid var(--green); color: var(--green);
 }
-.hint { color: var(--muted); font-size: 12px; margin-bottom: 12px; }
+.hint { color: var(--ink-2); font-size: 12px; line-height: 1.7; margin-bottom: 14px; }
 
+/* ---------- 防火墙面板 ---------- */
+.stats {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px; margin-bottom: 14px;
+}
+.stat {
+  border: 1px solid var(--line-soft); padding: 10px 12px;
+}
+.stat .k { font-size: 10px; color: var(--ink-2); letter-spacing: .06em; }
+.stat .v { font-size: 20px; font-weight: 800; color: var(--green); margin-top: 4px; }
+.stat .v.warn { color: var(--amber); }
+.stat .v.bad { color: var(--red); }
+.fw-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.fw-agent { font-size: 11px; color: var(--ink-2); }
+
+.events { display: flex; flex-direction: column; gap: 6px; max-height: 340px; overflow-y: auto; }
+.event {
+  display: grid;
+  grid-template-columns: 96px 128px 148px minmax(0, 1fr) 78px;
+  gap: 10px; align-items: center;
+  padding: 8px 10px;
+  border: 1px solid var(--line-soft);
+  font-size: 12px;
+}
+.event .t { color: var(--ink-2); }
+.event .ip { color: var(--ink); word-break: break-all; }
+.event .k { color: var(--green); }
+.event .d { color: var(--ink-2); word-break: break-word; }
+.event .a { font-size: 10px; padding: 1px 6px; border: 1px solid var(--line-soft); text-align: center; }
+.event .a.blocked { color: var(--red); border-color: var(--red); }
+.event .a.logged { color: var(--green); border-color: var(--green-dim); }
+.event .unblock {
+  background: transparent; border: 1px solid var(--line); color: var(--ink);
+  font-size: 11px; padding: 3px 9px;
+}
+.event .unblock:hover { background: var(--ink); color: var(--bg); }
+.empty-note { color: var(--ink-2); font-size: 13px; padding: 12px; border: 1px dashed var(--line-soft); text-align: center; }
+
+/* ---------- users ---------- */
 .users { display: flex; flex-direction: column; gap: 8px; }
 .user-row {
   display: flex; align-items: center; gap: 12px;
-  padding: 11px 14px; border-radius: var(--radius);
-  background: var(--glass); border: 1px solid var(--border-soft);
+  padding: 11px 13px; border: 1px solid var(--line-soft);
 }
 .user-row .avatar {
-  width: 40px; height: 40px; border-radius: 50%;
+  width: 38px; height: 38px; border-radius: var(--radius);
   display: flex; align-items: center; justify-content: center;
-  color: #fff; font-weight: 700; font-size: 15px; flex-shrink: 0;
-  background: linear-gradient(135deg, #5eead4, #60a5fa);
+  color: #000; font-weight: 800; font-size: 15px; flex-shrink: 0;
+  background: var(--green);
 }
-.user-row .avatar.jack { background: linear-gradient(135deg, #fbbf24, #f59e0b) !important; }
+.user-row .avatar.jack { background: var(--amber) !important; }
 .user-row .u-meta { flex: 1; min-width: 0; }
 .user-row .u-name { font-weight: 700; display: flex; align-items: center; gap: 6px; }
-.user-row .u-sub { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.user-row .u-sub { font-size: 11px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kill {
-  color: var(--danger); font-weight: 700; font-size: 13px;
-  padding: 6px 12px; border-radius: 999px;
-  background: rgba(239,68,68,0.10); border: 1px solid rgba(239,68,68,0.30);
+  color: var(--red); font-weight: 700; font-size: 12px;
+  padding: 6px 12px; background: transparent; border: 1px solid var(--red);
 }
-.kill:hover { background: rgba(239,68,68,0.20); }
+.kill:hover { background: var(--red); color: #000; }
 .kill:disabled { opacity: .5; cursor: wait; }
-.jack-tag {
-  font-size: 11px; padding: 1px 6px; border-radius: 6px; font-weight: 700;
-  background: #fbbf24; color: #7c2d12;
-}
+.jack-tag { font-size: 10px; padding: 1px 6px; border: 1px solid var(--amber); color: var(--amber); font-weight: 700; }
 
+/* ---------- conversations ---------- */
 .convos { display: flex; flex-direction: column; gap: 10px; }
-.convo {
-  padding: 14px 16px; border-radius: var(--radius);
-  background: var(--glass); border: 1px solid var(--border-soft);
-}
-.convo-head { font-weight: 700; font-size: 14px; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
-.convo-head .arrow { color: var(--muted); font-weight: 400; }
-.msgs { display: flex; flex-direction: column; gap: 5px; }
+.convo { padding: 13px 14px; border: 1px solid var(--line-soft); }
+.convo-head { font-weight: 700; font-size: 13px; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.convo-head .arrow { color: var(--ink-2); font-weight: 400; }
+.msgs { display: flex; flex-direction: column; gap: 4px; }
 .msg-line {
-  font-size: 13px; line-height: 1.5; padding: 6px 10px;
-  border-radius: 12px; background: var(--glass-soft);
-  word-break: break-word;
+  font-size: 12px; line-height: 1.6; padding: 6px 9px;
+  border: 1px solid var(--line-soft); word-break: break-word;
 }
-.msg-line .who { font-weight: 700; color: var(--accent); margin-right: 6px; }
-.msg-line .when { color: var(--muted); font-size: 11px; margin-left: 6px; }
-.msg-line.image { color: var(--muted); }
-.empty-note { color: var(--muted); font-size: 13px; padding: 14px; text-align: center; }
+.msg-line .who { font-weight: 700; color: var(--green); margin-right: 6px; }
+.msg-line .when { color: var(--ink-2); font-size: 10px; margin-left: 6px; }
+.msg-line.image { color: var(--ink-2); }
 
-/* confirm */
+/* ---------- confirm ---------- */
 .confirm { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 20px; }
-.confirm-mask { position: absolute; inset: 0; background: rgba(0,0,0,0.32); }
+.confirm-mask { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.72); }
 .confirm-card {
-  position: relative; width: min(88vw, 400px);
-  padding: 22px; border-radius: 28px;
-  background: var(--glass); border: 1px solid var(--border);
-  box-shadow: 0 20px 60px rgba(0,0,0,0.25);
-  backdrop-filter: blur(var(--blur-l3)) saturate(180%);
-  -webkit-backdrop-filter: blur(var(--blur-l3)) saturate(180%);
+  position: relative; width: min(88vw, 420px);
+  padding: 22px; background: var(--bg); border: 1px solid var(--line);
 }
-.confirm-card h3 { font-size: 16px; margin-bottom: 10px; }
-.confirm-card p { color: var(--ink-2); font-size: 14px; line-height: 1.6; margin-bottom: 18px; }
+.confirm-card h3 { font-size: 15px; margin-bottom: 10px; }
+.confirm-card p { color: var(--ink-2); font-size: 13px; line-height: 1.7; margin-bottom: 18px; }
 .confirm-actions { display: flex; gap: 10px; }
 .confirm-actions .btn { flex: 1; }
 
 .toast {
   position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
-  background: rgba(28,42,62,0.92); color: #fff; padding: 10px 20px;
-  border-radius: 999px; font-size: 13px; z-index: 200;
+  background: var(--green); color: #000; padding: 10px 20px;
+  font-size: 13px; font-weight: 700; z-index: 200;
 }
 
 /* ============================================================
    iPad / 宽屏:两栏
-   ------------------------------------------------------------
-   iPad 横屏有 1100px 以上的宽度,单栏会把右边空掉一大块,
-   而且用户列表、好友对话、群消息挤在一条竖线上,翻起来很费劲。
-   横屏改成「左:用户 / 右:对话 + 群消息」,竖屏留单栏但放宽。
    ============================================================ */
 @media (min-width: 900px) {
   .panel {
     max-width: 1180px;
     display: grid;
-    grid-template-columns: minmax(300px, 0.8fr) minmax(0, 1.2fr);
+    grid-template-columns: minmax(300px, 0.85fr) minmax(0, 1.15fr);
     grid-template-areas:
+      "fw     fw"
       "users  convos"
       "users  groups";
     grid-template-rows: auto 1fr;
-    gap: 24px 28px;
+    gap: 20px 24px;
     align-items: start;
   }
-  .panel > .block:nth-child(1) { grid-area: users; }
-  .panel > .block:nth-child(2) { grid-area: convos; }
-  .panel > .block:nth-child(3) { grid-area: groups; }
-  /* 列表自己滚动,页面不会被拉成一条长卷轴 */
+  .block-fw { grid-area: fw; }
+  .panel > .block:nth-of-type(2) { grid-area: users; }
+  .panel > .block:nth-of-type(3) { grid-area: convos; }
+  .panel > .block:nth-of-type(4) { grid-area: groups; }
   .users, .convos {
     max-height: min(52vh, 560px);
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     padding-right: 4px;
   }
-  .users::-webkit-scrollbar, .convos::-webkit-scrollbar { width: 6px; }
-  .users::-webkit-scrollbar-thumb, .convos::-webkit-scrollbar-thumb {
-    background: rgba(60, 90, 130, 0.22); border-radius: 3px;
+  .users::-webkit-scrollbar, .convos::-webkit-scrollbar, .events::-webkit-scrollbar { width: 6px; }
+  .users::-webkit-scrollbar-thumb, .convos::-webkit-scrollbar-thumb, .events::-webkit-scrollbar-thumb {
+    background: var(--green-dim);
   }
-  .convo { padding: 16px 18px; }
-}
-
-/* 每个区块都是一块玻璃卡 —— 标题和说明文字不会直接压在壁纸的亮丝带上。
-   手机上也一样,不然窄屏的提示语会糊在白丝带上读不出来。 */
-.block {
-  background: rgba(255, 255, 255, 0.34);
-  border: 1px solid var(--border-soft);
-  border-radius: 18px;
-  padding: 14px 14px 16px;
-  backdrop-filter: blur(var(--blur-l2)) saturate(180%);
-  -webkit-backdrop-filter: blur(var(--blur-l2)) saturate(180%);
-}
-body.dark .block { background: rgba(28, 33, 44, 0.34); }
-.block h2 { margin-bottom: 4px; }
-.block .hint { margin-bottom: 14px; }
-
-/* 平板及以上:卡片再舒展一点 */
-@media (min-width: 620px) {
-  .block {
-    border-radius: 22px;
-    padding: 18px 20px 20px;
-  }
-}
-
-/* iPad 竖屏 / 小平板:单栏,但别那么窄 */
-@media (min-width: 620px) and (max-width: 899px) {
-  .panel { max-width: 720px; padding: 26px 24px 80px; gap: 30px; }
-  .gate-card { max-width: 420px; padding: 40px 36px; }
 }
 
 /* ---------- 触控设备:点得中 ---------- */
@@ -281,7 +254,7 @@ body.dark .block { background: rgba(28, 33, 44, 0.34); }
   .kill { padding: 10px 18px; }
   .user-row { padding: 14px 16px; }
   .confirm-actions .btn { padding: 14px 20px; }
-  .confirm-card h3 { font-size: 17px; }
+  .confirm-card h3 { font-size: 16px; }
 }
 
 /* iPad 有 home 指示条,内容别贴着底 */

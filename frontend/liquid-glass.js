@@ -29,10 +29,6 @@
     t = Math.max(0, Math.min(1, (t - a) / (b - a)));
     return t * t * (3 - 2 * t);
   }
-  function roundedRectSDF(x, y, w, h, r) {
-    var qx = Math.abs(x) - w + r, qy = Math.abs(y) - h + r;
-    return Math.min(Math.max(qx, qy), 0) + Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) - r;
-  }
   function shade(hex, p) {
     var m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex || '');
     if (!m) return hex;
@@ -165,12 +161,11 @@
       H = Math.max(2, el.offsetHeight || H);
       filter.setAttribute('width', String(W)); filter.setAttribute('height', String(H));
       feImage.setAttribute('width', String(W)); feImage.setAttribute('height', String(H));
-      // 折射环贴着面板自己的圆角矩形走 —— 用元素真实的圆角，
-      // 长条面板的边缘才不会歪。
-      var rad = 0;
-      try { rad = parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0; } catch (_) {}
-      rad = Math.min(rad, Math.min(W, H) / 2);
+      // 玻璃球:球体被拉伸成面板自己的宽高(椭圆),
+      // 折射环贴着这条椭圆走 —— 面板越扁,两端越像被拉长的透镜。
+      // 只有形状变了,折射/色散那套滤镜链一个字都没动。
       var bandPx = Math.min(PARAMS.band, Math.min(W, H) * 0.45);
+      var ax = W / 2, ay = H / 2;
       maxScale = 0;
       var idx = 0;
       for (i = 0; i < data.length; i += 4) {
@@ -179,9 +174,13 @@
         // feDisplacementMap 的 scale 走的是 user space，
         // 用贴图像素算会差好几倍（贴图被拉伸过）。
         var ex = (x / MAP - 0.5) * W, ey = (y / MAP - 0.5) * H;
-        // 到面板边框的距离：边上 0，往里为正。
-        // SDF 必须按面板自己的形状算 —— 撑满写法会让位移场恒为 1，折射直接消失。
-        d = -roundedRectSDF(ex, ey, W / 2, H / 2, rad);
+        // 归一化到「球」里：r = 0 是球心，r = 1 是球面。
+        var r = Math.sqrt((ex / ax) * (ex / ax) + (ey / ay) * (ey / ay));
+        // 到球面的距离（px）：局部半径 × (1 - r)。
+        // 局部半径用该点到面板中心的实际距离 —— 球面在这一片是平的，
+        // 所以这个近似就是真的距离。
+        var Rloc = Math.sqrt(ex * ex + ey * ey);
+        d = (1 - r) * Rloc;
         // 边上一圈最强，往里 bandPx 过渡回「不折射」，中间保持平坦（放大感）。
         var s2 = 1 - PARAMS.ref * (1 - smoothStep(0, bandPx, d));
         dx = ex * (s2 - 1); dy = ey * (s2 - 1);
@@ -328,7 +327,15 @@
 
   function register(el, opts) {
     opts = opts || {};
-    if (!el || el.__lgRegistered) return;
+    if (!el) return;
+    if (el.__lgRegistered) {
+      // 已经注册过 —— 把这次的选项补上去(折射和按压可以同时要)。
+      if (opts.press && !el.classList.contains('lg-pressable')) {
+        el.classList.add('lg-pressable');
+        bindPress(el);
+      }
+      return;
+    }
     el.__lgRegistered = true;
     // 记下元素当前的几何变换（CSS 里的 translate/scale 也要保住，
     // 不然按下去的时候果冻形变会把布局顶歪）。

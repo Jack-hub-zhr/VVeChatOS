@@ -3036,31 +3036,48 @@ body.dark .msg-dots:hover { background: rgba(255, 255, 255, 0.10); }
    ============================================================ */
 @media (max-width: 520px) {
   .msg-action-bar {
-    /* A flex row's default min-width:auto lets the five buttons push the
-       bar wider than the viewport, which is why max-width alone was not
-       enough. min-width:0 lets the max-width actually bite and the row
-       scrolls inside instead of spilling off the screen. */
+    /* 手机上这块菜单原来浪费得很厉害:五个动作挤在右边,
+       左边那排表情被压成一条竖着的窄柱(每个表情只能占 34px 宽)。
+       改成两行网格:上面一行表情(横向可滑,不换行),
+       下面一行五个动作等宽排开,整块高度回到两行。 */
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    align-items: end;
+    gap: 4px;
     min-width: 0;
     max-width: calc(100vw - 20px);
+    overflow: visible;
+    padding: 8px;
+    border-radius: var(--r-ctrl);
+  }
+  .msg-action-quick {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 4px;
+    padding: 0 0 7px;
+    margin-bottom: 0;
+    border-bottom: 1px solid var(--glass-border-soft);
     overflow-x: auto;
-    overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
-    padding: 7px 8px;
-    border-radius: 18px;
   }
-  .msg-action-bar::-webkit-scrollbar { display: none; }
+  .msg-action-quick::-webkit-scrollbar { display: none; }
   .msg-action-btn {
+    grid-row: 2;
     flex-shrink: 0;
     width: auto;
-    min-width: 56px;
-    height: 56px;
-    padding: 6px 8px 8px;
+    min-width: 0;
+    height: 52px;
+    padding: 6px 2px 8px;
   }
-  .msg-action-btn svg { width: 16px; height: 16px; }
+  .msg-action-btn svg { width: 17px; height: 17px; }
   /* The floating label above each icon needs room; on narrow screens the
      label alone is enough — the icons are self-explanatory. */
-  .msg-action-btn .msg-action-label { font-size: 11px; }
+  .msg-action-btn .msg-action-label { font-size: 10px; }
 }
 
 /* ============================================================
@@ -5140,3 +5157,71 @@ body.theme-dark .mention-preview .cancel:hover {
   }
   .msg-popup-avatar { width: 32px; height: 32px; font-size: 13px; }
 }
+
+/* ============================================================
+   消息入场动画 —— 从下往上弹
+   ------------------------------------------------------------
+   只有「刚到的新消息」带 .msg-enter(整页重建历史时不带),
+   所以刷新一次不会让整屏历史跟着跳一遍。
+   ============================================================ */
+@keyframes msgEnter {
+  from { opacity: 0; transform: translateY(20px) scale(.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.msg-row.msg-enter {
+  animation: msgEnter .26s cubic-bezier(.22, 1, .36, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .msg-row.msg-enter { animation: none; }
+}
+
+/* ============================================================
+   新消息横幅 —— 手机通知那样从顶上滑下来
+   ------------------------------------------------------------
+   收到「当前对话之外」的新消息时,顶部滑下一条横条:
+   头像 + 谁发的 + 消息摘要。点一下弹出快速回复窗。
+   5 秒没人理就自己滑回去。
+   ============================================================ */
+.msg-banner {
+  position: fixed;
+  top: 10px;
+  left: 50%;
+  z-index: 1150;
+  width: min(94vw, 460px);
+  transform: translate(-50%, -180%);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform .34s cubic-bezier(.22, 1, .36, 1), opacity .22s ease;
+}
+.msg-banner.hidden { display: none !important; }
+.msg-banner.show { transform: translate(-50%, 0); opacity: 1; pointer-events: auto; }
+.msg-banner-inner {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--r-ctrl);
+  background: var(--glass-bg-strong);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(var(--blur-l3)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--blur-l3)) saturate(180%);
+  box-shadow: var(--glass-shadow-lg);
+  cursor: pointer;
+}
+.msg-banner-avatar {
+  width: 34px; height: 34px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-weight: 700; font-size: 13px; flex-shrink: 0;
+  background: linear-gradient(135deg, #5eead4, #60a5fa);
+}
+.msg-banner-text { flex: 1; min-width: 0; }
+.msg-banner-title { font-size: 13px; font-weight: 700; color: var(--ink); }
+.msg-banner-body {
+  font-size: 12px; color: var(--muted); margin-top: 1px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.msg-banner-close {
+  width: 26px; height: 26px; border-radius: 50%;
+  border: none; background: var(--glass-bg-soft);
+  color: var(--ink-2); font-size: 15px; line-height: 1; cursor: pointer;
+  flex-shrink: 0;
+}
+.msg-banner-close:active { transform: scale(.9); }

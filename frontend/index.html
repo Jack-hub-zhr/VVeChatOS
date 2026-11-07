@@ -8,9 +8,9 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="theme-color" content="#4C6FFF" />
   <title>VVeChat</title>
-  <link rel="stylesheet" href="style.css?v=20261104d" />
+  <link rel="stylesheet" href="style.css?v=20261107a" />
   <!-- 液态玻璃视觉层（移植自 xiaofangstudio/liquid-glass-web, MIT） -->
-  <link rel="stylesheet" href="liquid-glass.css?v=20261104d" />
+  <link rel="stylesheet" href="liquid-glass.css?v=20261107a" />
   <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><text x='32' y='44' font-family='system-ui' font-size='40' font-weight='800' text-anchor='middle' fill='%234C6FFF'>V</text></svg>" />
 </head>
 <body>
@@ -287,9 +287,10 @@
             <div class="discover-head">
               <div class="discover-sub" data-i18n="discover_sub">看看大家在聊什么</div>
             </div>
-            <!-- 建群入口:和「搜索 / 添加」面板里用的是同一张卡片、同一条流程,
-                 点开就是同一个建群表单。 -->
-            <button type="button" class="plus-action" data-action="group">
+            <!-- 建群入口:和顶栏放大镜(搜索 / 添加)走同一条路 ——
+                 点它弹出的就是那个面板,面板里再点「建个群聊」进表单,
+                 整条路径与放大镜 1:1 一致,没有「发现」自己的一套。 -->
+            <button type="button" class="plus-action" data-action="plus">
               <div class="plus-action-icon">
                 <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
@@ -813,12 +814,22 @@
       </form>
     </div>
   </div>
+  <div id="msg-banner" class="msg-banner hidden" role="status" aria-live="polite">
+    <div class="msg-banner-inner" id="msg-banner-inner">
+      <div class="msg-banner-avatar" id="msg-banner-avatar">?</div>
+      <div class="msg-banner-text">
+        <div class="msg-banner-title" id="msg-banner-title"></div>
+        <div class="msg-banner-body" id="msg-banner-body"></div>
+      </div>
+      <button class="msg-banner-close" id="msg-banner-close" type="button" aria-label="关闭" data-i18n-aria="cancel">×</button>
+    </div>
+  </div>
   <div id="offline-banner" class="offline-banner hidden"><span class="dot"></span> <span data-i18n="reconnecting">正在重新连接…</span></div>
 
   <!-- Socket.io client is served by this same Express app at /socket.io/socket.io.js,
        so there is no third-party CDN to fail (or be blocked). -->
   <script src="/socket.io/socket.io.js"></script>
-  <script src="config.js?v=20261104d"></script>
+  <script src="config.js?v=20261107a"></script>
   <!-- The 550C theme is ~60 KB. Only fetch it when it is actually on:
        localStorage says so right now, and app.js re-checks after login
        for the case where the account has it on but this browser does
@@ -836,7 +847,7 @@
        time even though the theme was enabled. -->
   <script>
   (function () {
-    try { window.__VV_ASSET_V = '20261104d'; } catch (e) { }
+    try { window.__VV_ASSET_V = '20261107a'; } catch (e) { }
     var V = window.__VV_ASSET_V || '';
     var on = false;
     try { on = localStorage.getItem('vve:boot550c') === '1'; } catch (e) { }
@@ -858,7 +869,7 @@
   })();
   </script>
   <!-- 液态玻璃引擎：折射 + 果冻物理 + 体积光 + 光照互通 -->
-  <script src="liquid-glass.js?v=20261104d"></script>
-  <script src="app.js?v=20261104d"></script>
+  <script src="liquid-glass.js?v=20261107a"></script>
+  <script src="app.js?v=20261107a"></script>
 </body>
 </html>

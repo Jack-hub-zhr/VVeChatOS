@@ -3,16 +3,17 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#4C6FFF" />
+  <meta name="theme-color" content="#000000" />
   <title>VVeChat 控制台</title>
-  <link rel="stylesheet" href="style.css?v=20261104b" />
-  <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%234C6FFF'/><text x='32' y='44' font-family='system-ui' font-size='36' font-weight='800' text-anchor='middle' fill='white'>V</text></svg>" />
+  <link rel="stylesheet" href="style.css?v=20261107a" />
+  <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' fill='%23000'/><text x='32' y='44' font-family='monospace' font-size='36' font-weight='800' text-anchor='middle' fill='%2322e37f'>V</text></svg>" />
 </head>
 <body>
 
 <header class="topbar">
   <div class="brand"><span class="brand-name">VVeChat</span><span class="brand-sub">控制台</span></div>
   <div class="topbar-right">
+    <span id="fw-state" class="fw-state"><span class="dot"></span><span id="fw-state-text">防火墙</span></span>
     <span id="stamp" class="stamp"></span>
     <button id="btn-format" class="pill danger">格式化一切信息</button>
     <button id="btn-refresh" class="pill">刷新</button>
@@ -33,6 +34,20 @@
 
 <!-- Panel -->
 <main id="panel" class="panel hidden">
+
+  <!-- 防火墙 / 安全中心 -->
+  <section class="block block-fw">
+    <h2>安全中心 <span id="fw-badge" class="count">—</span></h2>
+    <p class="hint">VVeChat 防火墙常驻运行：挡住路径穿越、敏感文件探测、注入载荷、扫描器和登录爆破。每一次拦截都会记录来源 IP。安全 agent 每 5 分钟自检一次，24 小时待命。</p>
+    <div class="stats" id="fw-stats"></div>
+    <div class="fw-actions">
+      <button id="btn-scan" class="btn">立即自检</button>
+      <span id="fw-agent" class="fw-agent">agent —</span>
+    </div>
+    <h3 class="sub-title">最近事件</h3>
+    <div id="fw-events" class="events"></div>
+  </section>
+
   <section class="block">
     <h2>所有用户 <span id="user-count" class="count">0</span></h2>
     <p class="hint">红色「注销」会永久删除该账号，以及它发出的全部消息、好友关系和好友申请。</p>
@@ -66,7 +81,7 @@
 
 <div id="toast" class="toast hidden"></div>
 
-<script src="config.js?v=20261104b"></script>
-<script src="app.js?v=20261104b"></script>
+<script src="config.js?v=20261107a"></script>
+<script src="app.js?v=20261107a"></script>
 </body>
 </html>
