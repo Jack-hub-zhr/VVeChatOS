@@ -426,6 +426,14 @@ async function assistantAnswer(question, context, kind) {
       '不要出现「作为一个AI」「作为一个助手」这类说法。',
       langLine
     ].join('\n')
+    : kind === 'dm'
+    ? [
+      '你叫 Jacky Bot，是 VVeChat 里的助手。现在是你跟用户一对一聊天。',
+      '请像真人一样回话：口语、简短、直接，通常一两句话,别写成报告。',
+      '不要出现「作为一个AI」「作为一个助手」这类说法，也不要罗列要点或加小标题。',
+      '不知道的就直说没看到相关信息，别编。',
+      langLine
+    ].join('\n')
     : [
       '你叫 Jacky Bot，是这个群聊里的一位成员。大家聊天时会喊你一声，你就把话接过来。',
       '请像真人一样回话：口语、简短、直接，最多两三句话。',
@@ -522,6 +530,20 @@ function groupContext(groupId, limit) {
   return rows.map((r) => ({
     role: r.sender_id === assistantId ? 'assistant' : 'user',
     content: (r.username || '某人') + '：' + String(r.content || '')
+  }));
+}
+
+// 单聊的上下文 —— 给「私聊里的 Jacky Bot」用。
+function userContext(convId, limit) {
+  const rows = db.prepare(`
+    SELECT m.sender_id, u.username, m.content, m.type
+    FROM messages m LEFT JOIN users u ON u.id = m.sender_id
+    WHERE m.conv_type = 'user' AND m.conv_id = ? AND m.is_deleted = 0 AND m.type = 'text'
+    ORDER BY m.id DESC LIMIT ?
+  `).all(String(convId), limit || 24).reverse();
+  return rows.map((r) => ({
+    role: r.sender_id === assistantId ? 'assistant' : 'user',
+    content: (r.sender_id === assistantId ? '' : (r.username ? r.username + '：' : '')) + String(r.content || '')
   }));
 }
 
@@ -785,10 +807,11 @@ app.post('/api/admin/wipe', rateLimit('write'), authRequired, requireAdmin, (req
 // Full snapshot: every user, every 1:1 conversation with its messages.
 app.get('/api/control/snapshot', authRequired, requireAdmin, (req, res) => {
   const users = db.prepare(`
-    SELECT id, username, avatar, avatar_color, bio, created_at,
-           CASE WHEN username = ? THEN 1 ELSE 0 END AS is_assistant
+    SELECT id, username, avatar, avatar_color, avatar_emoji, bio, created_at,
+           CASE WHEN username = ? THEN 1 ELSE 0 END AS is_assistant,
+           CASE WHEN username IN (?, ?) THEN 1 ELSE 0 END AS is_system
     FROM users ORDER BY id ASC
-  `).all(ASSISTANT_NAME);
+  `).all(ASSISTANT_NAME, ASSISTANT_NAME, FILE_ASSISTANT_NAME);
 
   // 1:1 conversations: friend pairs + every user-to-user conversation
   const convos = db.prepare(`
@@ -842,6 +865,11 @@ app.post('/api/control/purge-user/:id', rateLimit('write'), authRequired, requir
   const u = db.prepare('SELECT id, username FROM users WHERE id = ?').get(uid);
   if (!u) return res.status(404).json({ error: '用户不存在' });
   if (u.username === ADMIN_USERNAME) return res.status(400).json({ error: '不能注销管理员 Jack' });
+  // Jacky Bot 和文件传输助手是系统账号:群里 @ 要人接话、文件要有地方放,
+  // 注销了整站就瘸了 —— 直接挡掉。
+  if (u.username === ASSISTANT_NAME || u.username === FILE_ASSISTANT_NAME) {
+    return res.status(400).json({ error: '不能注销系统账号' });
+  }
 
   const tx = db.transaction(() => {
     // messages authored by this user
@@ -2227,7 +2255,7 @@ app.get('/api/users/status', authRequired, (req, res) => {
 // friends
 app.get('/api/friends', authRequired, (req, res) => {
   const rows = db.prepare(`
-    SELECT u.id, u.username, u.avatar, u.bio, u.avatar_color
+    SELECT u.id, u.username, u.avatar, u.bio, u.avatar_color, u.avatar_emoji
     FROM friends f
     JOIN users u ON u.id = f.friend_id
     WHERE f.user_id = ?
@@ -3005,6 +3033,32 @@ app.post('/api/messages', rateLimit('write'), authRequired, (req, res) => {
       const aMsg = buildMessage({ ...aRow, sender_username: ASSISTANT_NAME });
       broadcastMessage(aMsg, 'group', gid, assistantId);
     }).catch((e) => { stopTyping(); console.warn('[VVeChat] assistant reply failed:', e.message); });
+  }
+
+  // ---- 私聊里的 Jacky Bot ----
+  // 单独跟它聊天,它也得回话 —— 不然「hi」发出去石沉大海,像坏了。
+  if (conv_type === 'user' && msgType === 'text' && aiInGroups && Number(conv_id) === assistantId) {
+    const cid = normalizedConvId;
+    const context = userContext(cid, 24);
+    const typingOn = { conv_type: 'user', conv_id: String(cid), uid: assistantId, username: ASSISTANT_NAME };
+    const toRooms = (evt) => {
+      try {
+        if (!io) return;
+        io.to(`user:${req.user.id}`).emit(evt, typingOn);
+        io.to(`user:${assistantId}`).emit(evt, typingOn);
+      } catch (e) {}
+    };
+    toRooms('typing:start');
+    const stopTyping = () => toRooms('typing:stop');
+    assistantAnswer(String(content), context, 'dm').then((answer) => {
+      stopTyping();
+      const text = String(answer || '我这边暂时连不上，等会儿再叫我一次。').slice(0, 4000);
+      const aInfo = db.prepare(
+        'INSERT INTO messages (conv_type, conv_id, sender_id, content, type, meta, reply_to, is_deleted, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)'
+      ).run('user', cid, assistantId, text, 'text', null, null, now());
+      const aRow = db.prepare('SELECT * FROM messages WHERE id = ?').get(aInfo.lastInsertRowid);
+      broadcastMessage(buildMessage({ ...aRow, sender_username: ASSISTANT_NAME }), 'user', cid, assistantId);
+    }).catch((e) => { stopTyping(); console.warn('[VVeChat] assistant DM failed:', e.message); });
   }
 });
 

@@ -33,6 +33,8 @@
       cancel_at: '取消 @',
       tag_official: '官方',
       official_group_name: 'VVeChat 官方群',
+      me: '我',
+      file_assistant_name: '文件传输助手',
       ok: '确定',
       send_request: '发送申请',
       auth_username: '用户名',
@@ -430,6 +432,8 @@
       cancel_at: 'Cancel @',
       tag_official: 'Official',
       official_group_name: 'VVeChat Official Group',
+      me: 'Me',
+      file_assistant_name: 'File Transfer Assistant',
       ok: 'OK',
       send_request: 'Send request',
       auth_username: 'Username',
@@ -1415,7 +1419,11 @@
     // wrapped in style="..." — dropping that produced broken markup like
     // <div class="avatar" background:linear-gradient(...)> and the
     // conversation avatars lost their colour.
-    const avatarBg = isGroup ? '' : (() => { const st = avatarStyle(c); return st ? ` style="${st}"` : ''; })();
+    // 表情头像(📁)用柔白底,别再叠色盘;助手走发光圆环。
+    const avatarBg = isGroup ? '' : (() => {
+      if (c.avatar_emoji) return ' style="background:rgba(255,255,255,0.55)"';
+      const st = avatarStyle(c); return st ? ` style="${st}"` : '';
+    })();
     const dot = (isGroup || isOfficial) ? '' : `<span class="online-dot"></span>`;
     const avatarCls = [ac, online?'online':''].filter(Boolean).join(' ');
     const senderPrefix = c.last_sender_id && c.last_sender_id !== state.user.id && isGroup
@@ -1427,9 +1435,10 @@
     const unreadHtml = c.unread > 0 ? `<span class="unread">${c.unread>99?'99+':c.unread}</span>` : '';
     const inner = isGroup
       ? groupAvatarInner({ name: c.username, is_official: isOfficial, icon_emoji: c.icon_emoji })
-      : avatarInner(c);
+      // 「我」这一条在英文界面要显示 Me —— 头像也跟着走。
+      : avatarContent(displayName(c.username, c.special), emojiOf(c), 26);
     li.innerHTML = `<div class="${avatarCls}"${avatarBg} data-user-avatar="${isGroup ? '' : c.id}">${inner}${dot}</div>
-      <div class="meta"><div class="name">${escapeHtml(groupDisplayName(c.username, isOfficial))} ${officialTag}</div>
+      <div class="meta"><div class="name">${escapeHtml(c.type === 'user' ? displayName(c.username, c.special) : groupDisplayName(c.username, isOfficial))} ${officialTag}</div>
       <div class="preview">${atMePrefix}${senderPrefix}${escapeHtml(preview)}</div></div>
       <div class="time">${fmtTime(c.last_at)}</div>${unreadHtml}`;
     li.addEventListener('click', () => {
@@ -1537,7 +1546,7 @@
         ? `<span style="color:var(--accent);font-weight:600;">${escapeHtml(userInfo(c.last_sender_id).username)}:</span> ` : '';
       const unreadHtml = c.unread > 0 ? `<span class="unread">${c.unread>99?'99+':c.unread}</span>` : '';
       li.innerHTML = `<div class="${avatarCls}"${avatarBg} data-user-avatar="${isGroup ? '' : c.id}">${isGroup ? groupAvatarInner({ name: c.username, is_official: isOfficial, icon_emoji: c.icon_emoji }) : avatarContent(c.username, c.avatar_emoji, 26)}${dot}</div>
-        <div class="meta"><div class="name">${escapeHtml(groupDisplayName(c.username, isOfficial))} ${officialTag}</div>
+        <div class="meta"><div class="name">${escapeHtml(c.type === 'user' ? displayName(c.username, c.special) : groupDisplayName(c.username, isOfficial))} ${officialTag}</div>
         <div class="preview">${senderPrefix}${escapeHtml(preview)}</div></div>
         <div class="time">${fmtTime(c.last_at)}</div>${unreadHtml}`;
       li.addEventListener('click', () => openChat(c.type, c.id, c.username, isOfficial));
@@ -1964,12 +1973,27 @@
     if (isOfficial && name === 'VVeChat 官方群') return t('official_group_name');
     return name;
   }
+  // 系统账号:Jacky Bot / 文件传输助手。
+  // 名字在英文界面要有对应说法(否则英文界面里夹着中文名),
+  // 简介也不该顶掉「好友」那一行。
+  function isSystemAccount(name) {
+    const n = String(name || '').trim().toLowerCase();
+    return n === 'jacky bot' || n === 'qwen' || n === '文件传输助手';
+  }
+  function displayName(name, special) {
+    if (special === 'self') return t('me');
+    if (name === '文件传输助手') return t('file_assistant_name');
+    return name;
+  }
 
   function renderChatHeader() {
     if (!state.currentChat) return;
     const { type, id, title, isOfficial } = state.currentChat;
     const titleEl = $('#chat-title');
-    const dispTitle = groupDisplayName(title, isOfficial);
+    const curConv = state.conversations.find(c => c.type === type && String(c.id) === String(id));
+    const dispTitle = type === 'user'
+      ? displayName(title, curConv && curConv.special)
+      : groupDisplayName(title, isOfficial);
     // Official group: shield sits between the brand and the group type,
     // e.g. "VVeChat 🛡 官方群", rendered as a small inline badge.
     if (isOfficial) {
@@ -1986,14 +2010,19 @@
     titleEl.dataset.tState = 'zh';
     const sub = $('#chat-sub'); const avatar = $('#chat-avatar');
     if (type === 'user') {
-      const f = state.friends.find(f => f.id === id);
+      // 好友表和会话列表任一有数据就行 —— 头部头像要和列表里的长得一样。
+      const f = state.friends.find(x => String(x.id) === String(id)) ||
+                state.conversations.find(c => c.type === 'user' && String(c.id) === String(id));
       const online = isOnline(id);
-      sub.innerHTML = online ? `<span style="color:var(--online);">● ${t('online')}</span>` : escapeHtml(f?.bio || t('friend'));
-      const bg = avatarStyle(f);
+      const bio = f && !isSystemAccount(f.username) ? f.bio : '';
+      sub.innerHTML = online ? `<span style="color:var(--online);">● ${t('online')}</span>` : escapeHtml(bio || t('friend'));
+      const emoji = f && f.avatar_emoji;
+      const bg = emoji ? 'background:rgba(255,255,255,0.55)' : avatarStyle(f);
       avatar.style.cssText = `cursor:pointer;${bg}`;
       avatar.className = `avatar sm ${online?'online':''}`;
       avatar.style.display = 'flex';
-      avatar.textContent = f && f.avatar ? '' : initials(title);
+      // 助手用发光圆环、文件传输助手用 📁 —— 跟列表一模一样。
+      avatar.innerHTML = (f && f.avatar) ? '' : avatarContent(title, emoji, 26);
       // The header avatar opens the same action menu as every other
       // avatar in the app (查看资料 / 添加好友 / 发消息).
       avatar.setAttribute('data-user-avatar', String(id));

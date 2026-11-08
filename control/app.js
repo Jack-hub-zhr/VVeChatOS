@@ -22,6 +22,15 @@
   const esc = (s) => String(s == null ? '' : s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  // Jacky Bot 的头像:跟聊天界面一样的发光圆环
+  function assistantRing() {
+    return '<svg class="qwen-ring" viewBox="0 0 32 32" width="30" height="30" aria-hidden="true">'
+      + '<circle class="qwen-halo" cx="16" cy="16" r="11" fill="none" stroke="#fff" stroke-width="5" opacity="0.9" filter="url(#qwenGlow)"/>'
+      + '<circle cx="16" cy="16" r="11" fill="none" stroke="#fff" stroke-width="1.4" opacity="0.5"/>'
+      + '<circle cx="16" cy="16" r="11" fill="none" stroke="#e2e8f0" stroke-width="3.2"/>'
+      + '</svg>';
+  }
+
   function initials(name) {
     if (!name) return '?';
     return /[\u4e00-\u9fa5]/.test(name) ? name.slice(-1) : name.slice(0, 1).toUpperCase();
@@ -244,16 +253,20 @@
     for (const u of d.users) {
       const isJack = u.username === 'Jack';
       const row = el('div', { class: 'user-row' });
-      const bg = u.avatar_color ? `background:linear-gradient(135deg, ${u.avatar_color}, ${shade(u.avatar_color, -25)});` : '';
+      const isAssistant = u.username === 'Jacky Bot' || u.username === 'Qwen';
+      const hasEmoji = !!u.avatar_emoji;
+      const bg = isAssistant ? ''
+        : (hasEmoji ? 'background:rgba(255,255,255,0.55);'
+          : (u.avatar_color ? `background:linear-gradient(135deg, ${u.avatar_color}, ${shade(u.avatar_color, -25)});` : ''));
       row.innerHTML = `
-        <div class="avatar${isJack ? ' jack' : ''}" style="${isJack ? '' : bg}">${esc(initials(u.username))}</div>
+        <div class="avatar${isJack ? ' jack' : ''}" style="${isJack ? '' : bg}">${isAssistant ? assistantRing() : (hasEmoji ? '<span class="avatar-emoji">' + esc(u.avatar_emoji) + '</span>' : esc(initials(u.username)))}</div>
         <div class="u-meta">
           <div class="u-name">${esc(u.username)}${isJack ? ' <span class="jack-tag">管理员</span>' : ''}</div>
           <div class="u-sub">ID ${u.id} · 注册于 ${fmtTime(u.created_at)}${u.bio ? ' · ' + esc(u.bio) : ''}</div>
         </div>`;
-      // 助手账号(Jacky Bot)是系统账号,不给注销按钮 ——
-      // 删了群里的机器人就没了。
-      if (!isJack && !u.is_assistant) {
+      // 系统账号(Jacky Bot / 文件传输助手)不给注销按钮 ——
+      // 删了群里的机器人就没了,文件也没地方放。
+      if (!isJack && !u.is_system && !u.is_assistant) {
         const kill = el('button', { class: 'kill', 'data-id': u.id }, '注销');
         kill.addEventListener('click', async () => {
           const ok = await askConfirm(

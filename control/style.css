@@ -195,6 +195,9 @@ a { color: var(--green); }
   background: var(--green);
 }
 .user-row .avatar.jack { background: var(--amber) !important; }
+/* Jacky Bot 的发光圆环 + 表情头像(📁) */
+.user-row .avatar .qwen-ring { display: block; }
+.user-row .avatar .avatar-emoji { font-size: 20px; line-height: 1; }
 .user-row .u-meta { flex: 1; min-width: 0; }
 .user-row .u-name { font-weight: 700; display: flex; align-items: center; gap: 6px; }
 .user-row .u-sub { font-size: 11px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

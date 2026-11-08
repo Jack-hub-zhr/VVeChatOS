@@ -169,6 +169,42 @@ function loadFns() {
     assert.ok(names.includes('文件传输助手'), '文件传输助手 被格式化了: ' + names.join(','));
   });
 
+  console.log('\n[6] 系统账号不可注销');
+  const snap = await call('/control/snapshot', { token: adminToken });
+  for (const name of ['Jacky Bot', '文件传输助手']) {
+    const u = (snap.data.users || []).find((x) => x.username === name);
+    await step(name + ' 注销被拒绝', async () => {
+      assert.ok(u, '快照里没有 ' + name);
+      const r = await call('/control/purge-user/' + u.id, { method: 'POST', token: adminToken });
+      assert.equal(r.status, 400, 'HTTP ' + r.status + ' ' + JSON.stringify(r.data));
+    });
+  }
+
+  console.log('\n[7] 私聊里的 Jacky Bot 会回话');
+  await step('给 Jacky Bot 发消息 → 它有回复', async () => {
+    const c = await call('/conversations', { token: adminToken });
+    const bot = (c.data.conversations || []).find((x) => x.username === 'Jacky Bot');
+    assert.ok(bot, '会话列表里没有 Jacky Bot');
+    const sent = await call('/messages', {
+      method: 'POST', token: adminToken,
+      body: { conv_type: 'user', conv_id: bot.id, content: '自检:在吗' }
+    });
+    assert.equal(sent.status, 200, JSON.stringify(sent.data));
+    // 回答要几秒(模型是异步的),最多等 60 秒。
+    for (let i = 0; i < 30; i++) {
+      await new Promise((r) => setTimeout(r, 2000));
+      const g = await call(`/messages?conv_type=user&conv_id=${bot.id}&limit=10`, { token: adminToken });
+      const msgs = g.data.messages || [];
+      if (msgs.length > 1) {
+        const last = msgs[msgs.length - 1];
+        assert.equal(last.sender_username, 'Jacky Bot', '回复不是它发的: ' + last.sender_username);
+        assert.ok(String(last.content || '').length > 0, '回复是空的');
+        return;
+      }
+    }
+    throw new Error('60 秒内没有回复');
+  });
+
   console.log('\n通过 ' + pass + ' 项,失败 ' + fails.length + ' 项');
   if (fails.length) { fails.forEach((f) => console.log('  !', f)); process.exit(1); }
   process.exit(0);
