@@ -4,3 +4,6 @@ node_modules/
 # unslop skill 的本地截图输出
 shots/
 unslop-story/
+
+# 用户上传的文件(运行时目录,不入库)
+uploads/

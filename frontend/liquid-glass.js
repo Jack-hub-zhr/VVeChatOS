@@ -41,7 +41,12 @@
     return n;
   }
 
-  var SUPPORTS_REFRACTION = (function () {
+  // Safari 会对 backdrop-filter: url(#…) 渲染成一块灰斑(supports() 却返回 true),
+  // 所以在 Safari 上直接不用折射,退回样式表里的普通模糊。
+  var IS_SAFARI = /Safari/.test(navigator.userAgent) &&
+    !/(Chrome|Chromium|Edg|OPR|Android)/.test(navigator.userAgent);
+
+  var SUPPORTS_REFRACTION = !IS_SAFARI && (function () {
     try {
       return !!(window.CSS && CSS.supports &&
         (CSS.supports('backdrop-filter', 'url(#x)') ||

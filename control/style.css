@@ -1,9 +1,10 @@
 /* ============================================================
-   VVeChat 控制台 —— 黑底 / 白色直角边框 / 白+绿 字体
+   VVeChat 控制台 —— 黑底 / 白色描边 / 白+绿 字体
    ------------------------------------------------------------
    这是一块「值班室」,不是展示页:
-   黑背景让白字和绿字都发亮,直角边框(没有圆角)让它像终端,
+   黑背景让白字和绿字都发亮,细描边让它像仪表盘,
    绿 = 正常 / 白 = 中性 / 红 = 要处理。
+   界面里不留直角边框 —— 直角看着像断线,不像界面。
    ============================================================ */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -18,7 +19,7 @@
   --green-dim: #0f9d58;
   --red: #ff5f56;
   --amber: #ffc451;
-  --radius: 0;
+  --radius: 10px;
 }
 
 html { background: var(--bg); }
@@ -79,6 +80,7 @@ a { color: var(--green); }
 .gate-card {
   width: 100%; max-width: 400px; padding: 30px 28px;
   background: var(--bg-2); border: 1px solid var(--line);
+  border-radius: var(--radius);
   text-align: center;
 }
 .gate-card h1 { font-size: 22px; margin-bottom: 6px; }
@@ -110,6 +112,7 @@ a { color: var(--green); }
 .block {
   background: var(--bg);
   border: 1px solid var(--line);
+  border-radius: var(--radius);
   padding: 16px 16px 18px;
 }
 .block h2 { font-size: 15px; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
@@ -126,7 +129,7 @@ a { color: var(--green); }
   gap: 10px; margin-bottom: 14px;
 }
 .stat {
-  border: 1px solid var(--line-soft); padding: 10px 12px;
+  border: 1px solid var(--line-soft); border-radius: var(--radius); padding: 10px 12px;
 }
 .stat .k { font-size: 10px; color: var(--ink-2); letter-spacing: .06em; }
 .stat .v { font-size: 20px; font-weight: 800; color: var(--green); margin-top: 4px; }
@@ -138,17 +141,23 @@ a { color: var(--green); }
 .events { display: flex; flex-direction: column; gap: 6px; max-height: 340px; overflow-y: auto; }
 .event {
   display: grid;
-  grid-template-columns: 96px 128px 148px minmax(0, 1fr) 78px;
+  /* 列宽全部可压缩:窄屏时前几列先收窄,最后一列(操作)永远留够,
+     中间那列用 minmax(0,1fr) 吃掉剩下的空间。 */
+  grid-template-columns: minmax(0, 92px) minmax(0, 124px) minmax(0, 168px) minmax(0, 1fr) minmax(0, 76px);
   gap: 10px; align-items: center;
   padding: 8px 10px;
   border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
   font-size: 12px;
 }
 .event .t { color: var(--ink-2); }
 .event .ip { color: var(--ink); word-break: break-all; }
-.event .k { color: var(--green); }
+.event .k { color: var(--green); overflow-wrap: anywhere; }
 .event .d { color: var(--ink-2); word-break: break-word; }
-.event .a { font-size: 10px; padding: 1px 6px; border: 1px solid var(--line-soft); text-align: center; }
+.event .a {
+  font-size: 10px; padding: 1px 6px; border: 1px solid var(--line-soft);
+  border-radius: 6px; text-align: center; white-space: nowrap;
+}
 .event .a.blocked { color: var(--red); border-color: var(--red); }
 .event .a.logged { color: var(--green); border-color: var(--green-dim); }
 .event .unblock {
@@ -156,13 +165,28 @@ a { color: var(--green); }
   font-size: 11px; padding: 3px 9px;
 }
 .event .unblock:hover { background: var(--ink); color: var(--bg); }
-.empty-note { color: var(--ink-2); font-size: 13px; padding: 12px; border: 1px dashed var(--line-soft); text-align: center; }
+/* 窄屏:事件行拆成两段,不再挤成一横排(之前会互相压字)。 */
+@media (max-width: 760px) {
+  .event {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px 10px;
+  }
+  .event .t { grid-row: 1; grid-column: 1; }
+  .event .a { grid-row: 1; grid-column: 2; }
+  .event .ip { grid-row: 2; grid-column: 1 / -1; }
+  .event .k { grid-row: 3; grid-column: 1 / -1; }
+  .event .d { grid-row: 4; grid-column: 1 / -1; }
+}
+.empty-note {
+  color: var(--ink-2); font-size: 13px; padding: 12px;
+  border: 1px dashed var(--line-soft); border-radius: var(--radius); text-align: center;
+}
 
 /* ---------- users ---------- */
 .users { display: flex; flex-direction: column; gap: 8px; }
 .user-row {
   display: flex; align-items: center; gap: 12px;
-  padding: 11px 13px; border: 1px solid var(--line-soft);
+  padding: 11px 13px; border: 1px solid var(--line-soft); border-radius: var(--radius);
 }
 .user-row .avatar {
   width: 38px; height: 38px; border-radius: var(--radius);
@@ -184,13 +208,13 @@ a { color: var(--green); }
 
 /* ---------- conversations ---------- */
 .convos { display: flex; flex-direction: column; gap: 10px; }
-.convo { padding: 13px 14px; border: 1px solid var(--line-soft); }
+.convo { padding: 13px 14px; border: 1px solid var(--line-soft); border-radius: var(--radius); }
 .convo-head { font-weight: 700; font-size: 13px; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .convo-head .arrow { color: var(--ink-2); font-weight: 400; }
 .msgs { display: flex; flex-direction: column; gap: 4px; }
 .msg-line {
   font-size: 12px; line-height: 1.6; padding: 6px 9px;
-  border: 1px solid var(--line-soft); word-break: break-word;
+  border: 1px solid var(--line-soft); border-radius: 8px; word-break: break-word;
 }
 .msg-line .who { font-weight: 700; color: var(--green); margin-right: 6px; }
 .msg-line .when { color: var(--ink-2); font-size: 10px; margin-left: 6px; }
@@ -202,6 +226,7 @@ a { color: var(--green); }
 .confirm-card {
   position: relative; width: min(88vw, 420px);
   padding: 22px; background: var(--bg); border: 1px solid var(--line);
+  border-radius: var(--radius);
 }
 .confirm-card h3 { font-size: 15px; margin-bottom: 10px; }
 .confirm-card p { color: var(--ink-2); font-size: 13px; line-height: 1.7; margin-bottom: 18px; }

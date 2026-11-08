@@ -4,6 +4,12 @@
    ============================================================ */
 
 :root {
+  /* 弹簧缓动。linear() 是采样出来的物理曲线:
+     --spring-1     阻尼比 1(临界阻尼),消息入场用;
+     --spring-back  阻尼比 0.62,松手回弹用。 */
+  --spring-1: linear(0, 0.0079, 0.0288, 0.0596, 0.0974, 0.1402, 0.186, 0.2335, 0.2816, 0.3294, 0.3764, 0.4219, 0.4656, 0.5073, 0.5468, 0.584, 0.6189, 0.6516, 0.6819, 0.71, 0.7361, 0.7601, 0.7822, 0.8024, 0.821, 0.838, 0.8535, 0.8677, 0.8806, 0.8923, 0.9029, 0.9126, 0.9213, 0.9292, 0.9364, 0.9428, 0.9487, 0.9539, 0.9587, 0.963, 0.9668, 0.9703, 0.9734, 0.9762, 0.9787, 0.9809, 0.983, 0.9848, 1);
+  --spring-back: linear(0, 0.0081, 0.0307, 0.0652, 0.1092, 0.1608, 0.2179, 0.2788, 0.3419, 0.406, 0.4699, 0.5325, 0.5932, 0.6512, 0.706, 0.7572, 0.8047, 0.848, 0.8873, 0.9225, 0.9536, 0.9808, 1.0043, 1.0241, 1.0406, 1.054, 1.0645, 1.0724, 1.078, 1.0816, 1.0833, 1.0834, 1.0822, 1.0799, 1.0767, 1.0727, 1.0682, 1.0633, 1.0581, 1.0528, 1.0474, 1.0421, 1.0369, 1.032, 1.0272, 1.0228, 1.0186, 1.0148, 1);
+  --spring-dur: 520ms;
   /* ------------------------------------------------------------
      DESIGN LANGUAGE — "weightless glass" (see the P2 reference).
 
@@ -1254,6 +1260,7 @@ body.dark .chat-header { background: rgba(20, 24, 32, 0.30); border-bottom-color
 @keyframes typingFade { from { opacity: 0; transform: translateY(6px) } to { opacity: 1; transform: translateY(0) } }
 @keyframes typingBlink { 0%,100%{opacity:.35} 50%{opacity:1} }
 
+/* ============================================================
    Task 4 — image messages: no bubble chrome at all.
    The picture is sent at its natural aspect ratio, as a plain
    rounded rectangle sitting directly on the glass background.
@@ -1909,9 +1916,9 @@ body.dark .hello-splash-hint {
 .modal.hidden { display: none !important; pointer-events: none !important; }
 .modal-mask {
   position: absolute; inset: 0;
-  background: rgba(28, 42, 62, 0.20);
-
-  -webkit-backdrop-filter: ;
+  /* 二次页面弹出时，一级界面不要被统一压暗 —— 遮罩只负责「点外面关闭」，
+     压暗会让整层 UI 一起变灰，玻璃的通透感全没了。 */
+  background: transparent;
   animation: modalMaskIn 0.3s ease both;
 }
 @keyframes modalMaskIn { from { opacity: 0; } to { opacity: 1; } }
@@ -1926,9 +1933,8 @@ body.dark .hello-splash-hint {
 }
 .ask-confirm-mask {
   position: absolute; inset: 0;
-  background: rgba(0, 0, 0, 0.32);
-
-  -webkit-backdrop-filter: ;
+  /* 只做「点外面关闭」,别把底下那层界面压成一片灰。 */
+  background: rgba(0, 0, 0, 0.16);
 }
 .ask-confirm-card {
   position: relative;
@@ -1986,6 +1992,13 @@ body.dark .modal-card { background: rgba(20, 24, 32, 0.70); border-color: rgba(2
 .modal-actions {
   display: flex; justify-content: flex-end; gap: 8px;
   margin-top: 18px;
+}
+/* 弹窗底部按钮条。之前这个类根本没写样式,按钮直接贴在卡片边缘上。 */
+.modal-foot {
+  display: flex; justify-content: flex-end; gap: 8px;
+  padding: 14px 20px 18px;
+  border-top: 1px solid var(--glass-border-soft);
+  background: transparent;
 }
 
 .plus-action {
@@ -5159,17 +5172,61 @@ body.theme-dark .mention-preview .cancel:hover {
 }
 
 /* ============================================================
+   文件消息卡片
+   ============================================================ */
+.msg-bubble.file-bubble { padding: 0 !important; background: none !important; }
+.file-card {
+  display: flex; align-items: center; gap: 10px;
+  min-width: 190px; max-width: 280px;
+  padding: 10px 12px;
+  border: 1px solid var(--glass-border-soft);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.45);
+  color: inherit; text-decoration: none;
+  transition: background .18s, transform .18s;
+}
+.file-card:hover { background: rgba(255, 255, 255, 0.7); transform: translateY(-1px); }
+.file-card .file-icon { font-size: 20px; line-height: 1; }
+.file-card .file-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.file-card .file-name {
+  font-size: 13px; font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.file-card .file-size { font-size: 11px; color: var(--muted); }
+.file-card .file-dl { font-size: 12px; color: var(--accent); font-weight: 700; flex-shrink: 0; }
+body.dark .file-card { background: rgba(255, 255, 255, 0.08); }
+
+/* ============================================================
+   连续曲率 —— iOS 那种 squircle 圆角
+   ------------------------------------------------------------
+   corner-shape 是 Chrome 139+ 的属性,老浏览器直接忽略,
+   退回 border-radius,不会开天窗。
+   ============================================================ */
+* { corner-shape: squircle; }
+
+/* ============================================================
    消息入场动画 —— 从下往上弹
    ------------------------------------------------------------
    只有「刚到的新消息」带 .msg-enter(整页重建历史时不带),
    所以刷新一次不会让整屏历史跟着跳一遍。
    ============================================================ */
-@keyframes msgEnter {
-  from { opacity: 0; transform: translateY(20px) scale(.96); }
-  to   { opacity: 1; transform: translateY(0) scale(1); }
-}
+/* 弹簧缓动用 linear() 采样出来:
+   --spring-1  阻尼比 1(临界阻尼)—— 起步快、收尾稳,不抖也不越界;
+   --spring-back 阻尼比 0.62 —— 松手后过冲一点点再停,就是那个「回弹」。 */
 .msg-row.msg-enter {
-  animation: msgEnter .26s cubic-bezier(.22, 1, .36, 1) both;
+  animation: msgEnter var(--spring-dur, 520ms) var(--spring-1, linear(0, 1)) both;
+  /* 从发送按钮那一侧「递」出来:变换原点在右下角。 */
+  transform-origin: 96% 100%;
+}
+.msg-row:not(.me).msg-enter { transform-origin: 4% 100%; }
+/* 发送按钮:按下去缩一点,松手弹回来。 */
+.btn-primary {
+  transition: transform 420ms var(--spring-back, linear(0, 1)), background .18s, box-shadow .18s;
+}
+.btn-primary:active { transform: scale(.9); transition-duration: 110ms; }
+@keyframes msgEnter {
+  from { opacity: 0; transform: translateY(24px) scale(.92) rotate(-1.4deg); }
+  to   { opacity: 1; transform: translateY(0) scale(1) rotate(0); }
 }
 @media (prefers-reduced-motion: reduce) {
   .msg-row.msg-enter { animation: none; }

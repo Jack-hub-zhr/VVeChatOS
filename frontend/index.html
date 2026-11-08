@@ -8,9 +8,9 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="theme-color" content="#4C6FFF" />
   <title>VVeChat</title>
-  <link rel="stylesheet" href="style.css?v=20261107g" />
+  <link rel="stylesheet" href="style.css?v=20261107h" />
   <!-- 液态玻璃视觉层（折射引擎移植自 rdev/liquid-glass-react, MIT） -->
-  <link rel="stylesheet" href="liquid-glass.css?v=20261107g" />
+  <link rel="stylesheet" href="liquid-glass.css?v=20261107h" />
   <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><text x='32' y='44' font-family='system-ui' font-size='40' font-weight='800' text-anchor='middle' fill='%234C6FFF'>V</text></svg>" />
 </head>
 <body>
@@ -392,7 +392,7 @@
               <div class="more-row static">
                 <span class="more-row-main">
                   <span class="more-row-title" data-i18n="pref_ai_groups">群里可以叫助手</span>
-                  <span class="more-row-desc" data-i18n="pref_ai_groups_desc">在群聊里 @Qwen，它会读完上下文再回答</span>
+                  <span class="more-row-desc" data-i18n="pref_ai_groups_desc">在群聊里 @Jacky Bot，它会读完上下文再回答</span>
                 </span>
                 <span class="more-row-badge" data-i18n="pref_ai_groups_always">始终开启</span>
               </div>
@@ -454,7 +454,7 @@
                   </svg>
                 </div>
                 <div class="ai-head-text">
-                  <div class="ai-head-title" id="ai-head-title">Qwen</div>
+                  <div class="ai-head-title" id="ai-head-title">Jacky Bot</div>
                   <div class="ai-head-sub" id="ai-status" data-i18n="ai_checking">正在检查中转状态…</div>
                 </div>
               </div>
@@ -477,7 +477,7 @@
               </div>
             </div>
             <form class="ai-composer" id="ai-form">
-              <textarea id="ai-input" rows="1" placeholder="给 Qwen 发消息…（Enter 发送，Shift+Enter 换行）" data-i18n-ph="ai_input_ph" autocomplete="off"></textarea>
+              <textarea id="ai-input" rows="1" placeholder="给 Jacky Bot 发消息…（Enter 发送，Shift+Enter 换行）" data-i18n-ph="ai_input_ph" autocomplete="off"></textarea>
               <div class="ai-tools">
                 <div class="ai-tools-group">
                   <!-- 模型：每一项都是一个具体的 Qwen 模型，选哪个就回哪个 -->
@@ -584,7 +584,7 @@
                    by name. Tapping it drops the @ in for you. -->
               <button type="button" class="mention-hint-bar hidden" id="qwen-hint">
                 <span class="mention-hint-dot">@</span>
-                <span class="mention-hint-text" data-i18n="hint_assistant_call">点击我 让Qwen也一起来聊！</span>
+                <span class="mention-hint-text" data-i18n="hint_assistant_call">点击我 让Jacky Bot也一起来聊！</span>
               </button>
               <div id="mention-preview" class="mention-preview hidden">
                 <div class="info">
@@ -608,7 +608,13 @@
                 </button>
                 <!-- @ someone in a group chat -->
                 <button type="button" class="mention-btn" id="mention-btn" title="@ 群成员" data-i18n-title="mention_members" data-i18n-aria="mention_members">@</button>
+                <button type="button" class="attach-btn" id="file-btn" title="文件" data-i18n-title="file" aria-label="文件" data-i18n-aria="file">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21.4 11.05 12.25 20.2a5.5 5.5 0 0 1-7.78-7.78l9.19-9.19a3.67 3.67 0 0 1 5.19 5.19l-9.2 9.19a1.83 1.83 0 0 1-2.59-2.59l8.49-8.48"/>
+                  </svg>
+                </button>
                 <input type="file" id="img-input" accept="image/*" class="hidden" />
+                <input type="file" id="file-input" class="hidden" />
                 <input id="chat-input" type="text" placeholder="输入消息…" data-i18n-ph="chat_input_ph" autocomplete="off" />
                 <button class="btn btn-primary" type="submit" id="send-btn" data-i18n="send">发送</button>
               </div>
@@ -829,7 +835,7 @@
   <!-- Socket.io client is served by this same Express app at /socket.io/socket.io.js,
        so there is no third-party CDN to fail (or be blocked). -->
   <script src="/socket.io/socket.io.js"></script>
-  <script src="config.js?v=20261107g"></script>
+  <script src="config.js?v=20261107h"></script>
   <!-- The 550C theme is ~60 KB. Only fetch it when it is actually on:
        localStorage says so right now, and app.js re-checks after login
        for the case where the account has it on but this browser does
@@ -847,7 +853,7 @@
        time even though the theme was enabled. -->
   <script>
   (function () {
-    try { window.__VV_ASSET_V = '20261107g'; } catch (e) { }
+    try { window.__VV_ASSET_V = '20261107h'; } catch (e) { }
     var V = window.__VV_ASSET_V || '';
     var on = false;
     try { on = localStorage.getItem('vve:boot550c') === '1'; } catch (e) { }
@@ -869,8 +875,8 @@
   })();
   </script>
   <!-- 液态玻璃引擎：折射 + 果冻物理 + 体积光 + 光照互通 -->
-  <script src="liquid-glass-maps.js?v=20261107g"></script>
-  <script src="liquid-glass.js?v=20261107g"></script>
-  <script src="app.js?v=20261107g"></script>
+  <script src="liquid-glass-maps.js?v=20261107h"></script>
+  <script src="liquid-glass.js?v=20261107h"></script>
+  <script src="app.js?v=20261107h"></script>
 </body>
 </html>

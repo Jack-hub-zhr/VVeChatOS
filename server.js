@@ -83,6 +83,19 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conv_type, conv_id, created_at);
 
+  -- 上传的文件。文件本身存在磁盘上,数据库只记元信息。
+  CREATE TABLE IF NOT EXISTS files (
+    id TEXT PRIMARY KEY,
+    owner_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    mime TEXT,
+    size INTEGER NOT NULL DEFAULT 0,
+    path TEXT NOT NULL,
+    conv_type TEXT,
+    conv_id TEXT,
+    created_at INTEGER NOT NULL
+  );
+
   -- Runtime configuration for the AI relay (so the admin can plug in a key
   -- from the UI instead of editing Render's environment variables).
   CREATE TABLE IF NOT EXISTS ai_config (
@@ -355,6 +368,35 @@ try {
   console.error('[VVeChat] assistant seed failed:', e.message);
 }
 
+// 文件传输助手 —— 专门用来收发文件的系统账号(相当于微信的"文件传输助手")。
+// 它是个真人账号,所以能像别人一样出现在好友列表里、能收能发文件。
+const FILE_ASSISTANT_NAME = '文件传输助手';
+try {
+  const row = db.prepare('SELECT id FROM users WHERE username = ?').get(FILE_ASSISTANT_NAME);
+  if (!row) {
+    db.prepare(
+      `INSERT INTO users (username, password_hash, avatar_color, bio, created_at)
+       VALUES (?, ?, ?, ?, ?)`
+    ).run(FILE_ASSISTANT_NAME, bcrypt.hashSync(require('crypto').randomBytes(24).toString('hex'), 10),
+      '#60a5fa', 'VVeChat 文件传输助手', now());
+    console.log('[VVeChat] seeded file transfer assistant');
+  }
+} catch (e) {
+  console.error('[VVeChat] file assistant seed failed:', e.message);
+}
+
+// 注册/登录时给的默认联系人:Jack、Jacky Bot、文件传输助手。
+// 好友关系是双向的 —— 两边都得有对方,才能互相发消息。
+function seedDefaultContacts(userId) {
+  const ins = db.prepare('INSERT OR IGNORE INTO friends (user_id, friend_id, created_at) VALUES (?, ?, ?)');
+  for (const name of [ADMIN_USERNAME, ASSISTANT_NAME, FILE_ASSISTANT_NAME]) {
+    const u = db.prepare('SELECT id FROM users WHERE username = ?').get(name);
+    if (!u || u.id === userId) continue;
+    ins.run(userId, u.id, now());
+    ins.run(u.id, userId, now());
+  }
+}
+
 // Is this message calling the assistant by name?
 // 群里它叫 Jacky Bot,老的 @Qwen 也还认。
 function mentionsAssistant(text) {
@@ -366,6 +408,12 @@ async function assistantAnswer(question, context, kind) {
   const catalog = aiModelCatalog().filter((m) => m.ready);
   if (!catalog.length) return null;
 
+  // 群里谁用什么语言说话,就用什么语言接话。
+  const sample = String(question || '').trim() ||
+    (context && context.length ? String(context[context.length - 1].content || '') : '');
+  const useZh = /[\u4e00-\u9fa5]/.test(sample);
+  const langLine = useZh ? '默认用简体中文。' : 'Reply in English.';
+
   const system = kind === 'chime'
     ? [
       '你叫 Jacky Bot，是这个群聊里的一位成员。',
@@ -373,14 +421,14 @@ async function assistantAnswer(question, context, kind) {
       '接话要自然：一两句就够，绝不超过三句；不要提问、不要罗列要点、不要加小标题。',
       '内容要对得上刚才大家在聊的事，别凭空另开一个话题。',
       '不要出现「作为一个AI」「作为一个助手」这类说法。',
-      '默认用简体中文。'
+      langLine
     ].join('\n')
     : [
       '你叫 Jacky Bot，是这个群聊里的一位成员。大家聊天时会喊你一声，你就把话接过来。',
       '请像真人一样回话：口语、简短、直接，最多两三句话。',
       '不要出现「作为一个AI」「作为一个助手」这类说法，也不要罗列要点或加小标题。',
       '如果上下文里找不到答案，就直接说没看到相关信息，别编。',
-      '默认用简体中文。'
+      langLine
     ].join('\n');
 
   const messages = [{ role: 'system', content: system }];
@@ -820,6 +868,13 @@ app.post('/api/control/purge-user/:id', rateLimit('write'), authRequired, requir
 // Factory reset: keep the app working, keep Jack, wipe everything else.
 app.post('/api/control/format-all', rateLimit('write'), authRequired, requireAdmin, (req, res) => {
   try {
+    // 保留三个系统账号:管理员、群里的助手、文件传输助手。
+    // 少了 Jacky Bot,群里的 @ 就没人接话了。
+    const keep = [ADMIN_USERNAME, ASSISTANT_NAME, FILE_ASSISTANT_NAME];
+    const keepIds = keep.map((n) => {
+      const u = db.prepare('SELECT id FROM users WHERE username = ?').get(n);
+      return u ? u.id : -1;
+    });
     db.exec(`
       DELETE FROM messages;
       DELETE FROM friends;
@@ -829,15 +884,19 @@ app.post('/api/control/format-all', rateLimit('write'), authRequired, requireAdm
       DELETE FROM group_members;
       DELETE FROM ai_chat_messages;
       DELETE FROM ai_chats;
-      DELETE FROM users WHERE username <> '${ADMIN_USERNAME}';
-      DELETE FROM groups WHERE is_official = 0;
+      DELETE FROM files;
     `);
+    const del = db.prepare('DELETE FROM users WHERE id NOT IN (?, ?, ?)');
+    del.run(keepIds[0], keepIds[1], keepIds[2]);
+    db.exec('DELETE FROM groups WHERE is_official = 0');
     OFFICIAL_GROUP_ID = ensureOfficialGroup();
-    const jack = db.prepare('SELECT id FROM users WHERE username = ?').get(ADMIN_USERNAME);
-    if (jack) {
-      db.prepare('INSERT OR IGNORE INTO group_members (group_id, user_id, joined_at) VALUES (?, ?, ?)')
-        .run(OFFICIAL_GROUP_ID, jack.id, now());
+    // Jack、Jacky Bot、文件传输助手 都回到官方群里,并互为好友。
+    const addMember = db.prepare('INSERT OR IGNORE INTO group_members (group_id, user_id, joined_at) VALUES (?, ?, ?)');
+    for (const uid of keepIds) {
+      if (uid > 0) addMember.run(OFFICIAL_GROUP_ID, uid, now());
     }
+    const jack = db.prepare('SELECT id FROM users WHERE username = ?').get(ADMIN_USERNAME);
+    if (jack) seedDefaultContacts(jack.id);
     io.emit('control:formatted', { at: now() });
     res.json({ ok: true, formatted: true, official_group_id: OFFICIAL_GROUP_ID });
   } catch (e) {
@@ -1553,10 +1612,15 @@ app.post('/api/ai/chat', rateLimit('write'), authRequired, async (req, res) => {
 
   // The system prompt. When 搜索 is on, the live results are appended to
   // it so the model can actually ground its answer.
-  const BASE_SYSTEM = '你是 VVeChat 内置的通义千问（Qwen）助手。请用简体中文回答，简洁、直接、有条理；不确定的地方要明说。';
+  // 用户用什么语言提问,就用什么语言回答 —— 别再一律中文了。
+  const BASE_SYSTEM = msgIsZh
+    ? '你是 VVeChat 内置的通义千问（Qwen）助手。请用简体中文回答，简洁、直接、有条理；不确定的地方要明说。'
+    : 'You are the Qwen assistant built into VVeChat. Answer in English — concise, direct and organized; say so when you are unsure.';
   // 第一轮对话:顺带起个名字。模型被要求把标题放在第一行,
   // 下面那道「门」会把它从正文里摘走,用户看不到。
-  const TITLE_HINT = '\n\n【重要】回答的第一行必须先输出这一行格式的标题,然后再写正文：\n【标题:不超过12个字的标题】\n标题要概括这段对话的主题,不要引号,不要多余的话。';
+  const TITLE_HINT = msgIsZh
+    ? '\n\n【重要】回答的第一行必须先输出这一行格式的标题,然后再写正文：\n【标题:不超过12个字的标题】\n标题要概括这段对话的主题,不要引号,不要多余的话。'
+    : '\n\n[IMPORTANT] The FIRST line of your answer must be a title in this format, then the body:\n[Title: a title of at most 12 words]\nThe title should summarize the topic. No quotes, no extra words.';
   let searchCtx = null;
   const getSearchCtx = async () => {
     if (searchCtx !== null) return searchCtx;
@@ -1869,11 +1933,15 @@ function cleanAiTitle(raw, isZh) {
 // 把标题那一行从正文里摘掉(存进库的回答不该带标题)
 function stripTitleLine(content, isZh) {
   const s0 = String(content || '');
-  const nl = s0.indexOf('\n');
-  if (nl < 0) return s0;
-  const first = s0.slice(0, nl);
-  if (!parseTitleLine(first, isZh)) return s0;
-  return s0.slice(nl + 1).replace(/^\s*\n/, '');
+  // 模型常常在标题前面空两行(先 "\n\n" 再写标题)。这些空行会被存进库,
+  // 流式的时候看不出来,切回历史才暴露 —— 所以先吃掉开头的空白。
+  const s = s0.replace(/^[\s\u3000]+/, '');
+  const nl = s.indexOf('\n');
+  if (nl < 0) return parseTitleLine(s, isZh) ? '' : s;
+  const first = s.slice(0, nl);
+  if (!parseTitleLine(first, isZh)) return s;
+  // 标题行连同它后面的空行一起摘掉,正文直接从第一个字开始。
+  return s.slice(nl + 1).replace(/^[\s\u3000]+/, '');
 }
 
 // ============================================================
@@ -2019,6 +2087,8 @@ app.post('/api/register', rateLimit('auth'), (req, res) => {
   // auto-join official group
   db.prepare('INSERT OR IGNORE INTO group_members (group_id, user_id, joined_at) VALUES (?, ?, ?)')
     .run(OFFICIAL_GROUP_ID, userId, now());
+  // 默认联系人:Jack、Jacky Bot、文件传输助手。
+  seedDefaultContacts(userId);
   const token = jwt.sign({ uid: userId, username }, JWT_SECRET, { expiresIn: '30d' });
   res.json({ token, user: userPublic({ id: userId, username, avatar: null, bio: '', avatar_color: color }) });
 });
@@ -2036,6 +2106,8 @@ app.post('/api/login', rateLimit('auth'), (req, res) => {
   // re-join official group if previously removed
   db.prepare('INSERT OR IGNORE INTO group_members (group_id, user_id, joined_at) VALUES (?, ?, ?)')
     .run(OFFICIAL_GROUP_ID, u.id, now());
+  // 老账号也补上默认联系人(第一次登录时种下)。
+  seedDefaultContacts(u.id);
   const token = jwt.sign({ uid: u.id, username: u.username }, JWT_SECRET, { expiresIn: '30d' });
   // Successful login clears this IP's failure counter.
   try { const b = RATE_BUCKETS.get(clientIp(req)); if (b) b.authFail = 0; } catch (_) {}
@@ -2508,6 +2580,11 @@ app.put('/api/groups/:id', rateLimit('write'), authRequired, (req, res) => {
   if (body.icon_color !== undefined) {
     db.prepare('UPDATE groups SET icon_color = ? WHERE id = ?').run(body.icon_color || null, gid);
   }
+  // 置顶 —— 前端的勾选框一直发这个字段,服务端以前没接,所以点了没反应。
+  if (body.pinned !== undefined) {
+    db.prepare('UPDATE groups SET pinned = ? WHERE id = ?').run(body.pinned ? 1 : 0, gid);
+    try { if (io) io.emit('group:updated', { groupId: gid, pinned: body.pinned ? 1 : 0 }); } catch {}
+  }
   const fresh = db.prepare('SELECT * FROM groups WHERE id = ?').get(gid);
   res.json({ ok: true, group: groupPublic(fresh) });
 });
@@ -2706,11 +2783,16 @@ app.get('/api/conversations', authRequired, (req, res) => {
   `).all(uid);
   const groups = db.prepare(`
     SELECT g.id, g.name AS username, NULL AS avatar, NULL AS avatar_color, 'group' AS type, g.is_official,
-           g.icon_color, g.icon_emoji
+           g.icon_color, g.icon_emoji, g.pinned
     FROM group_members gm JOIN groups g ON g.id = gm.group_id
-    WHERE gm.user_id = ? ORDER BY g.is_official DESC, g.id ASC
+    WHERE gm.user_id = ? ORDER BY g.is_official DESC, g.pinned DESC, g.id ASC
   `).all(uid);
-  const all = [...friends, ...groups];
+  // "我" —— 自己的会话,拿来当备忘录/文件暂存。不用好友关系。
+  const self = {
+    id: uid, username: '我', avatar: null, avatar_color: null,
+    type: 'user', special: 'self', pinned: 0
+  };
+  const all = [self, ...friends, ...groups];
   const lastUserStmt = db.prepare(`
     SELECT id, content, sender_id, created_at, type FROM messages
     WHERE conv_type = 'user' AND conv_id = ? AND is_deleted = 0
@@ -2734,12 +2816,82 @@ app.get('/api/conversations', authRequired, (req, res) => {
   };
   for (const c of all) {
     const last = c.type === 'user' ? lastUserStmt.get(userConvId(uid, c.id)) : lastGroupStmt.get(c.id);
-    c.last_message = last ? (last.type === 'image' ? '🖼  图片' : last.content) : '';
+    c.last_message = last
+      ? (last.type === 'image' ? '🖼  图片' : (last.type === 'file' ? '📎  文件' : last.content))
+      : '';
     c.last_sender_id = last ? last.sender_id : null;
     c.last_at = last ? last.created_at : 0;
     c.unread = c.type === 'user' ? unreadStmt('user', userConvId(uid, c.id)) : unreadStmt('group', String(c.id));
   }
   res.json({ conversations: all });
+});
+
+// ============================================================
+// 文件上传/下载
+//   POST /api/upload      上传(base64),返回文件 id
+//   GET  /api/files/:id   下载(只有会话里的人能下)
+// ============================================================
+const UPLOAD_DIR = path.join(__dirname, 'uploads');
+try { fs.mkdirSync(UPLOAD_DIR, { recursive: true }); } catch (e) { console.error('[VVeChat] uploads dir failed:', e.message); }
+
+// 文件名里可能混进路径分隔符,只留最后一段。
+function safeFileName(name) {
+  return String(name || 'file').replace(/[\\/]+/g, '_').slice(0, 120) || 'file';
+}
+
+// 会话里的人才能下载这个文件。
+function canAccessFile(user, file) {
+  if (!user || !file) return false;
+  if (file.owner_id === user.id) return true;
+  if (file.conv_type === 'group') {
+    return !!db.prepare('SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?').get(file.conv_id, user.id);
+  }
+  // 单聊的 conv_id 形如 u_1_2
+  const parts = String(file.conv_id || '').split('_');
+  if (parts.length === 3 && parts[0] === 'u') return Number(parts[1]) === user.id || Number(parts[2]) === user.id;
+  return false;
+}
+
+app.post('/api/upload', rateLimit('write'), authRequired, express.json({ limit: '60mb' }), (req, res) => {
+  const { name, mime, data, conv_type, conv_id } = req.body || {};
+  if (conv_type !== 'user' && conv_type !== 'group') return res.status(400).json({ error: 'invalid conv_type' });
+  let buf;
+  try { buf = Buffer.from(String(data || ''), 'base64'); } catch (_) { buf = Buffer.alloc(0); }
+  if (!buf.length) return res.status(400).json({ error: '文件是空的' });
+  if (buf.length > 50 * 1024 * 1024) return res.status(413).json({ error: '文件过大(>50MB)' });
+  const fname = safeFileName(name);
+  const ext = (path.extname(fname) || '').slice(0, 12);
+  const id = require('crypto').randomUUID();
+  const rel = id + ext;
+  try {
+    fs.writeFileSync(path.join(UPLOAD_DIR, rel), buf);
+  } catch (e) {
+    return res.status(500).json({ error: '保存文件失败' });
+  }
+  const convId = conv_type === 'group'
+    ? String(Number(conv_id))
+    : userConvId(req.user.id, Number(conv_id));
+  db.prepare(
+    'INSERT INTO files (id, owner_id, name, mime, size, path, conv_type, conv_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(id, req.user.id, fname, String(mime || 'application/octet-stream'), buf.length, rel, conv_type, convId, now());
+  res.json({
+    ok: true,
+    file: { id, name: fname, mime: mime || 'application/octet-stream', size: buf.length, url: `/api/files/${id}` }
+  });
+});
+
+app.get('/api/files/:id', authRequired, (req, res) => {
+  const f = db.prepare('SELECT * FROM files WHERE id = ?').get(String(req.params.id));
+  if (!f) return res.status(404).json({ error: '文件不存在' });
+  if (!canAccessFile(req.user, f)) return res.status(403).json({ error: '无权下载该文件' });
+  const p = path.join(UPLOAD_DIR, path.basename(f.path));
+  if (!fs.existsSync(p)) return res.status(404).json({ error: '文件已丢失' });
+  res.setHeader('Content-Type', f.mime || 'application/octet-stream');
+  // 中文文件名要走 RFC 5987,不然浏览器存下来是乱码。
+  const ascii = String(f.name).replace(/[^\x20-\x7e]/g, '_').replace(/"/g, '');
+  res.setHeader('Content-Disposition',
+    `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(f.name)}`);
+  fs.createReadStream(p).pipe(res);
 });
 
 // helper: build a message response object
@@ -2795,7 +2947,9 @@ app.post('/api/messages', rateLimit('write'), authRequired, (req, res) => {
     normalizedConvId = String(conv_id);
   } else {
     const peerId = Number(conv_id);
-    const isFriend = db.prepare('SELECT 1 FROM friends WHERE user_id = ? AND friend_id = ?').get(req.user.id, peerId);
+    // 跟自己的会话(备忘录)不需要好友关系。
+    const isFriend = peerId === req.user.id ||
+      db.prepare('SELECT 1 FROM friends WHERE user_id = ? AND friend_id = ?').get(req.user.id, peerId);
     if (!isFriend) return res.status(403).json({ error: 'not friends' });
     normalizedConvId = userConvId(req.user.id, peerId);
   }
@@ -2804,7 +2958,7 @@ app.post('/api/messages', rateLimit('write'), authRequired, (req, res) => {
     if (!ref) return res.status(400).json({ error: '回复的消息不存在' });
     reply_to = ref.id;
   }
-  const msgType = ['text','image','system'].includes(type) ? type : 'text';
+  const msgType = ['text','image','system','file'].includes(type) ? type : 'text';
   const metaStr = meta ? JSON.stringify(meta) : null;
   const info = db.prepare(
     'INSERT INTO messages (conv_type, conv_id, sender_id, content, type, meta, reply_to, is_deleted, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)'
@@ -2865,7 +3019,9 @@ app.get('/api/messages', authRequired, (req, res) => {
     normalizedConvId = String(conv_id);
   } else {
     const peerId = Number(conv_id);
-    const ok = db.prepare('SELECT 1 FROM friends WHERE user_id = ? AND friend_id = ?').get(req.user.id, peerId);
+    // 跟自己的会话(备忘录)不需要好友关系。
+    const ok = peerId === req.user.id ||
+      db.prepare('SELECT 1 FROM friends WHERE user_id = ? AND friend_id = ?').get(req.user.id, peerId);
     if (!ok) return res.status(403).json({ error: 'not friends' });
     normalizedConvId = userConvId(req.user.id, peerId);
   }
@@ -3114,7 +3270,8 @@ io.on('connection', (socket) => {
         normalizedConvId = String(conv_id);
       } else {
         const peerId = Number(conv_id);
-        const ok = db.prepare('SELECT 1 FROM friends WHERE user_id = ? AND friend_id = ?').get(uid, peerId);
+        const ok = peerId === uid ||
+          db.prepare('SELECT 1 FROM friends WHERE user_id = ? AND friend_id = ?').get(uid, peerId);
         if (!ok) throw new Error('not friends');
         normalizedConvId = userConvId(uid, peerId);
       }
@@ -3123,7 +3280,7 @@ io.on('connection', (socket) => {
         if (!ref) throw new Error('回复的消息不存在');
         reply_to = ref.id;
       }
-      const msgType = ['text','image','system'].includes(type) ? type : 'text';
+      const msgType = ['text','image','system','file'].includes(type) ? type : 'text';
       const metaStr = meta ? JSON.stringify(meta) : null;
       const info = db.prepare(
         'INSERT INTO messages (conv_type, conv_id, sender_id, content, type, meta, reply_to, is_deleted, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)'

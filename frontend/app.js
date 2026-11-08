@@ -232,7 +232,11 @@
       hint_assistant_call: '点击我 让 Jacky Bot 也一起来聊',
       ai_new_chat: '新对话',
       ai_welcome: '有什么可以帮你？',
-      ai_input_ph: '给 Qwen 发消息…（Enter 发送，Shift+Enter 换行）',
+      ai_input_ph: '给 Jacky Bot 发消息…（Enter 发送，Shift+Enter 换行）',
+      file_too_big: '文件太大（上限 50MB）',
+      file_upload_failed: '文件发送失败',
+      file_download_failed: '文件下载失败',
+      file_name: '文件',
       ai_today: '今天',
       chat_empty_title: '选择一个会话开始聊天',
       chat_empty_desc: '可以从左侧选一个，或点右上角放大镜添加好友/群聊',
@@ -263,6 +267,7 @@
       remove: '移除',
       emoji: '表情',
       image: '图片',
+      file: '文件',
       mention_members: '@ 群成员',
       search_username_ph: '搜索用户名…',
       any_part_ph: '输入任何部分即可',
@@ -624,7 +629,11 @@
       hint_assistant_call: 'Tap me — let Jacky Bot join the chat',
       ai_new_chat: 'New chat',
       ai_welcome: 'What can I help with?',
-      ai_input_ph: 'Message Qwen… (Enter to send, Shift+Enter for a newline)',
+      ai_input_ph: 'Message Jacky Bot… (Enter to send, Shift+Enter for a newline)',
+      file_too_big: 'File is too large (50MB max)',
+      file_upload_failed: 'Could not send the file',
+      file_download_failed: 'Could not download the file',
+      file_name: 'File',
       ai_today: 'Today',
       chat_empty_title: 'Pick a conversation to start',
       chat_empty_desc: 'Choose one on the left, or use the magnifier to add someone',
@@ -655,6 +664,7 @@
       remove: 'Remove',
       emoji: 'Emoji',
       image: 'Image',
+      file: 'File',
       mention_members: '@ group members',
       search_username_ph: 'Search username…',
       any_part_ph: 'Type any part of it',
@@ -971,7 +981,7 @@
   // 助手(Qwen)是个真实账号,但它在群里不是「人」——
   // 不列进成员名册、不计入人数;可它出现的地方(会话列表、聊天气泡、
   // @ 选择器)要用跟侧边栏「助手」按钮一样的发光圆环当头像。
-  const ASSISTANT_NAME = 'Qwen';
+  const ASSISTANT_NAME = 'Jacky Bot';
   // 群里它叫 Jacky Bot(助手页面还是 Qwen —— 那是另一套语境)。
   // 两个名字都要认,头像上的发光圆环才不会掉。
   const ASSISTANT_ALIASES = ['qwen', 'jacky bot'];
@@ -1495,7 +1505,9 @@
       return;
     }
     empty.classList.add('hidden');
-    const sorted = [...state.conversations].sort((a,b) => (b.is_official||0)-(a.is_official||0) || (b.last_at||0)-(a.last_at||0));
+    // 置顶的群排最前,官方群照旧最优先,最后按最后一条消息排。
+    const sorted = [...state.conversations].sort((a,b) =>
+      (b.is_official||0)-(a.is_official||0) || (b.pinned||0)-(a.pinned||0) || (b.last_at||0)-(a.last_at||0));
     for (const c of sorted) {
       const li = document.createElement('li');
       li.className = 'list-item';
@@ -2366,6 +2378,14 @@
     let bubbleContent = '';
     if (m.is_deleted) bubbleContent = `<div class="msg-bubble deleted">${t('msg_deleted')}</div>`;
     else if (m.type === 'image') bubbleContent = `<div class="msg-bubble image-bubble"><img class="chat-img" src="${escapeHtml(m.content)}" alt="${t('img_alt')}" data-img="${escapeHtml(m.content)}" loading="lazy" /></div>`;
+    else if (m.type === 'file') {
+      const fm = m.meta || {};
+      const fname = fm.name || t('file_name');
+      bubbleContent = `<div class="msg-bubble file-bubble"><a class="file-card" href="#" data-file-id="${escapeHtml(m.content)}" data-file-name="${escapeHtml(fname)}" title="${escapeHtml(fname)}">
+        <span class="file-icon">📎</span>
+        <span class="file-meta"><span class="file-name">${escapeHtml(fname)}</span><span class="file-size">${escapeHtml(fmtFileSize(fm.size))}</span></span>
+        <span class="file-dl">⬇</span></a></div>`;
+    }
     else bubbleContent = `<div class="msg-bubble">${renderMentionText(m.content)}</div>`;
     // "Someone called you out" — a flag above the bubble.
     const mentionFlag = (ctype === 'group' && !mine && !m.is_deleted && mentionsMe(m.content))
@@ -2411,6 +2431,10 @@
       }
     }
     row.querySelectorAll('.chat-img').forEach(img => img.addEventListener('click', () => openLightbox(img.dataset.img)));
+    row.querySelectorAll('.file-card').forEach(a => a.addEventListener('click', (e) => {
+      e.preventDefault();
+      downloadFile(a.dataset.fileId, a.dataset.fileName);
+    }));
     // Tapping an avatar opens the shared action menu (查看资料 / 添加好友 /
     // 发消息) — see the delegated listener in ensureAvatarBound().  It
     // works for non-friends too, which is how you discover people inside
@@ -3269,6 +3293,66 @@
       $('#img-preview').classList.remove('hidden');
     };
     reader.readAsDataURL(file);
+  }
+
+  // ---------- 文件传输 ----------
+  // 走 base64 上传:后端把文件写到磁盘,数据库只存元信息。
+  function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
+      reader.onerror = () => reject(new Error('read failed'));
+      reader.readAsDataURL(file);
+    });
+  }
+  function fmtFileSize(n) {
+    const s = Number(n) || 0;
+    if (s < 1024) return s + ' B';
+    if (s < 1024 * 1024) return (s / 1024).toFixed(1) + ' KB';
+    return (s / 1024 / 1024).toFixed(1) + ' MB';
+  }
+  async function handleFileFile(file) {
+    if (!state.currentChat) { toast(t('pick_conversation_first')); return; }
+    if (file.size > 50 * 1024 * 1024) { toast(t('file_too_big')); return; }
+    const btn = $('#send-btn');
+    if (btn) btn.disabled = true;
+    try {
+      const data = await fileToBase64(file);
+      const { type, id } = state.currentChat;
+      const r = await api('/upload', {
+        method: 'POST',
+        body: { name: file.name, mime: file.type || 'application/octet-stream', data, conv_type: type, conv_id: id }
+      });
+      await sendMessage(r.file.id, {
+        type: 'file',
+        meta: { name: r.file.name, size: r.file.size, mime: r.file.mime }
+      });
+    } catch (e) {
+      console.error('[VVeChat] upload failed', e);
+      toast(t('file_upload_failed'));
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+  async function downloadFile(id, name) {
+    try {
+      const resp = await fetch(`${API_BASE}/api/files/${encodeURIComponent(id)}`, {
+        headers: state.token ? { Authorization: `Bearer ${state.token}` } : {}
+      });
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name || 'file';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    } catch (e) {
+      console.error('[VVeChat] download failed', e);
+      toast(t('file_download_failed'));
+    }
   }
 
   // ---------- socket ----------
@@ -4345,9 +4429,9 @@
   function aiUpdateHeadTitle() {
     const el = $('#ai-head-title');
     if (!el) return;
-    if (window.innerWidth > 820) { el.textContent = 'Qwen'; return; }
+    if (window.innerWidth > 820) { el.textContent = 'Jacky Bot'; return; }
     const c = (_aiChats || []).find(x => String(x.id) === String(_aiChatId));
-    el.textContent = (c && c.title && c.title !== '新对话') ? c.title : 'Qwen';
+    el.textContent = (c && c.title && c.title !== '新对话') ? c.title : 'Jacky Bot';
   }
 
   function aiRenderWelcome() {
@@ -5660,8 +5744,8 @@
       if (!input) return;
       input.focus();
       const pos = input.value.length;
-      input.value = input.value.slice(0, pos) + '@Qwen ';
-      input.setSelectionRange(pos + 6, pos + 6);
+      input.value = input.value.slice(0, pos) + '@Jacky Bot ';
+      input.setSelectionRange(pos + 11, pos + 11);
       input.dispatchEvent(new Event('input', { bubbles: true }));
     });
     // The chat header carries the same list switch as the AI header —
@@ -5845,6 +5929,9 @@
     });
     bindOnce($('#attach-btn'), 'click', () => $('#img-input').click());
     bindOnce($('#img-input'), 'change', (e) => { const f = e.target.files[0]; if (f) handleImageFile(f); e.target.value = ''; });
+    // 文件按钮:先弹「发图片 / 发文件」的选择,再选文件。
+    bindOnce($('#file-btn'), 'click', () => $('#file-input').click());
+    bindOnce($('#file-input'), 'change', (e) => { const f = e.target.files[0]; if (f) handleFileFile(f); e.target.value = ''; });
 
     // emoji picker (simplified)
     const EMOJIS = ['😀','😁','😂','🤣','😃','😄','😅','😆','😉','😊','😋','😎','😍','😘','🥰','😗','😙','😚','🙂','🤗','🤩','🤔','😐','😑','😶','🙄','😏','😣','😥','😮','🤐','😯','😪','😫','😴','😌','😛','😜','😝','🤤','😒','😓','😔','😕','🙃','🤑','😲','☹️','🙁','😖','😞','😟','😤','😢','😭','😦','😧','😨','😩','🤯','😬','😰','😱','🥵','🥶','😳','🤪','😵','😡','😠','🤬','😷','🤒','🤕','🤢','🤮','🤧','😇','🥳','🥺','🤠','🤡','🤥','🤫','🤭','🧐','🤓','👍','👎','👌','✌️','🤞','🤟','🤘','👏','🙌','🙏','💪','❤️','🧡','💛','💚','💙','💜','🖤','🤍','💔','❣️','💕','💞','💓','💗','💖','💘','💝','💟','🔥','✨','🎉','🎊','💯','💢','💥','💫','💦','💨'];
