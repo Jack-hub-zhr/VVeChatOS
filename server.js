@@ -372,14 +372,17 @@ try {
 // 它是个真人账号,所以能像别人一样出现在好友列表里、能收能发文件。
 const FILE_ASSISTANT_NAME = '文件传输助手';
 try {
-  const row = db.prepare('SELECT id FROM users WHERE username = ?').get(FILE_ASSISTANT_NAME);
+  const row = db.prepare('SELECT id, avatar_emoji FROM users WHERE username = ?').get(FILE_ASSISTANT_NAME);
   if (!row) {
     db.prepare(
-      `INSERT INTO users (username, password_hash, avatar_color, bio, created_at)
-       VALUES (?, ?, ?, ?, ?)`
+      `INSERT INTO users (username, password_hash, avatar_color, avatar_emoji, bio, created_at)
+       VALUES (?, ?, ?, ?, ?, ?)`
     ).run(FILE_ASSISTANT_NAME, bcrypt.hashSync(require('crypto').randomBytes(24).toString('hex'), 10),
-      '#60a5fa', 'VVeChat 文件传输助手', now());
+      '#60a5fa', '📁', 'VVeChat 文件传输助手', now());
     console.log('[VVeChat] seeded file transfer assistant');
+  } else if (!row.avatar_emoji) {
+    // 老库里的这个账号没有表情头像,补上。
+    db.prepare('UPDATE users SET avatar_emoji = ? WHERE id = ?').run('📁', row.id);
   }
 } catch (e) {
   console.error('[VVeChat] file assistant seed failed:', e.message);
@@ -2777,7 +2780,7 @@ app.post('/api/friend/respond', rateLimit('write'), authRequired, (req, res) => 
 app.get('/api/conversations', authRequired, (req, res) => {
   const uid = req.user.id;
   const friends = db.prepare(`
-    SELECT u.id, u.username, u.avatar, u.avatar_color, 'user' AS type
+    SELECT u.id, u.username, u.avatar, u.avatar_color, u.avatar_emoji, 'user' AS type
     FROM friends f JOIN users u ON u.id = f.friend_id
     WHERE f.user_id = ? ORDER BY u.username
   `).all(uid);

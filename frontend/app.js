@@ -1526,13 +1526,17 @@
       // wrapped in style="..." — dropping that produced broken markup like
       // <div class="avatar" background:linear-gradient(...)> and the
       // conversation avatars lost their colour.
-      const avatarBg = isGroup ? '' : (() => { const st = avatarStyle(c); return st ? ` style="${st}"` : ''; })();
+      // 表情头像(📁 之类)用柔白底,别再叠色盘;助手用发光圆环。
+      const avatarBg = isGroup ? '' : (() => {
+        if (c.avatar_emoji) return ' style="background:rgba(255,255,255,0.55)"';
+        const st = avatarStyle(c); return st ? ` style="${st}"` : '';
+      })();
       const dot = (isGroup || isOfficial) ? '' : `<span class="online-dot"></span>`;
       const avatarCls = [ac, online?'online':''].filter(Boolean).join(' ');
       const senderPrefix = c.last_sender_id && c.last_sender_id !== state.user.id && isGroup
         ? `<span style="color:var(--accent);font-weight:600;">${escapeHtml(userInfo(c.last_sender_id).username)}:</span> ` : '';
       const unreadHtml = c.unread > 0 ? `<span class="unread">${c.unread>99?'99+':c.unread}</span>` : '';
-      li.innerHTML = `<div class="${avatarCls}"${avatarBg} data-user-avatar="${isGroup ? '' : c.id}">${isGroup ? groupAvatarInner({ name: c.username, is_official: isOfficial, icon_emoji: c.icon_emoji }) : escapeHtml(initials(c.username))}${dot}</div>
+      li.innerHTML = `<div class="${avatarCls}"${avatarBg} data-user-avatar="${isGroup ? '' : c.id}">${isGroup ? groupAvatarInner({ name: c.username, is_official: isOfficial, icon_emoji: c.icon_emoji }) : avatarContent(c.username, c.avatar_emoji, 26)}${dot}</div>
         <div class="meta"><div class="name">${escapeHtml(groupDisplayName(c.username, isOfficial))} ${officialTag}</div>
         <div class="preview">${senderPrefix}${escapeHtml(preview)}</div></div>
         <div class="time">${fmtTime(c.last_at)}</div>${unreadHtml}`;
