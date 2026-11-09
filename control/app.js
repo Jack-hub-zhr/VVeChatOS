@@ -253,9 +253,10 @@
     for (const u of d.users) {
       const isJack = u.username === 'Jack';
       const row = el('div', { class: 'user-row' });
-      const isAssistant = u.username === 'Jacky Bot' || u.username === 'Qwen';
+      const isAssistant = u.username === 'AI' || u.username === 'Jacky Bot' || u.username === 'Qwen';
       const hasEmoji = !!u.avatar_emoji;
-      const bg = isAssistant ? ''
+      // 助手的头像底色是黑的(绿色是普通用户的),发光圆环压在上面。
+      const bg = isAssistant ? 'background:var(--bg);'
         : (hasEmoji ? 'background:rgba(255,255,255,0.55);'
           : (u.avatar_color ? `background:linear-gradient(135deg, ${u.avatar_color}, ${shade(u.avatar_color, -25)});` : ''));
       row.innerHTML = `

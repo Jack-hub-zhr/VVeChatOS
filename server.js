@@ -221,12 +221,21 @@ ensureColumn('messages', 'is_deleted', "INTEGER NOT NULL DEFAULT 0");
 function now() { return Date.now(); }
 // The assistant's account name. Declared up here because userPublic()
 // needs it and userPublic() is defined above the seed block.
-// 群里它叫 Jacky Bot(助手页面还是 Qwen —— 那是另一套语境)。
-const ASSISTANT_NAME = 'Jacky Bot';
-// 老库里那条 username='Qwen' 的账号就地改名,历史消息里的名字也跟着变。
-// 撞名(已经有人叫 Jacky Bot)就让老名字留着,不影响别的功能。
+// 它一路叫过来:Qwen → Jacky Bot → AI(中英文同一个名字)。
+let ASSISTANT_NAME = 'AI';
+// 老库里的助手账号就地改名,历史消息里的名字也跟着变。
+// 万一已经有人自己叫了 AI,就让老名字留着,不影响别的功能。
 try {
-  db.prepare("UPDATE users SET username = 'Jacky Bot' WHERE username = 'Qwen'").run();
+  const old = db.prepare("SELECT id, username FROM users WHERE username IN ('Qwen', 'Jacky Bot')").get();
+  if (old) {
+    const clash = db.prepare('SELECT id FROM users WHERE username = ?').get('AI');
+    if (!clash) {
+      db.prepare("UPDATE users SET username = 'AI' WHERE id = ?").run(old.id);
+    } else {
+      ASSISTANT_NAME = old.username;
+      console.warn('[VVeChat] "AI" is taken by a real user; assistant keeps the name', old.username);
+    }
+  }
 } catch (e) {
   console.warn('[VVeChat] assistant rename skipped:', e.message);
 }
@@ -348,14 +357,16 @@ try {
 let assistantId = 0;
 try {
   let row = db.prepare('SELECT id FROM users WHERE username = ?').get(ASSISTANT_NAME);
+  // 老账号的简介还是中文,顺手换成中英文一样的说法。
+  if (row) db.prepare("UPDATE users SET bio = 'VVeChat AI' WHERE id = ? AND bio = 'VVeChat 助手'").run(row.id);
   if (!row) {
     const info = db.prepare(
       `INSERT INTO users (username, password_hash, avatar_color, bio, created_at)
        VALUES (?, ?, ?, ?, ?)`
     ).run(ASSISTANT_NAME, bcrypt.hashSync(require('crypto').randomBytes(24).toString('hex'), 10),
-      '#4fd1c5', 'VVeChat 助手', now());
+      '#4fd1c5', 'VVeChat AI', now());
     row = { id: info.lastInsertRowid };
-    console.log('[VVeChat] seeded assistant account: Qwen');
+    console.log('[VVeChat] seeded assistant account:', ASSISTANT_NAME);
   }
   assistantId = row.id;
   // He belongs to every group, so "@Qwen" is always available.
@@ -403,7 +414,7 @@ function seedDefaultContacts(userId) {
 // Is this message calling the assistant by name?
 // 群里它叫 Jacky Bot,老的 @Qwen 也还认。
 function mentionsAssistant(text) {
-  return /(^|[^\w@])@(qwen|jacky[\s]?bot|助手|千问)(?![a-z0-9_])/i.test(String(text || ''));
+  return /(^|[^\w@])@(qwen|jacky[\s]?bot|ai|助手|千问)(?![a-z0-9_])/i.test(String(text || ''));
 }
 
 // Ask the model, with the group chat as the context.
@@ -419,7 +430,7 @@ async function assistantAnswer(question, context, kind) {
 
   const system = kind === 'chime'
     ? [
-      '你叫 Jacky Bot，是这个群聊里的一位成员。',
+      '你叫 AI，是这个群聊里的一位成员。',
       '此刻没有人问你话 —— 你只是坐在群里，听到大家聊得热闹，想接一两句。',
       '接话要自然：一两句就够，绝不超过三句；不要提问、不要罗列要点、不要加小标题。',
       '内容要对得上刚才大家在聊的事，别凭空另开一个话题。',
@@ -428,14 +439,14 @@ async function assistantAnswer(question, context, kind) {
     ].join('\n')
     : kind === 'dm'
     ? [
-      '你叫 Jacky Bot，是 VVeChat 里的助手。现在是你跟用户一对一聊天。',
+      '你叫 AI，是 VVeChat 里的助手。现在是你跟用户一对一聊天。',
       '请像真人一样回话：口语、简短、直接，通常一两句话,别写成报告。',
       '不要出现「作为一个AI」「作为一个助手」这类说法，也不要罗列要点或加小标题。',
       '不知道的就直说没看到相关信息，别编。',
       langLine
     ].join('\n')
     : [
-      '你叫 Jacky Bot，是这个群聊里的一位成员。大家聊天时会喊你一声，你就把话接过来。',
+      '你叫 AI，是这个群聊里的一位成员。大家聊天时会喊你一声，你就把话接过来。',
       '请像真人一样回话：口语、简短、直接，最多两三句话。',
       '不要出现「作为一个AI」「作为一个助手」这类说法，也不要罗列要点或加小标题。',
       '如果上下文里找不到答案，就直接说没看到相关信息，别编。',
@@ -522,30 +533,43 @@ async function assistantAnswer(question, context, kind) {
 // are talking about.
 function groupContext(groupId, limit) {
   const rows = db.prepare(`
-    SELECT m.sender_id, u.username, m.content, m.type
+    SELECT m.sender_id, u.username, m.content, m.type,
+           (SELECT q.content FROM messages q WHERE q.id = m.reply_to) AS quoted
     FROM messages m LEFT JOIN users u ON u.id = m.sender_id
     WHERE m.conv_type = 'group' AND m.conv_id = ? AND m.is_deleted = 0 AND m.type = 'text'
     ORDER BY m.id DESC LIMIT ?
   `).all(String(groupId), limit || 24).reverse();
   return rows.map((r) => ({
     role: r.sender_id === assistantId ? 'assistant' : 'user',
-    content: (r.username || '某人') + '：' + String(r.content || '')
+    content: (r.username || '某人') + '：' + quotePrefix(r.quoted) + String(r.content || '')
   }));
+}
+
+// 引用回复:被引用的那段话也得进上下文,不然助手「看不到我引了什么」。
+function quotePrefix(quoted) {
+  const q = String(quoted || '').trim();
+  if (!q) return '';
+  return '[引用] ' + q.slice(0, 600) + '\n';
 }
 
 // 单聊的上下文 —— 给「私聊里的 Jacky Bot」用。
 function userContext(convId, limit) {
   const rows = db.prepare(`
-    SELECT m.sender_id, u.username, m.content, m.type
+    SELECT m.sender_id, u.username, m.content, m.type,
+           (SELECT q.content FROM messages q WHERE q.id = m.reply_to) AS quoted
     FROM messages m LEFT JOIN users u ON u.id = m.sender_id
     WHERE m.conv_type = 'user' AND m.conv_id = ? AND m.is_deleted = 0 AND m.type = 'text'
     ORDER BY m.id DESC LIMIT ?
   `).all(String(convId), limit || 24).reverse();
   return rows.map((r) => ({
     role: r.sender_id === assistantId ? 'assistant' : 'user',
-    content: (r.sender_id === assistantId ? '' : (r.username ? r.username + '：' : '')) + String(r.content || '')
+    content: (r.sender_id === assistantId ? '' : (r.username ? r.username + '：' : ''))
+      + quotePrefix(r.quoted) + String(r.content || '')
   }));
 }
+
+// 私聊里「只答最新一条」的守卫:conv_id -> { token, timer }
+const pendingDm = new Map();
 
 // ============================================================
 // 助手自主发言 —— 24 小时待命的那位
@@ -595,7 +619,7 @@ async function assistantAutoChime() {
       ).run('group', gid, assistantId, answer.slice(0, 4000), 'text', null, null, now());
       const row = db.prepare('SELECT * FROM messages WHERE id = ?').get(info.lastInsertRowid);
       broadcastMessage(buildMessage({ ...row, sender_username: ASSISTANT_NAME }), 'group', g.group_id, assistantId);
-      console.log('[VVeChat] Jacky Bot joined the talk in group', g.group_id);
+      console.log('[VVeChat] AI joined the talk in group', g.group_id);
       return;   // 一轮只接一句,别刷屏
     }
   } catch (e) {
@@ -3006,7 +3030,7 @@ app.post('/api/messages', rateLimit('write'), authRequired, (req, res) => {
   if (conv_type === 'group' && msgType === 'text' && aiInGroups && mentionsAssistant(content)) {
     const gid = normalizedConvId;
     const question = String(content)
-      .replace(/@(qwen|jacky[\s]?bot|助手|千问)/gi, '')
+      .replace(/@(qwen|jacky[\s]?bot|ai|助手|千问)/gi, '')
       .replace(/^\s*[,，:：]\s*/, '')
       .trim() || String(content);
     const context = groupContext(gid, 24);
@@ -3035,8 +3059,11 @@ app.post('/api/messages', rateLimit('write'), authRequired, (req, res) => {
     }).catch((e) => { stopTyping(); console.warn('[VVeChat] assistant reply failed:', e.message); });
   }
 
-  // ---- 私聊里的 Jacky Bot ----
+  // ---- 私聊里的 AI ----
   // 单独跟它聊天,它也得回话 —— 不然「hi」发出去石沉大海,像坏了。
+  //
+  // 一次只回一句:用户连着发好几条时,只回答最后一条 —— 前面那几条的
+  // 回答直接作废(不然每条都调一次模型,又慢又贵,聊天记录还会被刷屏)。
   if (conv_type === 'user' && msgType === 'text' && aiInGroups && Number(conv_id) === assistantId) {
     const cid = normalizedConvId;
     const context = userContext(cid, 24);
@@ -3048,9 +3075,18 @@ app.post('/api/messages', rateLimit('write'), authRequired, (req, res) => {
         io.to(`user:${assistantId}`).emit(evt, typingOn);
       } catch (e) {}
     };
+    // 顶掉上一条还没回来的回答
+    const prev = pendingDm.get(cid);
+    if (prev) { clearTimeout(prev.timer); pendingDm.delete(cid); }
+    const token = now() + ':' + Math.random();
+    const timer = setTimeout(() => { if (pendingDm.get(cid) && pendingDm.get(cid).token === token) pendingDm.delete(cid); }, 60000);
+    pendingDm.set(cid, { token, timer });
     toRooms('typing:start');
     const stopTyping = () => toRooms('typing:stop');
     assistantAnswer(String(content), context, 'dm').then((answer) => {
+      const cur = pendingDm.get(cid);
+      if (!cur || cur.token !== token) return;   // 已经被更新的一轮顶掉了
+      pendingDm.delete(cid);
       stopTyping();
       const text = String(answer || '我这边暂时连不上，等会儿再叫我一次。').slice(0, 4000);
       const aInfo = db.prepare(

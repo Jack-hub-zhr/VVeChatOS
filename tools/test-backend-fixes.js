@@ -2,10 +2,10 @@
 /* ============================================================
    这轮后端改动的自检(对着本地起的 server 跑):
      1. stripTitleLine —— 标题行 + 它前后的空行要摘干净
-     2. 默认联系人 —— 注册后有「我 / Jack / Jacky Bot / 文件传输助手」
+     2. 默认联系人 —— 注册后有「我 / Jack / AI / 文件传输助手」
      3. 文件上传下载 —— 上传后会话里的人能下,外人不能
      4. 群置顶 —— PUT /api/groups/:id 认 pinned
-     5. format-all —— 格式化之后 Jacky Bot 还在
+     5. format-all —— 格式化之后 AI 还在
 
    用法: PORT=3000 DB_FILE=/workspace/vvechat-test.db node server.js &
          node tools/test-backend-fixes.js
@@ -40,7 +40,7 @@ async function call(pathname, { method = 'GET', body, token, raw } = {}) {
 // ---- 1. stripTitleLine:直接从 server.js 里抠出来跑,测的是真代码 ----
 function loadFns() {
   const src = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
-  const names = ['cleanAiTitle', 'parseTitleLine', 'stripTitleLine'];
+  const names = ['cleanAiTitle', 'parseTitleLine', 'stripTitleLine', 'quotePrefix'];
   const code = names.map((n) => {
     const i = src.indexOf('function ' + n + '(');
     assert.ok(i >= 0, 'server.js 里找不到 ' + n);
@@ -51,7 +51,7 @@ function loadFns() {
     }
     return src.slice(i, end + 1);
   }).join('\n');
-  return new Function(code + '\nreturn { cleanAiTitle, parseTitleLine, stripTitleLine };')();
+  return new Function(code + '\nreturn { cleanAiTitle, parseTitleLine, stripTitleLine, quotePrefix };')();
 }
 
 (async () => {
@@ -70,6 +70,14 @@ function loadFns() {
     assert.equal(stripTitleLine('\n\n正文', true), '正文');
   });
 
+  console.log('\n[1b] 引用内容要进上下文');
+  const { quotePrefix } = loadFns();
+  await step('被引用的那段话会带上「[引用]」前缀', () => {
+    assert.equal(quotePrefix('紫色香蕉'), '[引用] 紫色香蕉\n');
+    assert.equal(quotePrefix(''), '');
+    assert.equal(quotePrefix(null), '');
+  });
+
   console.log('\n[2] 默认联系人');
   const admin = await call('/login', { method: 'POST', body: ADMIN });
   assert.equal(admin.status, 200, '管理员登录失败: ' + JSON.stringify(admin.data));
@@ -83,14 +91,14 @@ function loadFns() {
   const myId = me.data.user.id;
 
   let convs = [];
-  await step('新注册的用户有「我 / Jack / Jacky Bot / 文件传输助手」', async () => {
+  await step('新注册的用户有「我 / Jack / AI / 文件传输助手」', async () => {
     const r = await call('/conversations', { token: userToken });
     assert.equal(r.status, 200);
     convs = r.data.conversations || [];
     const names = convs.map((c) => c.username);
     assert.ok(names.includes('我'), '没有「我」: ' + names.join(','));
     assert.ok(names.includes('Jack'), '没有 Jack: ' + names.join(','));
-    assert.ok(names.includes('Jacky Bot'), '没有 Jacky Bot: ' + names.join(','));
+    assert.ok(names.includes('AI'), '没有 AI: ' + names.join(','));
     assert.ok(names.includes('文件传输助手'), '没有文件传输助手: ' + names.join(','));
   });
   await step('「我」这一条指向自己', () => {
@@ -156,8 +164,8 @@ function loadFns() {
     assert.equal(Number(r.data.group.pinned), 0);
   });
 
-  console.log('\n[5] 格式化之后 Jacky Bot 还在');
-  await step('format-all 保留 Jacky Bot 与文件传输助手', async () => {
+  console.log('\n[5] 格式化之后 AI 还在');
+  await step('format-all 保留 AI 与文件传输助手', async () => {
     const r = await call('/control/format-all', { method: 'POST', token: adminToken });
     assert.equal(r.status, 200, JSON.stringify(r.data));
     // Jack 自己还在(没被格式化掉)。
@@ -165,13 +173,13 @@ function loadFns() {
     assert.equal(again.status, 200, 'Jack 账号被删了');
     const c = await call('/conversations', { token: adminToken });
     const names = (c.data.conversations || []).map((x) => x.username);
-    assert.ok(names.includes('Jacky Bot'), 'Jacky Bot 被格式化了: ' + names.join(','));
+    assert.ok(names.includes('AI'), 'AI 被格式化了: ' + names.join(','));
     assert.ok(names.includes('文件传输助手'), '文件传输助手 被格式化了: ' + names.join(','));
   });
 
   console.log('\n[6] 系统账号不可注销');
   const snap = await call('/control/snapshot', { token: adminToken });
-  for (const name of ['Jacky Bot', '文件传输助手']) {
+  for (const name of ['AI', '文件传输助手']) {
     const u = (snap.data.users || []).find((x) => x.username === name);
     await step(name + ' 注销被拒绝', async () => {
       assert.ok(u, '快照里没有 ' + name);
@@ -180,11 +188,11 @@ function loadFns() {
     });
   }
 
-  console.log('\n[7] 私聊里的 Jacky Bot 会回话');
-  await step('给 Jacky Bot 发消息 → 它有回复', async () => {
+  console.log('\n[7] 私聊里的 AI 会回话');
+  await step('给 AI 发消息 → 它有回复', async () => {
     const c = await call('/conversations', { token: adminToken });
-    const bot = (c.data.conversations || []).find((x) => x.username === 'Jacky Bot');
-    assert.ok(bot, '会话列表里没有 Jacky Bot');
+    const bot = (c.data.conversations || []).find((x) => x.username === 'AI');
+    assert.ok(bot, '会话列表里没有 AI');
     const sent = await call('/messages', {
       method: 'POST', token: adminToken,
       body: { conv_type: 'user', conv_id: bot.id, content: '自检:在吗' }
@@ -197,7 +205,7 @@ function loadFns() {
       const msgs = g.data.messages || [];
       if (msgs.length > 1) {
         const last = msgs[msgs.length - 1];
-        assert.equal(last.sender_username, 'Jacky Bot', '回复不是它发的: ' + last.sender_username);
+        assert.equal(last.sender_username, 'AI', '回复不是它发的: ' + last.sender_username);
         assert.ok(String(last.content || '').length > 0, '回复是空的');
         return;
       }

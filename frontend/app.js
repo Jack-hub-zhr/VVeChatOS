@@ -180,7 +180,7 @@
       members: '成员',
       only_jack_rename_official: '只有 Jack 才能修改官方群名称',
       nav_chats: '聊天',
-      nav_assistant: '助手',
+      nav_assistant: 'AI',
       nav_discover: '发现',
       discover_title: '发现',
       discover_sub: '看看大家在聊什么',
@@ -217,9 +217,9 @@
       pref_clock_desc: '消息旁边显示时间的样式',
       pref_24h: '24 小时',
       pref_12h: '12 小时',
-      pref_assistant: '助手',
+      pref_assistant: 'AI',
       pref_ai_groups: '群里可以叫助手',
-      pref_ai_groups_desc: '在群聊里 @Jacky Bot，它会读完上下文再回答',
+      pref_ai_groups_desc: '在群聊里 @AI，它会读完上下文再回答',
       pref_ai_groups_always: '始终开启',
       pref_lang: '语言',
       pref_lang_desc: '界面语言',
@@ -231,10 +231,10 @@
       list_sessions: '会话',
       list_empty: '还没有群聊或好友',
       list_search_ph: '搜索好友 / 群聊 / 用户',
-      hint_assistant_call: '点击我 让 Jacky Bot 也一起来聊',
+      hint_assistant_call: '点击我 让 AI 也一起来聊',
       ai_new_chat: '新对话',
       ai_welcome: '有什么可以帮你？',
-      ai_input_ph: '给 Jacky Bot 发消息…（Enter 发送，Shift+Enter 换行）',
+      ai_input_ph: '给 AI 发消息…（Enter 发送，Shift+Enter 换行）',
       file_too_big: '文件太大（上限 50MB）',
       file_upload_failed: '文件发送失败',
       file_download_failed: '文件下载失败',
@@ -257,7 +257,7 @@
       search_add: '搜索 / 添加',
       log_out: '退出登录',
       toggle_theme: '切换主题',
-      nav_ai: '助手',
+      nav_ai: 'AI',
       nav_settings: '设置',
       new_chat: '新对话',
       session_list: '会话列表',
@@ -579,7 +579,7 @@
       members: 'Members',
       only_jack_rename_official: 'Only Jack can rename the official group',
       nav_chats: 'Chats',
-      nav_assistant: 'Assistant',
+      nav_assistant: 'AI',
       nav_discover: 'Discover',
       discover_title: 'Discover',
       discover_sub: 'See what people are talking about',
@@ -616,9 +616,9 @@
       pref_clock_desc: 'How the time next to a message is written',
       pref_24h: '24-hour',
       pref_12h: '12-hour',
-      pref_assistant: 'Assistant',
+      pref_assistant: 'AI',
       pref_ai_groups: 'Let the assistant join groups',
-      pref_ai_groups_desc: '@Jacky Bot in a group reads the conversation, then answers',
+      pref_ai_groups_desc: '@AI in a group reads the conversation, then answers',
       pref_ai_groups_always: 'Always on',
       pref_lang: 'Language',
       pref_lang_desc: 'Interface language',
@@ -630,10 +630,10 @@
       list_sessions: 'Conversations',
       list_empty: 'No groups or friends yet',
       list_search_ph: 'Search friends / groups / people',
-      hint_assistant_call: 'Tap me — let Jacky Bot join the chat',
+      hint_assistant_call: 'Tap me — let AI join the chat',
       ai_new_chat: 'New chat',
       ai_welcome: 'What can I help with?',
-      ai_input_ph: 'Message Jacky Bot… (Enter to send, Shift+Enter for a newline)',
+      ai_input_ph: 'Message AI… (Enter to send, Shift+Enter for a newline)',
       file_too_big: 'File is too large (50MB max)',
       file_upload_failed: 'Could not send the file',
       file_download_failed: 'Could not download the file',
@@ -656,7 +656,7 @@
       search_add: 'Search / Add',
       log_out: 'Log out',
       toggle_theme: 'Toggle theme',
-      nav_ai: 'Assistant',
+      nav_ai: 'AI',
       nav_settings: 'Settings',
       new_chat: 'New chat',
       session_list: 'Conversation list',
@@ -985,10 +985,10 @@
   // 助手(Qwen)是个真实账号,但它在群里不是「人」——
   // 不列进成员名册、不计入人数;可它出现的地方(会话列表、聊天气泡、
   // @ 选择器)要用跟侧边栏「助手」按钮一样的发光圆环当头像。
-  const ASSISTANT_NAME = 'Jacky Bot';
-  // 群里它叫 Jacky Bot(助手页面还是 Qwen —— 那是另一套语境)。
-  // 两个名字都要认,头像上的发光圆环才不会掉。
-  const ASSISTANT_ALIASES = ['qwen', 'jacky bot'];
+  const ASSISTANT_NAME = 'AI';
+  // 它一路叫过来:Qwen → Jacky Bot → AI。旧名字都要认,
+  // 头像上的发光圆环才不会掉,老消息里的 @Qwen 也还能用。
+  const ASSISTANT_ALIASES = ['qwen', 'jacky bot', 'ai'];
   function isAssistant(name) {
     const n = String(name || '').trim().toLowerCase();
     return n === ASSISTANT_NAME.toLowerCase() || ASSISTANT_ALIASES.indexOf(n) >= 0;
@@ -2180,7 +2180,7 @@
       // The assistant is a person here, but a special one — mark it, so
       // it does not get lost among the ordinary members.
       const isBot = String(m.username || '').toLowerCase() === 'qwen';
-      const bot = isBot ? '<div class="tag tag-bot">' + escapeHtml(lang === 'en' ? 'Assistant' : '助手') + '</div>' : '';
+      const bot = isBot ? '<div class="tag tag-bot">AI</div>' : '';
       return `<div class="mention-item${i === 0 ? ' active' : ''}" data-i="${i}">
         <div class="avatar sm" style="${bg}" data-user-avatar="${m.id}">${avatarContent(m.username, em, 26)}</div>
         <div class="name">${escapeHtml(m.username)}</div>${who}${bot}
@@ -4462,9 +4462,9 @@
   function aiUpdateHeadTitle() {
     const el = $('#ai-head-title');
     if (!el) return;
-    if (window.innerWidth > 820) { el.textContent = 'Jacky Bot'; return; }
+    if (window.innerWidth > 820) { el.textContent = 'AI'; return; }
     const c = (_aiChats || []).find(x => String(x.id) === String(_aiChatId));
-    el.textContent = (c && c.title && c.title !== '新对话') ? c.title : 'Jacky Bot';
+    el.textContent = (c && c.title && c.title !== '新对话') ? c.title : 'AI';
   }
 
   function aiRenderWelcome() {
@@ -5777,8 +5777,8 @@
       if (!input) return;
       input.focus();
       const pos = input.value.length;
-      input.value = input.value.slice(0, pos) + '@Jacky Bot ';
-      input.setSelectionRange(pos + 11, pos + 11);
+      input.value = input.value.slice(0, pos) + '@AI ';
+      input.setSelectionRange(pos + 4, pos + 4);
       input.dispatchEvent(new Event('input', { bubbles: true }));
     });
     // The chat header carries the same list switch as the AI header —
