@@ -75,10 +75,14 @@ async function call(pathname, { method = 'GET', body, token, headers } = {}) {
   // ------------------------------------------------------------------
   console.log('\n[2] 注册 / 登录的防线');
   const uname = 'zztest' + Date.now().toString().slice(-6);
-  await step('弱口令注册被拒', async () => {
+  await step('弱口令注册被拒(带错误码,前端好翻译)', async () => {
     const r = await call('/register', { method: 'POST', body: { username: uname + 'x', password: '123456' } });
     assert.equal(r.status, 400);
-    assert.ok(/弱/.test(r.data.error || ''), r.data.error);
+    assert.ok(['weak_password', 'short_password'].includes(r.data.code), JSON.stringify(r.data));
+    // 8 位但常见的口令也要拒
+    const r2 = await call('/register', { method: 'POST', body: { username: uname + 'y', password: 'password1' } });
+    assert.equal(r2.status, 400);
+    assert.equal(r2.data.code, 'weak_password');
   });
   await step('蜜罐字段被填 → 注册被拒', async () => {
     const r = await call('/register', { method: 'POST', body: { username: uname, password: 'Str0ng-Pass-42', website: 'http://spam' } });

@@ -2236,19 +2236,23 @@ app.post('/api/ai/config', rateLimit('write'), authRequired, requireAdmin, (req,
 // Remove a member from a group. Allowed for the group owner and for Jack.
 
 // register
+// 带错误码的失败响应 —— 前端要按界面语言显示,不能直接甩一句中文。
+function fail(res, status, code, message) {
+  return res.status(status).json({ error: message, code });
+}
 app.post('/api/register', rateLimit('auth'), (req, res) => {
   const { username, password, avatar, avatar_emoji } = req.body || {};
-  if (!username || !password) return res.status(400).json({ error: '用户名和密码不能为空' });
-  if (username.length < 2 || username.length > 24) return res.status(400).json({ error: '用户名长度需 2-24' });
-  if (password.length < 4) return res.status(400).json({ error: '密码至少 4 位' });
+  if (!username || !password) return fail(res, 400, 'empty_credentials', '用户名和密码不能为空');
+  if (username.length < 2 || username.length > 24) return fail(res, 400, 'invalid_username', '用户名长度需 2-24');
+  if (password.length < 8) return fail(res, 400, 'short_password', '密码至少 8 位');
   // 诱导条件①:表单里藏了一个真人看不见、填表脚本会填的字段。
   if (honeypotTripped(req)) {
     recordSecurity(req, 'honeypot', 'high', '注册表单里的蜜罐字段被填了 —— 脚本');
-    return res.status(400).json({ error: '注册失败' });
+    return fail(res, 400, 'honeypot', '注册失败');
   }
   // 诱导条件②:弱口令直接拒。
   if (authCrypto.isWeakPassword(password)) {
-    return res.status(400).json({ error: '密码太弱:至少 8 位,别用 123456 / password 这类' });
+    return fail(res, 400, 'weak_password', '密码太弱:至少 8 位,别用 123456 / password 这类');
   }
   // Relaxed uniqueness: allow registration if EITHER the username OR the
   // password does not collide with any existing account. This means a user
@@ -2258,7 +2262,7 @@ app.post('/api/register', rateLimit('auth'), (req, res) => {
     'SELECT id, password_hash FROM users WHERE username = ?'
   ).get(username);
   if (sameBoth && verifyAny(password, sameBoth.password_hash)) {
-    return res.status(409).json({ error: '用户名和密码都已被注册（请至少修改一项）' });
+    return fail(res, 409, 'username_password_taken', '用户名和密码都已被注册（请至少修改一项）');
   }
 
   // pick a fun color for new users (Jack is the official admin → signature gold)
@@ -2287,17 +2291,17 @@ app.post('/api/register', rateLimit('auth'), (req, res) => {
 // login
 app.post('/api/login', rateLimit('auth'), (req, res) => {
   const { username, password } = req.body || {};
-  if (!username || !password) return res.status(400).json({ error: '用户名和密码不能为空' });
+  if (!username || !password) return fail(res, 400, 'empty_credentials', '用户名和密码不能为空');
   if (honeypotTripped(req)) {
     recordSecurity(req, 'honeypot', 'high', '登录表单里的蜜罐字段被填了 —— 脚本');
-    return res.status(401).json({ error: '用户名或密码错误' });
+    return fail(res, 401, 'bad_credentials', '用户名或密码错误');
   }
   const u = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
   if (!u) {
     // 账号不存在也要把 KDF 跑完,不然响应时间会泄露「这个账号不存在」。
     authCrypto.burnTime(PEPPER1);
     noteAuthFailure(req);
-    return res.status(401).json({ error: '用户名或密码错误' });
+    return fail(res, 401, 'bad_credentials', '用户名或密码错误');
   }
   if (!verifyAny(password, u.password_hash)) {
     // 诱导条件③:用弱口令登录 —— 放行,但记一条,方便管理员提醒换密码。
@@ -2305,7 +2309,7 @@ app.post('/api/login', rateLimit('auth'), (req, res) => {
       recordSecurity(req, 'weak_password', 'medium', `账号 ${u.username} 用了弱口令登录`);
     }
     noteAuthFailure(req);
-    return res.status(401).json({ error: '用户名或密码错误' });
+    return fail(res, 401, 'bad_credentials', '用户名或密码错误');
   }
   // 老库里的 bcrypt 哈希,登录成功后顺手升级成分层哈希。
   if (authCrypto.isLegacyHash(u.password_hash)) {

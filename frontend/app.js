@@ -260,6 +260,7 @@
       splash_aria: '点击任意处开始使用',
       auth_username_ph: '2-24 位字符',
       auth_password_ph: '至少 4 位',
+      auth_password_ph_reg: '至少 8 位',
       my_profile: '我的资料',
       menu: '菜单',
       main_menu: '主菜单',
@@ -670,6 +671,7 @@
       splash_aria: 'Tap anywhere to start',
       auth_username_ph: '2-24 characters',
       auth_password_ph: 'At least 4 characters',
+      auth_password_ph_reg: 'At least 8 characters',
       my_profile: 'My profile',
       menu: 'Menu',
       main_menu: 'Main menu',
@@ -903,6 +905,16 @@
       const btn = $('#auth-submit');
       if (btn) btn.textContent = authMode === 'login' ? t('btn_login') : t('btn_register');
     }
+    applyAuthPasswordHint();
+  }
+
+  // 密码框的提示跟着当前标签页走:注册要 8 位,登录 4 位就够。
+  // 换语言之后也要跟着重算 —— applyI18n 会把占位文字刷回默认值。
+  function applyAuthPasswordHint() {
+    const pw = $('#auth-password');
+    if (!pw) return;
+    pw.minLength = authMode === 'register' ? 8 : 4;
+    pw.placeholder = authMode === 'register' ? t('auth_password_ph_reg') : t('auth_password_ph');
   }
 
   // ---------- DOM helpers ----------
@@ -1088,6 +1100,25 @@
     };
     reader.readAsDataURL(file);
   }
+  // 服务端的错误码 → 中英文文案。英文界面里不能夹一句中文。
+  const AUTH_ERR = {
+    empty_credentials: { zh: '用户名和密码不能为空', en: 'Username and password are required' },
+    invalid_username: { zh: '用户名长度需 2-24', en: 'Username must be 2–24 characters' },
+    short_password: { zh: '密码至少 8 位', en: 'Password must be at least 8 characters' },
+    weak_password: { zh: '密码太弱:至少 8 位,别用 123456 / password 这类', en: 'Password too weak — at least 8 characters, and not 123456 / password' },
+    username_password_taken: { zh: '用户名和密码都已被注册(请至少修改一项)', en: 'That username + password is already registered — change one of them' },
+    bad_credentials: { zh: '用户名或密码错误', en: 'Wrong username or password' },
+    honeypot: { zh: '注册失败', en: 'Sign-up failed' },
+  };
+  function authErrorText(err) {
+    const m = err && err.code && AUTH_ERR[err.code];
+    if (m) return m[lang === 'en' ? 'en' : 'zh'];
+    const text = (err && err.message) || '登录失败';
+    // 服务端没给码却给了中文 —— 英文界面里别直接显示中文。
+    if (lang === 'en' && /[\u4e00-\u9fa5]/.test(text)) return 'Request failed — please try again';
+    return text;
+  }
+
   function openAvatarPicker(cur, onPick) {
     _apState = { emoji: (cur && cur.emoji) || '', img: (cur && cur.img) || '' };
     const grid = $('#ap-grid');
@@ -1145,7 +1176,11 @@
     clearTimeout(timer);
     let data = null;
     try { data = await resp.json(); } catch {}
-    if (!resp.ok) throw new Error((data && data.error) || `HTTP ${resp.status}`);
+    if (!resp.ok) {
+      const err = new Error((data && data.error) || `HTTP ${resp.status}`);
+      err.code = data && data.code;      // 前端按界面语言翻译用
+      throw err;
+    }
     return data;
   }
   async function api(path, opts = {}) {
@@ -1346,6 +1381,7 @@
     const row = $('#auth-avatar-row');
     if (row) row.classList.toggle('hidden', mode !== 'register');
     if (mode === 'register') paintRegPreview();
+    applyAuthPasswordHint();
   }
   // 注册时选的头像:先放在内存里,注册成功才随请求带上去。
   let _regAvatar = { emoji: '', img: '' };
@@ -3374,8 +3410,16 @@
   const MOMENT = { items: [], imgs: [] };
 
   function openMoments() {
-    $('#app-view')?.classList.add('hidden');
-    $('#moment-view')?.classList.remove('hidden');
+    const mv = $('#moment-view');
+    if (!mv) return;
+    // AI 面板和聊天区先让位,朋友圈占右边这块主显示区。
+    $('#ai-view')?.classList.remove('open');
+    $('#ai-view')?.classList.add('hidden');
+    $('#chat-window')?.classList.add('hidden');
+    $('#chat-empty')?.classList.add('hidden');
+    mv.classList.remove('hidden');
+    // 中间那栏列表收起来 —— 主显示区占满,左边细长的侧边栏照旧留着。
+    $('.app-body')?.classList.add('list-collapsed');
     if (state.user) {
       const nameEl = $('#moment-cover-name');
       if (nameEl) nameEl.textContent = state.user.username;
@@ -3385,8 +3429,18 @@
     loadMoments();
   }
   function closeMoments() {
-    $('#moment-view')?.classList.add('hidden');
-    $('#app-view')?.classList.remove('hidden');
+    const mv = $('#moment-view');
+    if (!mv || mv.classList.contains('hidden')) return;
+    mv.classList.add('hidden');
+    $('.app-body')?.classList.remove('list-collapsed');
+    // 把聊天区还回来。
+    if (state.currentChat) {
+      $('#chat-window')?.classList.remove('hidden');
+      $('#chat-empty')?.classList.add('hidden');
+    } else {
+      $('#chat-window')?.classList.add('hidden');
+      $('#chat-empty')?.classList.remove('hidden');
+    }
   }
   async function loadMoments() {
     try {
@@ -5941,8 +5995,9 @@
     $$('.side-nav-item').forEach(btn => bindOnce(btn, 'click', () => {
       $$('.side-nav-item').forEach(b => b.classList.toggle('active', b === btn));
       const target = btn.dataset.pane;
-      // 「日常」是整个页面切成朋友圈,不是中间那栏换个列表。
+      // 「日常」占的是右边的主显示区,左边侧边栏不动。
       if (target === 'moment') { openMoments(); return; }
+      closeMoments();
       $$('.pane').forEach(p => p.classList.toggle('active', p.id === `pane-${target}`));
       setListMode(target);
       // Discover is a list of groups other people made — pull it fresh.
@@ -6358,7 +6413,7 @@
             enterApp();
           }, 300);
         } catch (err) {
-          msgEl.textContent = err.message;
+          msgEl.textContent = authErrorText(err);
           btn.textContent = orig;
         } finally { btn.disabled = false; }
       });
