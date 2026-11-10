@@ -3125,7 +3125,9 @@ app.get('/api/conversations', authRequired, (req, res) => {
 //   POST /api/upload      上传(base64),返回文件 id
 //   GET  /api/files/:id   下载(只有会话里的人能下)
 // ============================================================
-const UPLOAD_DIR = path.join(__dirname, 'uploads');
+// 上传目录。默认在项目目录里 —— 那是容器的临时目录,每次部署都会清空。
+// 挂了持久磁盘之后要指到盘上,否则传的文件发一次就没了。
+const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, 'uploads');
 try { fs.mkdirSync(UPLOAD_DIR, { recursive: true }); } catch (e) { console.error('[VVeChat] uploads dir failed:', e.message); }
 
 // 文件名里可能混进路径分隔符,只留最后一段。

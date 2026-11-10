@@ -26,7 +26,14 @@ control/             管理控制台（/control）
 |---|---|---|
 | `NODE_VERSION` | `18` | better-sqlite3 11.x 只有 Node 18 有预编译包 |
 | `JWT_SECRET` | *随机长字符串* | **必填**：令牌签名 + 密码 pepper 的密钥。生产环境不设的话控制台会红字提示 |
-| `DB_FILE` | `/var/data/vvechat.db` | **挂持久磁盘后填**，否则每次重启数据清空 |
+
+> ⚠️ **不挂持久磁盘 = 数据每次部署清零。** Render Free 的容器目录是临时的，
+> 每次重新部署都会重建，`vvechat.db` 和 `uploads/` 会一起没。
+> 挂盘步骤见下面「持久磁盘（重要）」；挂好后把 `DB_FILE` 和 `UPLOAD_DIR`
+> 都指到 `/var/data` 下面。控制台的「部署与数据」板块会显示当前实际路径 ——
+> 如果那里写的还是 `/opt/render/project/src/...`，就说明盘还没挂上。
+| `DB_FILE` | `/var/data/vvechat.db` | **挂持久磁盘后填**，否则每次部署数据清空（容器目录会被重建）|
+| `UPLOAD_DIR` | `/var/data/uploads` | 聊天里传的文件放在哪。跟 DB_FILE 一样，**不指到盘上就会随部署丢失** |
 | `KEEPALIVE_INTERVAL_MS` | `300000` | 保活间隔（默认 5 分钟） |
 | `KEEPALIVE` | `0` | 设为 0 可关闭保活 |
 | `ALLOW_ORIGIN` | *(留空)* | 仅开发时放开跨域 |
