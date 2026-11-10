@@ -92,6 +92,17 @@
       add: '加入',
       cancel: '取消',
       ok: '确定',
+      avatar_picker_title: '选择头像',
+      nav_moment: '日常',
+      moment_title: '日常',
+      moment_compose: '发一条日常…',
+      moment_compose_title: '发一条日常',
+      moment_ph: '这一刻的想法…',
+      moment_add_img: '添加图片',
+      moment_publish: '发表',
+      btn_back: '返回',
+      avatar_upload: '上传照片',
+      btn_pick_avatar: '选择头像',
       profile_title: '我的资料',
       profile_username: '用户名',
       profile_bio: '个人简介',
@@ -217,9 +228,9 @@
       pref_clock_desc: '消息旁边显示时间的样式',
       pref_24h: '24 小时',
       pref_12h: '12 小时',
-      pref_assistant: 'AI',
+      pref_assistant: 'Jacky Bot',
       pref_ai_groups: '群里可以叫助手',
-      pref_ai_groups_desc: '在群聊里 @AI，它会读完上下文再回答',
+      pref_ai_groups_desc: '在群聊里 @Jacky Bot，它会读完上下文再回答',
       pref_ai_groups_always: '始终开启',
       pref_lang: '语言',
       pref_lang_desc: '界面语言',
@@ -231,10 +242,10 @@
       list_sessions: '会话',
       list_empty: '还没有群聊或好友',
       list_search_ph: '搜索好友 / 群聊 / 用户',
-      hint_assistant_call: '点击我 让 AI 也一起来聊',
+      hint_assistant_call: '点击我 让 Jacky Bot 也一起来聊',
       ai_new_chat: '新对话',
       ai_welcome: '有什么可以帮你？',
-      ai_input_ph: '给 AI 发消息…（Enter 发送，Shift+Enter 换行）',
+      ai_input_ph: '给 Jacky Bot 发消息…（Enter 发送，Shift+Enter 换行）',
       file_too_big: '文件太大（上限 50MB）',
       file_upload_failed: '文件发送失败',
       file_download_failed: '文件下载失败',
@@ -491,6 +502,17 @@
       add: 'Join',
       cancel: 'Cancel',
       ok: 'OK',
+      avatar_picker_title: 'Choose an avatar',
+      nav_moment: 'Moments',
+      moment_title: 'Moments',
+      moment_compose: 'Post a moment…',
+      moment_compose_title: 'New moment',
+      moment_ph: "What's on your mind…",
+      moment_add_img: 'Add photos',
+      moment_publish: 'Post',
+      btn_back: 'Back',
+      avatar_upload: 'Upload a photo',
+      btn_pick_avatar: 'Choose avatar',
       profile_title: 'My profile',
       profile_username: 'Username',
       profile_bio: 'Bio',
@@ -616,9 +638,9 @@
       pref_clock_desc: 'How the time next to a message is written',
       pref_24h: '24-hour',
       pref_12h: '12-hour',
-      pref_assistant: 'AI',
+      pref_assistant: 'Jacky Bot',
       pref_ai_groups: 'Let the assistant join groups',
-      pref_ai_groups_desc: '@AI in a group reads the conversation, then answers',
+      pref_ai_groups_desc: '@Jacky Bot in a group reads the conversation, then answers',
       pref_ai_groups_always: 'Always on',
       pref_lang: 'Language',
       pref_lang_desc: 'Interface language',
@@ -630,10 +652,10 @@
       list_sessions: 'Conversations',
       list_empty: 'No groups or friends yet',
       list_search_ph: 'Search friends / groups / people',
-      hint_assistant_call: 'Tap me — let AI join the chat',
+      hint_assistant_call: 'Tap me — let Jacky Bot join the chat',
       ai_new_chat: 'New chat',
       ai_welcome: 'What can I help with?',
-      ai_input_ph: 'Message AI… (Enter to send, Shift+Enter for a newline)',
+      ai_input_ph: 'Message Jacky Bot… (Enter to send, Shift+Enter for a newline)',
       file_too_big: 'File is too large (50MB max)',
       file_upload_failed: 'Could not send the file',
       file_download_failed: 'Could not download the file',
@@ -985,10 +1007,10 @@
   // 助手(Qwen)是个真实账号,但它在群里不是「人」——
   // 不列进成员名册、不计入人数;可它出现的地方(会话列表、聊天气泡、
   // @ 选择器)要用跟侧边栏「助手」按钮一样的发光圆环当头像。
-  const ASSISTANT_NAME = 'AI';
+  const ASSISTANT_NAME = 'Jacky Bot';
   // 它一路叫过来:Qwen → Jacky Bot → AI。旧名字都要认,
   // 头像上的发光圆环才不会掉,老消息里的 @Qwen 也还能用。
-  const ASSISTANT_ALIASES = ['qwen', 'jacky bot', 'ai'];
+  const ASSISTANT_ALIASES = ['qwen', 'ai', 'jacky bot'];
   function isAssistant(name) {
     const n = String(name || '').trim().toLowerCase();
     return n === ASSISTANT_NAME.toLowerCase() || ASSISTANT_ALIASES.indexOf(n) >= 0;
@@ -1018,10 +1040,75 @@
     if (emoji) return `<span class="avatar-emoji">${escapeHtml(emoji)}</span>`;
     return escapeHtml(initials(username || '?'));
   }
-  function avatarInner(u) {
-    return avatarContent(u && u.username, emojiOf(u), 26);
+  // 全站唯一的头像内容来源:上传的图 > 表情 > 助手发光环 > 首字母。
+  // 谁新增了一个头像位,都调它 —— 不然就会出现「列表是 📁、弹窗是『手』」。
+  function avatarInner(u, size) {
+    if (!u) return escapeHtml(initials('?'));
+    if (u.avatar) return `<img class="avatar-img" src="${escapeHtml(u.avatar)}" alt="" />`;
+    return avatarContent(u.username, emojiOf(u), size || 26);
+  }
+  // 头像底色:照片/表情 → 柔白;普通用户 → 他自己的色盘。
+  function avatarBgOf(u) {
+    if (!u) return '';
+    if (u.avatar || emojiOf(u)) return 'background:rgba(255,255,255,0.55)';
+    return avatarStyle(u);
   }
   function isOnline(uid) { return uid && state.online.has(uid); }
+
+  // ---------- 头像选择器:表情 + 上传照片 ----------
+  // 注册和改资料共用一个弹窗,省得两套选择逻辑各走各的。
+  let _apState = { emoji: '', img: '' };
+  function paintApPreview() {
+    const el = $('#ap-preview');
+    if (!el) return;
+    el.style.background = _apState.img ? 'transparent' : avatarBgOf(state.user);
+    el.innerHTML = _apState.img
+      ? `<img class="avatar-img" src="${escapeHtml(_apState.img)}" alt=""/>`
+      : (_apState.emoji
+        ? `<span class="avatar-emoji">${escapeHtml(_apState.emoji)}</span>`
+        : escapeHtml(initials(state.user ? state.user.username : '?')));
+    $$('#ap-grid .emoji-pick').forEach(b =>
+      b.classList.toggle('selected', !_apState.img && b.dataset.emoji === _apState.emoji));
+  }
+  // 照片先裁成正方形再缩到 256px —— 一张 base64 头像不能背着几 MB。
+  function shrinkToAvatar(file, cb) {
+    if (!file.type.startsWith('image/')) { toast(t('toast_img_only')); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const S = 256, side = Math.min(img.width, img.height);
+        const c = document.createElement('canvas');
+        c.width = c.height = S;
+        c.getContext('2d').drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, S, S);
+        try { cb(c.toDataURL('image/jpeg', 0.82)); } catch (_) { cb(reader.result); }
+      };
+      img.onerror = () => cb(reader.result);
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  }
+  function openAvatarPicker(cur, onPick) {
+    _apState = { emoji: (cur && cur.emoji) || '', img: (cur && cur.img) || '' };
+    const grid = $('#ap-grid');
+    grid.innerHTML = EMOJI_AVATARS.map(em =>
+      `<button type="button" class="emoji-pick ${em === _apState.emoji && !_apState.img ? 'selected' : ''}" data-emoji="${em}" title="${em}">${em}</button>`
+    ).join('') + `<button type="button" class="emoji-pick-clear" id="ap-clear">${lang === 'en' ? 'Default (first letter)' : '恢复默认（首字母）'}</button>`;
+    grid.onclick = (e) => {
+      const pick = e.target.closest('.emoji-pick');
+      if (pick) { _apState = { emoji: pick.dataset.emoji, img: '' }; paintApPreview(); return; }
+      if (e.target.closest('#ap-clear')) { _apState = { emoji: '', img: '' }; paintApPreview(); }
+    };
+    const file = $('#ap-file');
+    file.value = '';
+    file.onchange = () => {
+      const f = file.files && file.files[0];
+      if (f) shrinkToAvatar(f, (url) => { _apState = { emoji: '', img: url }; paintApPreview(); });
+    };
+    $('#ap-ok').onclick = () => { closeModal('modal-avatar-picker'); onPick(_apState); };
+    paintApPreview();
+    openModal('modal-avatar-picker');
+  }
   function showOffline() { $('#offline-banner')?.classList.remove('hidden'); }
   function hideOffline() { $('#offline-banner')?.classList.add('hidden'); }
 
@@ -1256,18 +1343,22 @@
     $$('.auth-card .tab').forEach(t => t.classList.toggle('active', t.dataset.tab === mode));
     $('#auth-submit').textContent = mode === 'login' ? t('btn_login') : t('btn_register');
     $('#auth-msg').textContent = '';
+    const row = $('#auth-avatar-row');
+    if (row) row.classList.toggle('hidden', mode !== 'register');
+    if (mode === 'register') paintRegPreview();
+  }
+  // 注册时选的头像:先放在内存里,注册成功才随请求带上去。
+  let _regAvatar = { emoji: '', img: '' };
+  function paintRegPreview() {
+    const el = $('#auth-avatar-preview');
+    if (!el) return;
+    el.innerHTML = _regAvatar.img
+      ? `<img class="avatar-img" src="${escapeHtml(_regAvatar.img)}" alt=""/>`
+      : (_regAvatar.emoji ? `<span class="avatar-emoji">${escapeHtml(_regAvatar.emoji)}</span>` : '🙂');
+    el.style.background = _regAvatar.img ? 'transparent' : 'rgba(255,255,255,0.55)';
   }
 
   // ---------- avatar rendering ----------
-  function avatarHtml(name, opts = {}) {
-    const { size = '', online, color, group = false, official = false } = opts;
-    const sz = size ? ' ' + size : '';
-    const cls = ['avatar', sz, group ? 'group' : '', official ? 'official' : '', online ? 'online' : ''].filter(Boolean).join(' ');
-    const dot = (group || official) ? '' : '<span class="online-dot"></span>';
-    const bg = group ? '' : (color ? ` style="background:linear-gradient(135deg, ${color}, ${shade(color, -25)})"` : '');
-    return `<div class="${cls}"${bg}>${escapeHtml(initials(name))}${dot}</div>`;
-  }
-
   // ---------- rendering ----------
   function renderAll() { renderChats(); renderBell(); renderTopbarAvatar(); renderSideMe(); setListMode('chats'); applyLiquidGlass(); }
 
@@ -1317,24 +1408,16 @@
     const nm = $('#side-name');
     const sb = $('#side-sub');
     if (!av || !state.user) return;
-    const emoji = state.user.avatar_emoji || null;
-    const color = state.user.avatar_color || '#5eead4';
-    const face = emoji
-      ? `<span class="avatar-emoji">${escapeHtml(emoji)}</span>`
-      : escapeHtml(initials(state.user.username));
-    const fill = emoji
-      ? 'rgba(255,255,255,0.55)'
-      : `linear-gradient(135deg, ${color}, ${shade(color, -25)})`;
-    av.innerHTML = face;
-    av.style.background = fill;
+    av.innerHTML = avatarInner(state.user);
+    av.style.background = avatarBgOf(state.user);
     av.classList.toggle('avatar-jack-glow', state.user.username === 'Jack');
     if (nm) nm.textContent = state.user.username;
     if (sb) sb.textContent = state.user.username === 'Jack' ? t('admin_word') : 'VVeChat';
     // The same face, at the top of the list column.
     const la = $('#list-avatar');
     if (la) {
-      la.innerHTML = face;
-      la.style.background = fill;
+      la.innerHTML = avatarInner(state.user);
+      la.style.background = avatarBgOf(state.user);
       la.classList.toggle('avatar-jack-glow', state.user.username === 'Jack');
     }
     const lnm = $('#list-me-name');
@@ -1349,23 +1432,12 @@
     // Jack ALWAYS gets the signature gold — don't trust stale localStorage.
     const isJack = state.user.username === 'Jack' || !!state.user.is_admin;
     const color = isJack ? '#fbbf24' : (state.user.avatar_color || '#5eead4');
-    const emoji = state.user.avatar_emoji || null;
-    const letter = emoji ? null : initials(state.user.username);
-    // Always show the user's first letter (or upload image if set)
-    el.innerHTML = emoji
-      ? `<span class="avatar-emoji">${escapeHtml(emoji)}</span>`
-      : escapeHtml(letter || '');
-    el.setAttribute('data-letter', letter || '');
-    if (state.user.avatar) {
-      el.style.backgroundImage = `url('${state.user.avatar}')`;
-      el.style.backgroundSize = 'cover';
-      el.style.backgroundPosition = 'center';
-      el.style.backgroundColor = 'transparent';
-      el.style.background = '';
-    } else {
-      el.style.backgroundImage = '';
-      el.style.background = `linear-gradient(135deg, ${color}, ${shade(color, -25)})`;
-    }
+    // 照片 / 表情 / 首字母 —— 跟其它地方同一个 helper。
+    el.innerHTML = avatarInner(state.user);
+    el.style.backgroundImage = '';
+    el.style.background = state.user.avatar
+      ? 'transparent'
+      : (isJack ? `linear-gradient(135deg, ${color}, ${shade(color, -25)})` : avatarBgOf(state.user));
     // Force white text + sizing inline so no CSS rule can hide the letter
     el.style.color = '#ffffff';
     el.style.fontSize = '13px';
@@ -1435,8 +1507,8 @@
     const unreadHtml = c.unread > 0 ? `<span class="unread">${c.unread>99?'99+':c.unread}</span>` : '';
     const inner = isGroup
       ? groupAvatarInner({ name: c.username, is_official: isOfficial, icon_emoji: c.icon_emoji })
-      // 「我」这一条在英文界面要显示 Me —— 头像也跟着走。
-      : avatarContent(displayName(c.username, c.special), emojiOf(c), 26);
+      // 「我」这一条:名字在英文界面显示 Me,但头像是我本人的。
+      : (c.special === 'self' ? avatarInner(state.user) : avatarContent(displayName(c.username, c.special), emojiOf(c), 26));
     li.innerHTML = `<div class="${avatarCls}"${avatarBg} data-user-avatar="${isGroup ? '' : c.id}">${inner}${dot}</div>
       <div class="meta"><div class="name">${escapeHtml(c.type === 'user' ? displayName(c.username, c.special) : groupDisplayName(c.username, isOfficial))} ${officialTag}</div>
       <div class="preview">${atMePrefix}${senderPrefix}${escapeHtml(preview)}</div></div>
@@ -1563,7 +1635,7 @@
     list.innerHTML = '';
     for (const r of pending) {
       const div = document.createElement('div'); div.className='req-item';
-      div.innerHTML = `<div class="avatar sm" data-user-avatar="${r.from_id}">${avatarContent(r.from_username, null, 26)}</div>
+      div.innerHTML = `<div class="avatar sm" data-user-avatar="${r.from_id}">${avatarInner(r)}</div>
         <div class="meta"><div class="name">${escapeHtml(r.from_username)}</div>
         <div class="sub">${t('req_want')}${fmtTime(r.created_at)}</div></div>
         <div class="actions">
@@ -1788,7 +1860,7 @@
         if (canManage && m.id !== state.user.id) {
           right.push(`<span class="settings-action danger" data-act="kick" data-uid="${m.id}">${lang==='zh'?'移除':'Remove'}</span>`);
         }
-        row.innerHTML = `<div class="avatar sm" style="${bg}" data-user-avatar="${m.id}">${avatarContent(m.username, null, 26)}</div>
+        row.innerHTML = `<div class="avatar sm" style="${avatarBgOf(m)}" data-user-avatar="${m.id}">${avatarInner(m)}</div>
           <div class="settings-label">${escapeHtml(m.username)}${m.is_admin?` <span class="admin-pill admin-pill-xs"></span>`:''}</div>
           <div class="settings-trailing">${right.join('')}</div>`;
         const kick = row.querySelector('[data-act="kick"]');
@@ -2174,15 +2246,12 @@
     // in, so say what the list is for.
     const head = `<div class="mention-hint">${t('mention_pick_hint')}</div>`;
     menu.innerHTML = head + items.map((m, i) => {
-      const bg = m.avatar_color ? `background:linear-gradient(135deg, ${m.avatar_color}, ${shade(m.avatar_color, -25)});` : '';
-      const em = emojiOf(m);
       const who = m.id === state.user.id ? `<div class="tag">${t('me_tag')}</div>` : '';
       // The assistant is a person here, but a special one — mark it, so
       // it does not get lost among the ordinary members.
-      const isBot = String(m.username || '').toLowerCase() === 'qwen';
-      const bot = isBot ? '<div class="tag tag-bot">AI</div>' : '';
+      const bot = isAssistant(m.username) ? '<div class="tag tag-bot">Jacky Bot</div>' : '';
       return `<div class="mention-item${i === 0 ? ' active' : ''}" data-i="${i}">
-        <div class="avatar sm" style="${bg}" data-user-avatar="${m.id}">${avatarContent(m.username, em, 26)}</div>
+        <div class="avatar sm" style="${avatarBgOf(m)}" data-user-avatar="${m.id}">${avatarInner(m)}</div>
         <div class="name">${escapeHtml(m.username)}</div>${who}${bot}
       </div>`;
     }).join('');
@@ -2313,6 +2382,8 @@
     if (!b) return;
     const c = state.currentChat;
     const on = !!(c && c.type === 'group');
+    // 私聊里 @ 根本没用 —— 直接藏掉,不是灰着。
+    b.classList.toggle('hidden', !on);
     b.classList.toggle('disabled', !on);
     b.title = on ? t('mention_members_title') : t('mention_only_group');
     // The hint that says the assistant can be called by name.
@@ -2646,7 +2717,7 @@
     document.body.appendChild(modal);
     // Populate target lists
     const friendsHtml = (state.friends || []).map(f => {
-      const bg = avatarStyle(f);
+      const bg = avatarBgOf(f);
       return `<div class="req-item" data-fid="${f.id}">
         <div class="avatar sm" data-user-avatar="${f.id}"${bg ? ` style="${bg}"` : ''}>${avatarInner(f)}</div>
         <div class="meta"><div class="name">${escapeHtml(f.username)}</div></div>
@@ -2835,7 +2906,7 @@
     dropdown.innerHTML = '';
     for (const u of users) {
       const isFriend = state.friends.some(f=>f.id===u.id);
-      const bg = avatarStyle(u);
+      const bg = avatarBgOf(u);
       const item = document.createElement('div');
       item.className = 'suggestion-item';
       item.innerHTML = `<div class="avatar sm" data-user-avatar="${u.id}"${bg ? ` style="${bg}"` : ''}>${avatarInner(u)}</div>
@@ -2857,10 +2928,9 @@
     // Already a friend? then the primary action is "message", not "add".
     const isFriend = state.friends.some(f => Number(f.id) === Number(user.id));
     $('#profile-title').textContent = isMe ? t('profile_title') : user.username;
-    const bg = user.avatar_color ? `background:linear-gradient(135deg, ${user.avatar_color}, ${shade(user.avatar_color, -25)})` : '';
     const online = isOnline(user.id);
     $('#profile-body').innerHTML = `<div class="profile-head">
-      <div class="avatar lg" style="${bg}">${escapeHtml(initials(user.username))}</div>
+      <div class="avatar lg" style="${avatarBgOf(user)}">${avatarInner(user, 64)}</div>
       <div class="name">${escapeHtml(user.username)} ${online ? `<span style="font-size:11px;color:#15803d;background:rgba(52,199,89,0.14);padding:2px 7px;border-radius:6px;border:1px solid rgba(52,199,89,0.30);font-weight:600;">${t('online')}</span>` : ''}</div>
       <div class="bio">${escapeHtml(user.bio || t('profile_bio_empty'))}</div>
       <div class="profile-actions">
@@ -3036,7 +3106,7 @@
     if (!u) { toast(t('user_not_found')); return; }
     const isFriend = state.friends.some(f => Number(f.id) === uid);
     const online = isOnline(uid);
-    const bg = avatarStyle(u);
+    const bg = avatarBgOf(u);
     const menu = document.createElement('div');
     menu.id = 'user-action-menu';
     menu.className = 'user-menu';
@@ -3123,8 +3193,7 @@
         for (const q of reqs) {
           const row = document.createElement('div');
           row.className = 'settings-row';
-          const bg = q.avatar_color ? `background:linear-gradient(135deg, ${q.avatar_color}, ${shade(q.avatar_color, -25)})` : '';
-          row.innerHTML = `<div class="avatar sm" style="${bg}" data-user-avatar="${q.user_id}">${avatarContent(q.username, null, 26)}</div>
+          row.innerHTML = `<div class="avatar sm" style="${avatarBgOf(q)}" data-user-avatar="${q.user_id}">${avatarInner(q)}</div>
             <div class="settings-label">${escapeHtml(q.username)}${q.message ? `<div style="font-size:11px;color:var(--muted);font-weight:400;margin-top:2px;">${escapeHtml(q.message)}</div>` : ''}</div>
             <div class="settings-trailing">
               <span class="settings-action" data-ok="${q.id}" style="color:#10b981;">${lang === 'en' ? 'Accept' : '同意'}</span>
@@ -3188,8 +3257,7 @@
         for (const u of list) {
           const row = document.createElement('div');
           row.className = 'settings-row';
-          const bg = u.avatar_color ? `background:linear-gradient(135deg, ${u.avatar_color}, ${shade(u.avatar_color, -25)})` : '';
-          row.innerHTML = `<div class="avatar sm" style="${bg}" data-user-avatar="${u.id}">${avatarContent(u.username, null, 18)}</div>
+          row.innerHTML = `<div class="avatar sm" style="${avatarBgOf(u)}" data-user-avatar="${u.id}">${avatarInner(u, 18)}</div>
             <div class="settings-label">${escapeHtml(u.username)}</div>
             <div class="settings-trailing"><span class="settings-action" data-add="${u.id}">${t('add_member_verb')}</span></div>`;
           const btn = row.querySelector('[data-add]');
@@ -3232,18 +3300,10 @@
     const previewInner = curEmoji
       ? `<span class="avatar-emoji">${escapeHtml(curEmoji)}</span>`
       : escapeHtml(initials(state.user.username));
-    const emojiGrid = EMOJI_AVATARS.map(em =>
-      `<button type="button" class="emoji-pick ${em === curEmoji ? 'selected' : ''}" data-emoji="${em}" title="${em}">${em}</button>`
-    ).join('');
     $('#profile-body').innerHTML = `<form id="form-edit-profile">
-      <div class="profile-head"><div class="avatar lg" id="edit-avatar-preview" style="${previewStyle}">${previewInner}</div></div>
-
-      <div class="field">
-        <span class="field-label">选择头像表情</span>
-        <div class="emoji-picker-grid" id="emoji-picker-grid">
-          ${emojiGrid}
-          <button type="button" class="emoji-pick-clear" id="emoji-clear">${lang==='zh' ? '恢复默认头像（用用户名首字母）' : 'Reset to the default (first letter)'}</button>
-        </div>
+      <div class="profile-head">
+        <div class="avatar lg" id="edit-avatar-preview" style="${previewStyle}">${previewInner}</div>
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-edit-avatar">${lang === 'zh' ? '更换头像' : 'Change avatar'}</button>
       </div>
 
       <label class="field"><span class="field-label">${t('profile_username')}</span><input id="edit-username" type="text" value="${escapeHtml(state.user.username)}" maxlength="24" /></label>
@@ -3254,35 +3314,24 @@
         <button type="submit" class="btn btn-primary">${t('btn_save')}</button>
       </div></form>`;
 
-    // Emoji picker: pick one, or clear it to go back to the initial.
+    // 头像:表情或照片,都用统一的选择器。
     let pickedEmoji = curEmoji;
+    let pickedImg = state.user.avatar || '';
     const preview = $('#edit-avatar-preview');
-    const grid = $('#emoji-picker-grid');
     const paint = () => {
       if (!preview) return;
-      preview.innerHTML = pickedEmoji
-        ? `<span class="avatar-emoji">${escapeHtml(pickedEmoji)}</span>`
-        : escapeHtml(initials(state.user.username));
-      if (grid) {
-        grid.querySelectorAll('.emoji-pick').forEach(b => {
-          b.classList.toggle('selected', b.dataset.emoji === pickedEmoji);
-        });
-      }
+      preview.style.background = pickedImg ? 'transparent' : previewStyle;
+      preview.innerHTML = pickedImg
+        ? `<img class="avatar-img" src="${escapeHtml(pickedImg)}" alt=""/>`
+        : (pickedEmoji
+          ? `<span class="avatar-emoji">${escapeHtml(pickedEmoji)}</span>`
+          : escapeHtml(initials(state.user.username)));
     };
-    if (grid) {
-      grid.addEventListener('click', (e) => {
-        const pick = e.target.closest('.emoji-pick');
-        if (pick) {
-          pickedEmoji = pick.dataset.emoji || null;
-          paint();
-          return;
-        }
-        if (e.target.closest('#emoji-clear')) {
-          pickedEmoji = '';
-          paint();
-        }
-      });
-    }
+    const btnAv = $('#btn-edit-avatar');
+    if (btnAv) btnAv.addEventListener('click', () => openAvatarPicker(
+      { emoji: pickedEmoji, img: pickedImg },
+      (v) => { pickedEmoji = v.emoji; pickedImg = v.img; paint(); }
+    ));
 
     $('#form-edit-profile').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -3290,7 +3339,11 @@
       const username = $('#edit-username').value.trim();
       const bio = $('#edit-bio').value.trim();
       try {
-        const r = await api('/me', { method: 'PUT', body: { username, bio, avatar_emoji: pickedEmoji } });
+        const r = await api('/me', { method: 'PUT', body: {
+          username, bio,
+          avatar_emoji: pickedEmoji || null,
+          avatar: pickedImg || null,
+        } });
         Object.assign(state.user, r.user);
         localStorage.setItem('vve:user', JSON.stringify(state.user));
         renderTopbarAvatar();
@@ -3314,6 +3367,156 @@
   // the user-created-group feature was removed. They wrote into
   // #join-group-results and called /groups/search + /groups/:id/join —
   // none of which exist any more.
+
+  // ============================================================
+  // 朋友圈(日常)—— 微信那套:封面 + 一条条动态,能赞能评论。
+  // ============================================================
+  const MOMENT = { items: [], imgs: [] };
+
+  function openMoments() {
+    $('#app-view')?.classList.add('hidden');
+    $('#moment-view')?.classList.remove('hidden');
+    if (state.user) {
+      const nameEl = $('#moment-cover-name');
+      if (nameEl) nameEl.textContent = state.user.username;
+      const av = $('#moment-cover-avatar');
+      if (av) { av.innerHTML = avatarInner(state.user, 64); av.style.background = avatarBgOf(state.user); }
+    }
+    loadMoments();
+  }
+  function closeMoments() {
+    $('#moment-view')?.classList.add('hidden');
+    $('#app-view')?.classList.remove('hidden');
+  }
+  async function loadMoments() {
+    try {
+      const r = await api('/moments');
+      MOMENT.items = r.moments || [];
+      renderMoments();
+    } catch (e) { console.error('[VVeChat] moments failed:', e && e.message); }
+  }
+  function momentTime(ts) {
+    const d = Date.now() - Number(ts || 0);
+    if (d < 60 * 1000) return lang === 'en' ? 'just now' : '刚刚';
+    if (d < 3600 * 1000) return Math.floor(d / 60000) + (lang === 'en' ? ' min ago' : ' 分钟前');
+    if (d < 86400 * 1000) return Math.floor(d / 3600000) + (lang === 'en' ? ' h ago' : ' 小时前');
+    if (d < 7 * 86400 * 1000) return Math.floor(d / 86400000) + (lang === 'en' ? ' d ago' : ' 天前');
+    return fmtTime(ts);
+  }
+  function renderMoments() {
+    const feed = $('#moment-feed');
+    if (!feed) return;
+    if (!MOMENT.items.length) {
+      feed.innerHTML = `<div class="empty-hint"><p>${lang === 'en' ? 'No posts yet' : '还没有动态'}</p></div>`;
+      return;
+    }
+    feed.innerHTML = MOMENT.items.map(m => {
+      const u = m.user || {};
+      const imgs = (m.images || []).map(src => `<img src="${escapeHtml(src)}" alt="" loading="lazy">`).join('');
+      const likes = (m.likes || []).map(l => escapeHtml(l.username || '')).filter(Boolean);
+      const comments = (m.comments || []).map(c =>
+        `<div class="c"><b>${escapeHtml(c.username || '')}</b>: ${escapeHtml(c.text || '')}</div>`).join('');
+      const mine = Number(u.id) === Number(state.user && state.user.id);
+      const liked = (m.likes || []).some(l => Number(l.id) === Number(state.user && state.user.id));
+      return `<div class="moment-post" data-id="${m.id}">
+        <div class="avatar sm moment-post-avatar" style="${avatarBgOf(u)}">${avatarInner(u)}</div>
+        <div class="meta">
+          <div class="name">${escapeHtml(u.username || '')}</div>
+          ${m.content ? `<div class="text">${escapeHtml(m.content)}</div>` : ''}
+          ${imgs ? `<div class="imgs">${imgs}</div>` : ''}
+          <div class="foot">
+            <span>${escapeHtml(momentTime(m.created_at))}</span>
+            <span class="acts">
+              <button type="button" class="moment-act like ${liked ? 'on' : ''}" data-act="like">${liked ? '💗' : '🤍'}</button>
+              <button type="button" class="moment-act" data-act="comment">💬</button>
+              ${mine ? `<button type="button" class="moment-act" data-act="del">🗑</button>` : ''}
+            </span>
+          </div>
+          ${likes.length ? `<div class="moment-likes">❤️ ${likes.join('，')}</div>` : ''}
+          ${comments ? `<div class="moment-comments">${comments}</div>` : ''}
+          <div class="moment-comment-box">
+            <input class="moment-comment-input" type="text" placeholder="${lang === 'en' ? 'Comment…' : '评论…'}" />
+            <button type="button" class="moment-act send" data-act="send">${lang === 'en' ? 'Send' : '发送'}</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+  function momentImagesChanged() {
+    const box = $('#moment-imgs');
+    if (!box) return;
+    box.innerHTML = MOMENT.imgs.map((src, i) =>
+      `<div class="moment-img"><img src="${escapeHtml(src)}" alt=""/><button type="button" data-i="${i}">×</button></div>`).join('');
+  }
+  function bindMoments() {
+    const back = $('#btn-moment-back');
+    if (back) back.addEventListener('click', closeMoments);
+    const compose = $('#btn-moment-compose');
+    if (compose) compose.addEventListener('click', () => {
+      MOMENT.imgs = [];
+      const t = $('#moment-text'); if (t) t.value = '';
+      momentImagesChanged();
+      openModal('modal-moment');
+    });
+    const file = $('#moment-file');
+    if (file) file.addEventListener('change', () => {
+      const files = [...(file.files || [])].slice(0, 9 - MOMENT.imgs.length);
+      file.value = '';
+      files.forEach(f => shrinkToAvatar(f, (url) => {
+        if (MOMENT.imgs.length >= 9) return;
+        MOMENT.imgs.push(url); momentImagesChanged();
+      }));
+    });
+    const imgs = $('#moment-imgs');
+    if (imgs) imgs.addEventListener('click', (e) => {
+      const x = e.target.closest('button[data-i]');
+      if (!x) return;
+      MOMENT.imgs.splice(Number(x.dataset.i), 1);
+      momentImagesChanged();
+    });
+    const pub = $('#moment-publish');
+    if (pub) pub.addEventListener('click', async () => {
+      const text = ($('#moment-text') || {}).value || '';
+      if (!text.trim() && !MOMENT.imgs.length) { toast(lang === 'en' ? 'Say something first' : '说点什么再发表'); return; }
+      pub.disabled = true;
+      try {
+        await api('/moments', { method: 'POST', body: { content: text, images: MOMENT.imgs } });
+        closeModal('modal-moment');
+        await loadMoments();
+      } catch (e) {
+        const m = $('#moment-msg'); if (m) m.textContent = e.message;
+      } finally { pub.disabled = false; }
+    });
+    const feed = $('#moment-feed');
+    if (feed) feed.addEventListener('click', async (e) => {
+      const btn = e.target.closest('.moment-act');
+      if (!btn) return;
+      const post = btn.closest('.moment-post');
+      if (!post) return;
+      const id = Number(post.dataset.id);
+      const act = btn.dataset.act;
+      if (act === 'like') {
+        const r = await api('/moments/' + id + '/like', { method: 'POST', body: {} });
+        const m = MOMENT.items.find(x => Number(x.id) === id);
+        if (m) m.likes = r.likes || [];
+        renderMoments();
+      } else if (act === 'del') {
+        await api('/moments/' + id, { method: 'DELETE' });
+        await loadMoments();
+      } else if (act === 'comment') {
+        const input = post.querySelector('.moment-comment-input');
+        if (input) input.focus();
+      } else if (act === 'send') {
+        const input = post.querySelector('.moment-comment-input');
+        const text = (input && input.value || '').trim();
+        if (!text) return;
+        const r = await api('/moments/' + id + '/comment', { method: 'POST', body: { text } });
+        const m = MOMENT.items.find(x => Number(x.id) === id);
+        if (m) m.comments = r.comments || [];
+        renderMoments();
+      }
+    });
+  }
 
   // ---------- image handling ----------
   function handleImageFile(file) {
@@ -3401,8 +3604,25 @@
     state.socket = s;
     bindSocketEvents(s);
   }
+  // 在线状态靠心跳:每 25 秒告诉服务端「我还活着」,
+  // 服务端 70 秒没收到心跳就把我判成离线。断线重连也会自动续上。
+  let _presenceTimer = null;
+  function startPresencePing(s) {
+    if (_presenceTimer) clearInterval(_presenceTimer);
+    _presenceTimer = setInterval(() => {
+      try { s.emit('presence:ping'); } catch (_) {}
+    }, 25000);
+  }
+
   function bindSocketEvents(s) {
-    s.on('connect', () => { hideOffline(); if (state.currentChat) loadMessages().then(renderMessages); refreshConversations(); });
+    s.on('connect', () => {
+      hideOffline();
+      if (state.currentChat) loadMessages().then(renderMessages);
+      refreshConversations();
+      // 重连期间别人上下线的事件可能丢了,连上就重新拉一次。
+      refreshOnlineStatus().then(() => { renderChats(); renderChatHeader(); });
+      startPresencePing(s);
+    });
     s.on('disconnect', () => showOffline());
     s.on('message:new', onSocketMessage);
     s.on('message:deleted', onMessageDeleted);
@@ -3410,6 +3630,11 @@
     s.on('typing:start', onTypingStart);
     s.on('typing:stop', onTypingStop);
     s.on('user:presence', onUserPresence);
+    // 别人发了新动态 —— 朋友圈开着就刷新。
+    s.on('moment:new', () => {
+      const v = $('#moment-view');
+      if (v && !v.classList.contains('hidden')) loadMoments();
+    });
     s.on('user:updated', onUserUpdated);
     s.on('friend:request', onFriendRequest);
     s.on('friend:request:resolved', onRequestResolved);
@@ -3559,13 +3784,10 @@
       const u = mine
         ? state.user
         : { id: m.sender_id, username: m.sender_username, avatar_color: m.sender_avatar_color };
-      const bg = u && u.avatar_color
-        ? `background:linear-gradient(135deg, ${u.avatar_color}, ${shade(u.avatar_color, -25)});`
-        : '';
       const av = document.createElement('div');
       av.className = 'msg-avatar avatar sm';
-      av.style.cssText = bg;
-      av.textContent = initials(u && u.username || '?');
+      av.style.cssText = avatarBgOf(u);
+      av.innerHTML = avatarInner(u);
       const content = document.createElement('div');
       content.className = 'msg-content';
       const bub = document.createElement('div');
@@ -3592,18 +3814,18 @@
     const isGroup = convType === 'group';
     // 标题：私聊是对方，群聊是群名
     let title = msg.sender_username || '';
-    let avatarText = initials(title);
+    let avatarHtml = escapeHtml(initials(title));
     let avatarBg = '';
     if (isGroup) {
       const g = (state.groups || []).find(x => Number(x.id) === Number(msg.conv_id));
       title = (g && g.name) || t('a_group');
-      avatarText = t('group_word');
+      avatarHtml = t('group_word');
       avatarBg = g && g.icon_color ? `background:linear-gradient(135deg, ${g.icon_color}, ${shade(g.icon_color, -25)});` : '';
     } else {
       const u = (state.friends || []).find(x => Number(x.id) === Number(peerId));
-      if (u) { avatarText = initials(u.username); avatarBg = avatarStyle(u); }
+      if (u) { avatarHtml = avatarInner(u); avatarBg = avatarBgOf(u); }
     }
-    return { convType, convId, title, avatarText, avatarBg, isGroup };
+    return { convType, convId, title, avatarHtml, avatarBg, isGroup };
   }
 
   // ============================================================
@@ -3828,9 +4050,11 @@
     if (state.currentChat && convKey(state.currentChat.type, state.currentChat.id) === key) renderMessages();
   }
   function onUserPresence({ user_id, online }) {
-    if (online) state.online.add(user_id); else state.online.delete(user_id);
+    if (online) state.online.add(Number(user_id)); else state.online.delete(Number(user_id));
     renderChats();
-    if (state.currentChat && state.currentChat.type==='user' && state.currentChat.id===user_id) renderChatHeader();
+    // id 一边是字符串一边是数字 —— 直接比永远不相等,头部就永远不刷新。
+    if (state.currentChat && state.currentChat.type === 'user'
+        && String(state.currentChat.id) === String(user_id)) renderChatHeader();
   }
   function onUserUpdated(u) {
     const f = state.friends.find(f => f.id === u.id);
@@ -3929,7 +4153,11 @@
     }
   }
   async function refreshOnlineStatus() {
-    const ids = [...state.friends.map(f => f.id), ...state.groups.map(g => g.id), state.user.id];
+    // 好友 + 群 + **正在聊的人** —— 少了最后一项,没加好友的聊天对象永远是离线。
+    const ids = [...state.friends.map(f => f.id),
+                 ...state.groups.map(g => g.id),
+                 ...state.conversations.filter(c => c.type === 'user').map(c => c.id),
+                 state.user.id];
     if (!ids.length) return;
     try { const r = await api(`/users/status?ids=${ids.join(',')}`); state.online.clear(); for (const [uid, on] of Object.entries(r.status)) if (on) state.online.add(Number(uid)); } catch {}
   }
@@ -5022,14 +5250,8 @@
     if (sideName && state.user) sideName.textContent = state.user.username;
     const sideAv = $('#ai-side-avatar');
     if (sideAv && state.user) {
-      const em = state.user.avatar_emoji;
-      const color = state.user.avatar_color || '#5eead4';
-      sideAv.innerHTML = em
-        ? `<span class="avatar-emoji">${escapeHtml(em)}</span>`
-        : escapeHtml(initials(state.user.username));
-      sideAv.style.background = em
-        ? 'rgba(255,255,255,0.55)'
-        : `linear-gradient(135deg, ${color}, ${shade(color, -25)})`;
+      sideAv.innerHTML = avatarInner(state.user);
+      sideAv.style.background = avatarBgOf(state.user);
     }
   }
 
@@ -5719,6 +5941,8 @@
     $$('.side-nav-item').forEach(btn => bindOnce(btn, 'click', () => {
       $$('.side-nav-item').forEach(b => b.classList.toggle('active', b === btn));
       const target = btn.dataset.pane;
+      // 「日常」是整个页面切成朋友圈,不是中间那栏换个列表。
+      if (target === 'moment') { openMoments(); return; }
       $$('.pane').forEach(p => p.classList.toggle('active', p.id === `pane-${target}`));
       setListMode(target);
       // Discover is a list of groups other people made — pull it fresh.
@@ -5777,7 +6001,7 @@
       if (!input) return;
       input.focus();
       const pos = input.value.length;
-      input.value = input.value.slice(0, pos) + '@AI ';
+      input.value = input.value.slice(0, pos) + '@Jacky Bot ';
       input.setSelectionRange(pos + 4, pos + 4);
       input.dispatchEvent(new Event('input', { bubbles: true }));
     });
@@ -6061,16 +6285,34 @@
     }, true /* capture so we run before any other handler can swallow it */, 'modal-close');
   }
 
+  // 桌面版:UI 比例跟着屏幕走。1440px 是 1.0 倍,更宽就放大一点,
+  // 笔记本窄屏就收一点。只改一个 CSS 变量,样式表自己乘上去。
+  function updateUiScale() {
+    const w = window.innerWidth;
+    let s = 1;
+    if (w >= 2100) s = 1.18;
+    else if (w >= 1700) s = 1.08;
+    else if (w >= 1300) s = 1;
+    else if (w >= 1000) s = 0.94;
+    else if (w >= 900) s = 0.88;
+    else s = 1;                       // 手机端不缩放
+    document.documentElement.style.setProperty('--ui', String(s));
+  }
+
   // ---------- init ----------
   function init() {
     try {
       setLang(lang);
       switchAuthTab('login');
       ensureAvatarBound();   // every avatar opens the add-friend menu
+      bindMoments();         // 朋友圈(日常)
+      updateUiScale();
+      window.addEventListener('resize', updateUiScale);
       initSplash();         // show full-screen Hello before auth (skipped if logged in)
       startHelloCycler();   // animate the auth tagline across languages
       $$('.lang-toggle, .lang-btn').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); setLang(lang === 'zh' ? 'en' : 'zh'); }));
       $$('.auth-card .tab').forEach(t => t.addEventListener('click', () => switchAuthTab(t.dataset.tab)));
+      $('#btn-pick-avatar')?.addEventListener('click', () => openAvatarPicker(_regAvatar, (v) => { _regAvatar = v; paintRegPreview(); }));
       $('#auth-form')?.addEventListener('submit', async (e) => {
         e.preventDefault();
         const username = $('#auth-username').value.trim();
@@ -6083,7 +6325,13 @@
         btn.disabled = true;
         btn.textContent = authMode === 'login' ? t('auth_loading_login') : t('auth_loading_register');
         try {
-          const data = await api(authMode === 'login' ? '/login' : '/register', { method: 'POST', body: { username, password } });
+          const data = await api(authMode === 'login' ? '/login' : '/register', { method: 'POST', body: {
+            username, password,
+            avatar: _regAvatar.img || null,
+            avatar_emoji: _regAvatar.emoji || null,
+            // 蜜罐字段:真人这里是空的,脚本填了它后端就会记一条安全事件。
+            website: ($('#auth-form [name=website]') || {}).value || '',
+          } });
           state.user = data.user; state.token = data.token;
           localStorage.setItem('vve:token', state.token);
           localStorage.setItem('vve:user', JSON.stringify(state.user));

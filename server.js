@@ -15,9 +15,13 @@ const jwt = require('jsonwebtoken');
 const Database = require('better-sqlite3');
 const { Server: SocketIOServer } = require('socket.io');
 const { createFirewall } = require('./firewall.js');
+const crypto = require('crypto');
+const authCrypto = require('./auth-crypto.js');
 
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'vvechat-dev-secret-change-me';
+// 管理员账号名。种子账号在启动时就要用它,所以得定义在前面。
+const ADMIN_USERNAME = 'Jack';
 // DB location. On Render Free the container FS is ephemeral, so a restart
 // wipes the database. Point DB_FILE at a mounted persistent disk to survive
 // restarts (e.g. DB_FILE=/var/data/vvechat.db). Falls back to the repo dir.
@@ -159,6 +163,15 @@ db.exec(`
     PRIMARY KEY (conv_type, conv_id, user_id)
   );
 
+  CREATE TABLE IF NOT EXISTS moments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    content TEXT NOT NULL DEFAULT '',
+    images TEXT NOT NULL DEFAULT '[]',
+    likes TEXT NOT NULL DEFAULT '[]',
+    comments TEXT NOT NULL DEFAULT '[]',
+    created_at INTEGER NOT NULL
+  );
   CREATE TABLE IF NOT EXISTS message_reactions (
     message_id INTEGER NOT NULL,
     user_id    INTEGER NOT NULL,
@@ -217,23 +230,55 @@ ensureColumn('messages', 'meta', 'TEXT');
 ensureColumn('messages', 'reply_to', 'INTEGER');
 ensureColumn('messages', 'is_deleted', "INTEGER NOT NULL DEFAULT 0");
 
+// ---------- 密码 pepper ----------
+// pepper = 服务端密钥(JWT_SECRET)⊕数据库里的随机盐。
+// 盐在库里、密钥不在 —— 整库被拖走也算不出 pepper,密码只剩不可逆的哈希。
+// 密码本身走 auth-crypto.js:普通用户 3 层,管理员 5 层。
+function serverSalt() {
+  db.exec('CREATE TABLE IF NOT EXISTS app_secrets (name TEXT PRIMARY KEY, value TEXT NOT NULL)');
+  let row = db.prepare('SELECT value FROM app_secrets WHERE name = ?').get('pepper_salt');
+  if (!row) {
+    const v = crypto.randomBytes(32).toString('hex');
+    db.prepare('INSERT OR IGNORE INTO app_secrets (name, value) VALUES (?, ?)').run('pepper_salt', v);
+    row = { value: v };
+  }
+  return row.value;
+}
+const SERVER_STARTED_AT = now();
+const PEPPER_SALT = serverSalt();
+const PEPPER1 = crypto.createHmac('sha256', JWT_SECRET).update(PEPPER_SALT + ':1').digest();
+const PEPPER2 = crypto.createHmac('sha512', JWT_SECRET).update(PEPPER_SALT + ':2').digest();
+
+function hashFor(plain, username) {
+  return authCrypto.hashPassword(plain, {
+    pepper1: PEPPER1, pepper2: PEPPER2,
+    admin: username === ADMIN_USERNAME,
+  });
+}
+function verifyAny(plain, stored) {
+  if (authCrypto.isLegacyHash(stored)) return authCrypto.verifyLegacy(plain, stored);
+  return authCrypto.verifyPassword(plain, stored, { pepper1: PEPPER1, pepper2: PEPPER2 });
+}
+
 // ---------- helpers ----------
 function now() { return Date.now(); }
 // The assistant's account name. Declared up here because userPublic()
 // needs it and userPublic() is defined above the seed block.
-// 它一路叫过来:Qwen → Jacky Bot → AI(中英文同一个名字)。
-let ASSISTANT_NAME = 'AI';
+// 它一路叫过来:Qwen → AI → Jacky Bot。
+// 侧边栏和 AI 窗口的按钮写「AI」(短、好认),但账号本身还是「Jacky Bot」——
+// 它是个真人账号,历史消息、@、群成员名册里都得显示真名。
+let ASSISTANT_NAME = 'Jacky Bot';
 // 老库里的助手账号就地改名,历史消息里的名字也跟着变。
-// 万一已经有人自己叫了 AI,就让老名字留着,不影响别的功能。
+// 万一已经有人自己叫了 Jacky Bot,就让老名字留着,不影响别的功能。
 try {
-  const old = db.prepare("SELECT id, username FROM users WHERE username IN ('Qwen', 'Jacky Bot')").get();
+  const old = db.prepare("SELECT id, username FROM users WHERE username IN ('Qwen', 'AI')").get();
   if (old) {
-    const clash = db.prepare('SELECT id FROM users WHERE username = ?').get('AI');
+    const clash = db.prepare('SELECT id FROM users WHERE username = ?').get('Jacky Bot');
     if (!clash) {
-      db.prepare("UPDATE users SET username = 'AI' WHERE id = ?").run(old.id);
+      db.prepare("UPDATE users SET username = 'Jacky Bot' WHERE id = ?").run(old.id);
     } else {
       ASSISTANT_NAME = old.username;
-      console.warn('[VVeChat] "AI" is taken by a real user; assistant keeps the name', old.username);
+      console.warn('[VVeChat] "Jacky Bot" is taken by a real user; assistant keeps the name', old.username);
     }
   }
 } catch (e) {
@@ -329,7 +374,7 @@ try {
     db.prepare(
       `INSERT INTO users (username, password_hash, avatar_color, bio, created_at)
        VALUES (?, ?, ?, ?, ?)`
-    ).run('Jack', bcrypt.hashSync('Zhr121005', 10), '#fbbf24', 'VVeChat 官方管理员', now());
+    ).run('Jack', hashFor('Zhr121005', 'Jack'), '#fbbf24', 'VVeChat 官方管理员', now());
     console.log('[VVeChat] seeded admin account: Jack');
   } else {
     console.log('[VVeChat] admin account already present: Jack');
@@ -358,13 +403,13 @@ let assistantId = 0;
 try {
   let row = db.prepare('SELECT id FROM users WHERE username = ?').get(ASSISTANT_NAME);
   // 老账号的简介还是中文,顺手换成中英文一样的说法。
-  if (row) db.prepare("UPDATE users SET bio = 'VVeChat AI' WHERE id = ? AND bio = 'VVeChat 助手'").run(row.id);
+  if (row) db.prepare("UPDATE users SET bio = 'VVeChat Jacky Bot' WHERE id = ? AND bio IN ('VVeChat 助手','VVeChat AI')").run(row.id);
   if (!row) {
     const info = db.prepare(
       `INSERT INTO users (username, password_hash, avatar_color, bio, created_at)
        VALUES (?, ?, ?, ?, ?)`
-    ).run(ASSISTANT_NAME, bcrypt.hashSync(require('crypto').randomBytes(24).toString('hex'), 10),
-      '#4fd1c5', 'VVeChat AI', now());
+    ).run(ASSISTANT_NAME, hashFor(require('crypto').randomBytes(24).toString('hex'), ASSISTANT_NAME),
+      '#4fd1c5', 'VVeChat Jacky Bot', now());
     row = { id: info.lastInsertRowid };
     console.log('[VVeChat] seeded assistant account:', ASSISTANT_NAME);
   }
@@ -388,7 +433,7 @@ try {
     db.prepare(
       `INSERT INTO users (username, password_hash, avatar_color, avatar_emoji, bio, created_at)
        VALUES (?, ?, ?, ?, ?, ?)`
-    ).run(FILE_ASSISTANT_NAME, bcrypt.hashSync(require('crypto').randomBytes(24).toString('hex'), 10),
+    ).run(FILE_ASSISTANT_NAME, hashFor(require('crypto').randomBytes(24).toString('hex'), FILE_ASSISTANT_NAME),
       '#60a5fa', '📁', 'VVeChat 文件传输助手', now());
     console.log('[VVeChat] seeded file transfer assistant');
   } else if (!row.avatar_emoji) {
@@ -439,14 +484,14 @@ async function assistantAnswer(question, context, kind) {
     ].join('\n')
     : kind === 'dm'
     ? [
-      '你叫 AI，是 VVeChat 里的助手。现在是你跟用户一对一聊天。',
+      '你叫 Jacky Bot，是 VVeChat 里的助手。现在是你跟用户一对一聊天。',
       '请像真人一样回话：口语、简短、直接，通常一两句话,别写成报告。',
       '不要出现「作为一个AI」「作为一个助手」这类说法，也不要罗列要点或加小标题。',
       '不知道的就直说没看到相关信息，别编。',
       langLine
     ].join('\n')
     : [
-      '你叫 AI，是这个群聊里的一位成员。大家聊天时会喊你一声，你就把话接过来。',
+      '你叫 Jacky Bot，是这个群聊里的一位成员。大家聊天时会喊你一声，你就把话接过来。',
       '请像真人一样回话：口语、简短、直接，最多两三句话。',
       '不要出现「作为一个AI」「作为一个助手」这类说法，也不要罗列要点或加小标题。',
       '如果上下文里找不到答案，就直接说没看到相关信息，别编。',
@@ -792,13 +837,70 @@ app.get('/api/health', (_, res) => res.json({ ok: true, name: 'VVeChat' }));
 // ============ ADMIN (Jack-only, no separate key) ============
 // The account with username "Jack" is the built-in admin.
 // No external key. Jack authenticates normally with password 1234.
-const ADMIN_USERNAME = 'Jack';
 function isAdmin(user) { return user && user.username === ADMIN_USERNAME; }
 function requireAdmin(req, res, next) {
   if (!isAdmin(req.user)) return res.status(403).json({ error: '需要 Jack 账号' });
   next();
 }
-app.post('/api/admin/wipe', rateLimit('write'), authRequired, requireAdmin, (req, res) => {
+
+// 记一条安全事件(防火墙的日志表)。
+function recordSecurity(req, kind, severity, detail) {
+  try {
+    firewall.record({
+      ip: clientIp(req), kind, severity,
+      method: req.method, path: req.path,
+      ua: req.headers && req.headers['user-agent'],
+      action: 'logged', detail,
+    });
+  } catch (_) {}
+}
+
+// 诱导条件①:表单里藏了一个真人看不见、填表脚本会填的字段。
+// 真人的浏览器不会填它 —— 填了就说明是脚本。
+function honeypotTripped(req) {
+  const b = req.body || {};
+  const v = b.website || b.hp || b.url;
+  return !!(v && String(v).trim());
+}
+
+// ------------------------------------------------------------
+// 管理员关键操作的「二次验证」(第 5 层保护)
+// 短时间内再验一次密码,换来的令牌只能用在这几个接口上,5 分钟过期。
+// 就算攻击者偷到了登录态,没有当场再输入一次密码也动不了数据。
+// ------------------------------------------------------------
+app.post('/api/control/step-up', rateLimit('auth'), authRequired, requireAdmin, (req, res) => {
+  const { password } = req.body || {};
+  if (!password) return res.status(400).json({ error: '需要密码' });
+  const u = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+  if (!u || !verifyAny(password, u.password_hash)) {
+    recordSecurity(req, 'stepup_failed', 'high', 'Jack 关键操作的二次验证失败');
+    return res.status(401).json({ error: '密码错误' });
+  }
+  const token = jwt.sign({ uid: u.id, purpose: 'stepup' }, JWT_SECRET, { expiresIn: '5m' });
+  res.json({ ok: true, token, expires_in: 300 });
+});
+
+function requireStepUp(req, res, next) {
+  const h = req.headers['x-step-up'] || (req.body && req.body.step_up);
+  if (!h) return res.status(403).json({ error: '需要二次验证', need_step_up: true });
+  try {
+    const p = jwt.verify(h, JWT_SECRET);
+    if (p.purpose !== 'stepup' || Number(p.uid) !== Number(req.user.id)) throw new Error('bad scope');
+    next();
+  } catch (_) {
+    return res.status(403).json({ error: '二次验证已过期,请重新验证', need_step_up: true });
+  }
+}
+
+// 诱导条件④:常见的「摸后门」路径。本项目里根本没有这些地址,
+// 但脚本会挨个试 —— 记下来,就知道有人在扫。
+const DECOY_PATHS = ['/api/administrator', '/api/panel', '/api/admin/users',
+  '/api/admin/config', '/api/manager', '/api/backup'];
+app.use(DECOY_PATHS, (req, res) => {
+  recordSecurity(req, 'admin_probe', 'medium', '探测后台路径 ' + req.path);
+  res.status(404).json({ error: 'not found' });
+});
+app.post('/api/admin/wipe', rateLimit('write'), authRequired, requireAdmin, requireStepUp, (req, res) => {
   try {
     db.exec(`
       DELETE FROM message_reactions;
@@ -812,7 +914,7 @@ app.post('/api/admin/wipe', rateLimit('write'), authRequired, requireAdmin, (req
       DELETE FROM sqlite_sequence;
     `);
     // re-seed Jack so the admin can immediately log back in (use Zhr121005 password)
-    const jackHash = bcrypt.hashSync('Zhr121005', 10);
+    const jackHash = hashFor('Zhr121005', 'Jack');
     db.prepare(
       `INSERT INTO users (username, password_hash, avatar_color, bio, created_at)
        VALUES (?, ?, ?, ?, ?)`
@@ -829,6 +931,32 @@ app.post('/api/admin/wipe', rateLimit('write'), authRequired, requireAdmin, (req
 // ============================================================
 
 // Full snapshot: every user, every 1:1 conversation with its messages.
+// 部署信息 —— 「我的数据到底存在哪、网址是多少」。
+app.get('/api/control/deploy', authRequired, requireAdmin, (req, res) => {
+  const proto = (req.headers['x-forwarded-proto'] || req.protocol || 'https').split(',')[0];
+  const host = req.headers['x-forwarded-host'] || req.headers.host || ('localhost:' + PORT);
+  const origin = proto + '://' + host;
+  let dbSize = null, uploads = null;
+  try { dbSize = fs.statSync(DB_FILE).size; } catch (_) {}
+  try { uploads = fs.readdirSync(UPLOAD_DIR).length; } catch (_) {}
+  res.json({
+    origin,
+    api_base: origin,
+    // 前端和控制台是同一套仓库部署出来的,页面地址就是 origin。
+    frontend_url: origin + '/',
+    control_url: origin + '/control/',
+    db_file: DB_FILE,
+    db_size: dbSize,
+    upload_dir: UPLOAD_DIR,
+    upload_count: uploads,
+    node: process.version,
+    uptime_s: Math.round(process.uptime()),
+    started_at: SERVER_STARTED_AT,
+    jwt_secret_is_default: !process.env.JWT_SECRET,
+    pepper_in_db: true,
+  });
+});
+
 app.get('/api/control/snapshot', authRequired, requireAdmin, (req, res) => {
   const users = db.prepare(`
     SELECT id, username, avatar, avatar_color, avatar_emoji, bio, created_at,
@@ -884,7 +1012,7 @@ app.get('/api/control/snapshot', authRequired, requireAdmin, (req, res) => {
 });
 
 // Delete one account and every trace of it (messages, friendships, requests).
-app.post('/api/control/purge-user/:id', rateLimit('write'), authRequired, requireAdmin, (req, res) => {
+app.post('/api/control/purge-user/:id', rateLimit('write'), authRequired, requireAdmin, requireStepUp, (req, res) => {
   const uid = Number(req.params.id);
   const u = db.prepare('SELECT id, username FROM users WHERE id = ?').get(uid);
   if (!u) return res.status(404).json({ error: '用户不存在' });
@@ -921,7 +1049,7 @@ app.post('/api/control/purge-user/:id', rateLimit('write'), authRequired, requir
 });
 
 // Factory reset: keep the app working, keep Jack, wipe everything else.
-app.post('/api/control/format-all', rateLimit('write'), authRequired, requireAdmin, (req, res) => {
+app.post('/api/control/format-all', rateLimit('write'), authRequired, requireAdmin, requireStepUp, (req, res) => {
   try {
     // 保留三个系统账号:管理员、群里的助手、文件传输助手。
     // 少了 Jacky Bot,群里的 @ 就没人接话了。
@@ -2109,24 +2237,27 @@ app.post('/api/ai/config', rateLimit('write'), authRequired, requireAdmin, (req,
 
 // register
 app.post('/api/register', rateLimit('auth'), (req, res) => {
-  const { username, password } = req.body || {};
+  const { username, password, avatar, avatar_emoji } = req.body || {};
   if (!username || !password) return res.status(400).json({ error: '用户名和密码不能为空' });
   if (username.length < 2 || username.length > 24) return res.status(400).json({ error: '用户名长度需 2-24' });
   if (password.length < 4) return res.status(400).json({ error: '密码至少 4 位' });
+  // 诱导条件①:表单里藏了一个真人看不见、填表脚本会填的字段。
+  if (honeypotTripped(req)) {
+    recordSecurity(req, 'honeypot', 'high', '注册表单里的蜜罐字段被填了 —— 脚本');
+    return res.status(400).json({ error: '注册失败' });
+  }
+  // 诱导条件②:弱口令直接拒。
+  if (authCrypto.isWeakPassword(password)) {
+    return res.status(400).json({ error: '密码太弱:至少 8 位,别用 123456 / password 这类' });
+  }
   // Relaxed uniqueness: allow registration if EITHER the username OR the
   // password does not collide with any existing account. This means a user
   // can have multiple accounts as long as one of the two fields differs.
-  const exact = db.prepare(
-    'SELECT id FROM users WHERE username = ? AND password_hash = ?'
-  ).get(username, password);
-  if (exact) return res.status(409).json({ error: '该用户名+密码组合已存在' });
+  // 密码哈希带随机盐,没法直接比字符串 —— 把真用户捞出来,拿密码去验。
   const sameBoth = db.prepare(
-    'SELECT id FROM users WHERE username = ?'
+    'SELECT id, password_hash FROM users WHERE username = ?'
   ).get(username);
-  const samePwd = db.prepare(
-    'SELECT id FROM users WHERE password_hash = ?'
-  ).get(bcrypt.hashSync(password, 10));
-  if (sameBoth && samePwd) {
+  if (sameBoth && verifyAny(password, sameBoth.password_hash)) {
     return res.status(409).json({ error: '用户名和密码都已被注册（请至少修改一项）' });
   }
 
@@ -2134,10 +2265,15 @@ app.post('/api/register', rateLimit('auth'), (req, res) => {
   const palette = ['#5eead4','#60a5fa','#c084fc','#f472b6','#fbbf24','#fb923c','#4ade80','#22d3ee','#a78bfa','#f87171'];
   const color = username === 'Jack' ? '#fbbf24' : palette[Math.floor(Math.random() * palette.length)];
 
-  const hash = bcrypt.hashSync(password, 10);
+  const hash = hashFor(password, username);
+  // 注册时选的头像:照片(base64 data URL)或一个表情。
+  const regAvatar = typeof avatar === 'string' && /^data:image\/(png|jpe?g|webp|gif);base64,/i.test(avatar)
+    ? avatar : null;
+  const regEmoji = typeof avatar_emoji === 'string' && [...avatar_emoji.trim()].length <= 4
+    ? avatar_emoji.trim() : null;
   const info = db.prepare(
-    'INSERT INTO users (username, password_hash, avatar, bio, avatar_color, created_at) VALUES (?, ?, ?, ?, ?, ?)'
-  ).run(username, hash, null, '', color, now());
+    'INSERT INTO users (username, password_hash, avatar, bio, avatar_color, avatar_emoji, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).run(username, hash, regAvatar, '', color, regEmoji, now());
   const userId = info.lastInsertRowid;
   // auto-join official group
   db.prepare('INSERT OR IGNORE INTO group_members (group_id, user_id, joined_at) VALUES (?, ?, ?)')
@@ -2152,11 +2288,31 @@ app.post('/api/register', rateLimit('auth'), (req, res) => {
 app.post('/api/login', rateLimit('auth'), (req, res) => {
   const { username, password } = req.body || {};
   if (!username || !password) return res.status(400).json({ error: '用户名和密码不能为空' });
+  if (honeypotTripped(req)) {
+    recordSecurity(req, 'honeypot', 'high', '登录表单里的蜜罐字段被填了 —— 脚本');
+    return res.status(401).json({ error: '用户名或密码错误' });
+  }
   const u = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
-  if (!u) { noteAuthFailure(req); return res.status(401).json({ error: '账号不存在' }); }
-  if (!bcrypt.compareSync(password, u.password_hash)) {
+  if (!u) {
+    // 账号不存在也要把 KDF 跑完,不然响应时间会泄露「这个账号不存在」。
+    authCrypto.burnTime(PEPPER1);
     noteAuthFailure(req);
-    return res.status(401).json({ error: '密码错误' });
+    return res.status(401).json({ error: '用户名或密码错误' });
+  }
+  if (!verifyAny(password, u.password_hash)) {
+    // 诱导条件③:用弱口令登录 —— 放行,但记一条,方便管理员提醒换密码。
+    if (authCrypto.isWeakPassword(password)) {
+      recordSecurity(req, 'weak_password', 'medium', `账号 ${u.username} 用了弱口令登录`);
+    }
+    noteAuthFailure(req);
+    return res.status(401).json({ error: '用户名或密码错误' });
+  }
+  // 老库里的 bcrypt 哈希,登录成功后顺手升级成分层哈希。
+  if (authCrypto.isLegacyHash(u.password_hash)) {
+    try {
+      db.prepare('UPDATE users SET password_hash = ? WHERE id = ?')
+        .run(hashFor(password, u.username), u.id);
+    } catch (e) { console.warn('[VVeChat] password upgrade failed:', e.message); }
   }
   // re-join official group if previously removed
   db.prepare('INSERT OR IGNORE INTO group_members (group_id, user_id, joined_at) VALUES (?, ?, ?)')
@@ -2260,19 +2416,102 @@ app.get('/api/users/search', authRequired, (req, res) => {
   const q = (req.query.q || '').toString().trim();
   if (!q) return res.json({ users: [] });
   const rows = db.prepare(
-    'SELECT id, username, avatar, bio, avatar_color FROM users WHERE username LIKE ? AND id != ? ORDER BY username LIMIT 20'
+    'SELECT id, username, avatar, bio, avatar_color, avatar_emoji FROM users WHERE username LIKE ? AND id != ? ORDER BY username LIMIT 20'
   ).all(`%${q}%`, req.user.id);
   res.json({ users: rows });
 });
 
 // search groups to join (substring match)
 
+// ============================================================
+// 朋友圈(日常)
+// ------------------------------------------------------------
+// 一条动态 = 文字 + 最多 9 张图 + 点赞 + 评论。
+// 点赞和评论直接存 JSON 文本 —— 朋友圈不需要单独建表,省事。
+// ============================================================
+function packMoment(r) {
+  let images = [], likes = [], comments = [];
+  try { images = JSON.parse(r.images || '[]'); } catch (_) {}
+  try { likes = JSON.parse(r.likes || '[]'); } catch (_) {}
+  try { comments = JSON.parse(r.comments || '[]'); } catch (_) {}
+  return {
+    id: r.id, content: r.content, images, likes, comments, created_at: r.created_at,
+    user: {
+      id: r.user_id, username: r.username, avatar: r.avatar,
+      avatar_color: r.avatar_color, avatar_emoji: r.avatar_emoji,
+    },
+  };
+}
+app.get('/api/moments', authRequired, (req, res) => {
+  const rows = db.prepare(`
+    SELECT m.*, u.username, u.avatar, u.avatar_color, u.avatar_emoji
+    FROM moments m JOIN users u ON u.id = m.user_id
+    ORDER BY m.id DESC LIMIT 100
+  `).all();
+  res.json({ moments: rows.map(packMoment) });
+});
+app.post('/api/moments', rateLimit('write'), authRequired, (req, res) => {
+  const { content = '', images = [] } = req.body || {};
+  const text = String(content || '').slice(0, 1000).trim();
+  const imgs = (Array.isArray(images) ? images : []).slice(0, 9)
+    .filter(u => typeof u === 'string' && /^data:image\/(png|jpe?g|webp|gif);base64,/i.test(u));
+  if (!text && !imgs.length) return res.status(400).json({ error: '内容不能为空' });
+  const info = db.prepare(
+    'INSERT INTO moments (user_id, content, images, created_at) VALUES (?, ?, ?, ?)'
+  ).run(req.user.id, text, JSON.stringify(imgs), now());
+  const row = db.prepare(`
+    SELECT m.*, u.username, u.avatar, u.avatar_color, u.avatar_emoji
+    FROM moments m JOIN users u ON u.id = m.user_id WHERE m.id = ?
+  `).get(info.lastInsertRowid);
+  const m = packMoment(row);
+  try { io.emit('moment:new', m); } catch (_) {}
+  res.json({ ok: true, moment: m });
+});
+app.post('/api/moments/:id/like', rateLimit('write'), authRequired, (req, res) => {
+  const id = Number(req.params.id);
+  const row = db.prepare('SELECT * FROM moments WHERE id = ?').get(id);
+  if (!row) return res.status(404).json({ error: '动态不存在' });
+  let likes = [];
+  try { likes = JSON.parse(row.likes || '[]'); } catch (_) {}
+  const uid = Number(req.user.id);
+  const mine = likes.find(l => Number(l.id) === uid);
+  if (mine) likes = likes.filter(l => Number(l.id) !== uid);
+  else likes.push({ id: uid, username: req.user.username });
+  db.prepare('UPDATE moments SET likes = ? WHERE id = ?').run(JSON.stringify(likes), id);
+  res.json({ ok: true, likes });
+});
+app.post('/api/moments/:id/comment', rateLimit('write'), authRequired, (req, res) => {
+  const id = Number(req.params.id);
+  const text = String((req.body || {}).text || '').slice(0, 300).trim();
+  if (!text) return res.status(400).json({ error: '评论不能为空' });
+  const row = db.prepare('SELECT * FROM moments WHERE id = ?').get(id);
+  if (!row) return res.status(404).json({ error: '动态不存在' });
+  let comments = [];
+  try { comments = JSON.parse(row.comments || '[]'); } catch (_) {}
+  comments.push({
+    id: Number(req.user.id), username: req.user.username,
+    text, created_at: now(),
+  });
+  db.prepare('UPDATE moments SET comments = ? WHERE id = ?').run(JSON.stringify(comments), id);
+  res.json({ ok: true, comments });
+});
+app.delete('/api/moments/:id', rateLimit('write'), authRequired, (req, res) => {
+  const id = Number(req.params.id);
+  const row = db.prepare('SELECT * FROM moments WHERE id = ?').get(id);
+  if (!row) return res.status(404).json({ error: '动态不存在' });
+  if (Number(row.user_id) !== Number(req.user.id) && !isAdmin(req.user)) {
+    return res.status(403).json({ error: '只能删自己的动态' });
+  }
+  db.prepare('DELETE FROM moments WHERE id = ?').run(id);
+  res.json({ ok: true });
+});
+
 // online status of specific users
 app.get('/api/users/status', authRequired, (req, res) => {
   const ids = String(req.query.ids || '').split(',').map(s => Number(s)).filter(Boolean);
   if (!ids.length) return res.json({ status: {} });
   const status = {};
-  for (const id of ids) status[id] = onlineUsers.has(id);
+  for (const id of ids) status[id] = isUserOnline(id);
   res.json({ status });
 });
 
@@ -2543,7 +2782,7 @@ app.get('/api/groups/:id/members', authRequired, (req, res) => {
   // 助手(ASSISTANT_NAME)也在成员表里(它是真人账号,要收群消息),
   // 但它不算「群成员」—— 前端不把它列进成员名册,只标个标记。
   const rows = db.prepare(`
-    SELECT u.id, u.username, u.avatar, u.bio, u.avatar_color,
+    SELECT u.id, u.username, u.avatar, u.bio, u.avatar_color, u.avatar_emoji,
            (u.username = ?) AS is_assistant
     FROM group_members gm
     JOIN users u ON u.id = gm.user_id
@@ -3273,8 +3512,19 @@ const server = http.createServer(app);
 const io = new SocketIOServer(server, { cors: { origin: '*' } });
 
 // online presence
-const onlineUsers = new Set();
+// 只靠 socket 的 'disconnect' 事件判断在线是不准的:
+// Render 休眠、页面被挂起、网络抖动都会让 disconnect 丢事件 ——
+// 人明明走了,列表上还挂着一个绿点。所以在线状态改成「心跳 + TTL」:
+// 客户端每 25 秒 ping 一次,超过 70 秒没心跳就判定离线。
+const ONLINE_TTL = 70 * 1000;
+const onlineUsers = new Map();  // uid → lastSeen(ms)
 const userSockets = new Map();  // uid → Set<socketId>
+
+function isUserOnline(uid) {
+  const seen = onlineUsers.get(Number(uid));
+  return !!seen && (Date.now() - seen) < ONLINE_TTL;
+}
+function touchOnline(uid) { onlineUsers.set(Number(uid), Date.now()); }
 
 function broadcastPresence(uid, online) {
   const friends = getFriends(uid);
@@ -3341,10 +3591,12 @@ io.on('connection', (socket) => {
     console.error('[socket] group join failed:', e.message);
   }
   if (!userSockets.has(uid)) userSockets.set(uid, new Set());
-  const wasOffline = !onlineUsers.has(uid);
+  const wasOffline = !isUserOnline(uid);
   userSockets.get(uid).add(socket.id);
-  onlineUsers.add(uid);
+  touchOnline(uid);
   if (wasOffline) broadcastPresence(uid, true);
+  // 客户端的心跳:证明这条连接还活着,别让它被 TTL 判成离线。
+  socket.on('presence:ping', () => touchOnline(uid));
   console.log(`[VVeChat] user ${uid} (${socket.user.username}) connected`);
 
   // realtime send
@@ -3497,6 +3749,17 @@ io.on('connection', (socket) => {
     console.log(`[VVeChat] user ${uid} disconnected`);
   });
 });
+
+// TTL 清扫:把心跳超时的用户标记成离线并广播出去。
+setInterval(() => {
+  const now = Date.now();
+  for (const [uid, seen] of onlineUsers) {
+    if (now - seen > ONLINE_TTL) {
+      onlineUsers.delete(uid);
+      broadcastPresence(uid, false);
+    }
+  }
+}, 15000);
 
 // ============================================================
 // 30-day message auto-deletion (cleanup job)

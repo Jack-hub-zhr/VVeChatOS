@@ -57,6 +57,7 @@
   async function api(path, opts = {}) {
     const headers = { 'Content-Type': 'application/json' };
     if (state.token) headers['Authorization'] = 'Bearer ' + state.token;
+    Object.assign(headers, opts.headers || {});
     const r = await fetch(API_BASE + path, {
       method: opts.method || 'GET',
       headers,
@@ -66,6 +67,50 @@
     try { j = await r.json(); } catch (_) {}
     if (!r.ok) throw new Error((j && j.error) || ('HTTP ' + r.status));
     return j || {};
+  }
+
+  // ---------- 二次验证(第 5 层保护) ----------
+  // 关键操作前要再输一次密码,换来的令牌只能用 5 分钟。
+  let stepUpToken = null, stepUpUntil = 0;
+  function askStepUp() {
+    return new Promise((resolve) => {
+      const box = $('#stepup');
+      const input = $('#stepup-pass');
+      input.value = '';
+      box.classList.remove('hidden');
+      setTimeout(() => input.focus(), 30);
+      let closed = false;
+      const done = (v) => {
+        if (closed) return;
+        closed = true;
+        box.classList.add('hidden');
+        $('#stepup-yes').removeEventListener('click', onYes);
+        $('#stepup-no').removeEventListener('click', onNo);
+        document.removeEventListener('keydown', onKey);
+        resolve(v);
+      };
+      const onYes = async () => {
+        const pw = input.value;
+        if (!pw) { toast('请输入密码'); return; }
+        try {
+          const r = await api('/api/control/step-up', { method: 'POST', body: { password: pw } });
+          stepUpToken = r.token;
+          stepUpUntil = Date.now() + (r.expires_in || 300) * 1000;
+          done(true);
+        } catch (e) { toast('验证失败：' + e.message); }
+      };
+      const onNo = () => done(false);
+      const onKey = (e) => { if (e.key === 'Escape') done(false); };
+      $('#stepup-yes').addEventListener('click', onYes);
+      $('#stepup-no').addEventListener('click', onNo);
+      document.addEventListener('keydown', onKey);
+    });
+  }
+  // 关键操作前调用:没令牌(或者过期了)就先弹密码框。
+  async function ensureStepUp() {
+    if (stepUpToken && Date.now() < stepUpUntil) return true;
+    const ok = await askStepUp();
+    return ok && !!stepUpToken;
   }
 
   // Confirm dialog (own class names so nothing else can tear it down).
@@ -144,6 +189,33 @@
       toast('加载失败：' + e.message);
     }
     await loadSecurity();
+    await loadDeploy();
+  }
+
+  // ---------------- 部署信息 ----------------
+  async function loadDeploy() {
+    const box = $('#deploy');
+    if (!box) return;
+    try {
+      const d = await api('/api/control/deploy');
+      const mb = d.db_size ? (d.db_size / 1048576).toFixed(2) + ' MB' : '—';
+      const up = d.uptime_s ? Math.round(d.uptime_s / 60) + ' 分钟' : '—';
+      box.innerHTML = `
+        <div class="event"><span class="k">网页地址</span>
+          <span class="d"><a href="${esc(d.frontend_url)}" target="_blank" rel="noopener">${esc(d.frontend_url)}</a></span></div>
+        <div class="event"><span class="k">接口地址</span>
+          <span class="d"><code>${esc(d.api_base)}</code></span></div>
+        <div class="event"><span class="k">数据库</span>
+          <span class="d"><code>${esc(d.db_file)}</code> · ${mb}</span></div>
+        <div class="event"><span class="k">上传文件</span>
+          <span class="d"><code>${esc(d.upload_dir)}</code> · ${d.upload_count || 0} 个</span></div>
+        <div class="event"><span class="k">运行</span>
+          <span class="d">Node ${esc(d.node)} · 已运行 ${up}</span></div>
+        ${d.jwt_secret_is_default ? '<div class="event"><span class="k warn">注意</span><span class="d warn">还没设 JWT_SECRET 环境变量 —— 在 Render 里加一个随机值更安全。</span></div>' : ''}
+      `;
+    } catch (e) {
+      box.innerHTML = '<div class="empty-note">读取失败：' + esc(e.message) + '</div>';
+    }
   }
 
   // ---------------- 防火墙 / 安全中心 ----------------
@@ -255,12 +327,18 @@
       const row = el('div', { class: 'user-row' });
       const isAssistant = u.username === 'AI' || u.username === 'Jacky Bot' || u.username === 'Qwen';
       const hasEmoji = !!u.avatar_emoji;
+      const hasPhoto = !!u.avatar;
       // 助手的头像底色是黑的(绿色是普通用户的),发光圆环压在上面。
       const bg = isAssistant ? 'background:var(--bg);'
-        : (hasEmoji ? 'background:rgba(255,255,255,0.55);'
-          : (u.avatar_color ? `background:linear-gradient(135deg, ${u.avatar_color}, ${shade(u.avatar_color, -25)});` : ''));
+        : (hasPhoto ? 'background:transparent;'
+          : (hasEmoji ? 'background:rgba(255,255,255,0.55);'
+            : (u.avatar_color ? `background:linear-gradient(135deg, ${u.avatar_color}, ${shade(u.avatar_color, -25)});` : '')));
+      // 头像内容:上传的照片 > 表情 > 首字母 —— 跟聊天界面一个规矩。
+      const face = isAssistant ? assistantRing()
+        : (hasPhoto ? '<img class="avatar-img" src="' + esc(u.avatar) + '" alt=""/>'
+          : (hasEmoji ? '<span class="avatar-emoji">' + esc(u.avatar_emoji) + '</span>' : esc(initials(u.username))));
       row.innerHTML = `
-        <div class="avatar${isJack ? ' jack' : ''}" style="${isJack ? '' : bg}">${isAssistant ? assistantRing() : (hasEmoji ? '<span class="avatar-emoji">' + esc(u.avatar_emoji) + '</span>' : esc(initials(u.username)))}</div>
+        <div class="avatar${isJack ? ' jack' : ''}" style="${isJack ? '' : bg}">${face}</div>
         <div class="u-meta">
           <div class="u-name">${esc(u.username)}${isJack ? ' <span class="jack-tag">管理员</span>' : ''}</div>
           <div class="u-sub">ID ${u.id} · 注册于 ${fmtTime(u.created_at)}${u.bio ? ' · ' + esc(u.bio) : ''}</div>
@@ -276,9 +354,13 @@
             '永久删除'
           );
           if (!ok) return;
+          if (!await ensureStepUp()) return;
           kill.disabled = true;
           try {
-            await api('/api/control/purge-user/' + u.id, { method: 'POST', body: {} });
+            await api('/api/control/purge-user/' + u.id, {
+              method: 'POST', body: {},
+              headers: { 'X-Step-Up': stepUpToken },
+            });
             toast('已注销 ' + u.username);
             await load();
           } catch (e) {
@@ -372,7 +454,11 @@
     const btn = $('#btn-format');
     btn.disabled = true;
     try {
-      await api('/api/control/format-all', { method: 'POST', body: {} });
+      if (!await ensureStepUp()) return;
+      await api('/api/control/format-all', {
+        method: 'POST', body: {},
+        headers: { 'X-Step-Up': stepUpToken },
+      });
       toast('已格式化，一切恢复初始状态');
       await load();
     } catch (e) {

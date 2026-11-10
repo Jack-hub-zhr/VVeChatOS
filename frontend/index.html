@@ -8,9 +8,9 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="theme-color" content="#4C6FFF" />
   <title>VVeChat</title>
-  <link rel="stylesheet" href="style.css?v=20261107k" />
+  <link rel="stylesheet" href="style.css?v=20261107l" />
   <!-- 液态玻璃视觉层（折射引擎移植自 rdev/liquid-glass-react, MIT） -->
-  <link rel="stylesheet" href="liquid-glass.css?v=20261107k" />
+  <link rel="stylesheet" href="liquid-glass.css?v=20261107l" />
   <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><text x='32' y='44' font-family='system-ui' font-size='40' font-weight='800' text-anchor='middle' fill='%234C6FFF'>V</text></svg>" />
 </head>
 <body>
@@ -49,6 +49,8 @@
       </div>
 
       <form id="auth-form" autocomplete="off">
+        <!-- 蜜罐:真人看不见,填表脚本会填。填了就说明是脚本,后端会记一条。 -->
+        <input type="text" name="website" tabindex="-1" autocomplete="off" class="hp-field" aria-hidden="true" value="" />
         <label class="field">
           <span class="field-label" data-i18n="auth_username">用户名</span>
           <input id="auth-username" name="username" type="text" required minlength="2" maxlength="24" data-i18n-ph="auth_username_ph" placeholder="2-24 位字符" />
@@ -57,11 +59,60 @@
           <span class="field-label" data-i18n="auth_password">密码</span>
           <input id="auth-password" name="password" type="password" required minlength="4" data-i18n-ph="auth_password_ph" placeholder="至少 4 位" />
         </label>
+        <div class="field hidden" id="auth-avatar-row">
+          <span class="field-label" data-i18n="avatar_picker_title">头像</span>
+          <div class="auth-avatar-row">
+            <div class="avatar lg" id="auth-avatar-preview"></div>
+            <button type="button" class="btn btn-ghost btn-sm" id="btn-pick-avatar" data-i18n="btn_pick_avatar">选择头像</button>
+          </div>
+        </div>
         <div class="auth-msg" id="auth-msg"></div>
         <button id="auth-submit" class="btn btn-primary btn-lg" type="submit" data-i18n="btn_login">登录</button>
       </form>
     </section>
   </main>
+
+  <!-- 朋友圈(日常)—— 全屏页面,跟微信朋友圈一个路子 -->
+  <main id="moment-view" class="view view-moment hidden">
+    <header class="moment-top">
+      <button class="icon-btn" id="btn-moment-back" aria-label="back" data-i18n-aria="btn_back">‹</button>
+      <div class="moment-top-title" data-i18n="moment_title">日常</div>
+    </header>
+    <div class="moment-cover">
+      <div class="moment-cover-name" id="moment-cover-name"></div>
+      <div class="avatar lg moment-cover-avatar" id="moment-cover-avatar"></div>
+    </div>
+    <div class="moment-body">
+      <button type="button" class="moment-compose" id="btn-moment-compose">
+        <span data-i18n="moment_compose">发一条日常…</span>
+      </button>
+      <div id="moment-feed"></div>
+    </div>
+  </main>
+
+  <!-- MODAL: 发一条日常 -->
+  <div class="modal hidden" id="modal-moment" role="dialog">
+    <div class="modal-mask"></div>
+    <div class="modal-card">
+      <div class="modal-head">
+        <h3 data-i18n="moment_compose_title">发一条日常</h3>
+        <button class="icon-btn icon-btn-sm modal-close" data-close="modal-moment">×</button>
+      </div>
+      <div class="modal-body">
+        <textarea id="moment-text" rows="4" placeholder="这一刻的想法…" data-i18n-ph="moment_ph"></textarea>
+        <div class="moment-imgs" id="moment-imgs"></div>
+        <label class="btn btn-ghost btn-sm moment-upload">
+          <span data-i18n="moment_add_img">添加图片</span>
+          <input type="file" id="moment-file" accept="image/*" multiple hidden />
+        </label>
+        <div class="modal-msg" id="moment-msg"></div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn btn-ghost" data-close="modal-moment" data-i18n="cancel">取消</button>
+        <button type="button" class="btn btn-primary" id="moment-publish" data-i18n="moment_publish">发表</button>
+      </div>
+    </div>
+  </div>
 
   <!-- APP VIEW -->
   <main id="app-view" class="view view-app hidden">
@@ -208,6 +259,16 @@
                 </svg>
               </span>
               <span class="side-nav-label" data-i18n="nav_discover">发现</span>
+            </button>
+            <button class="side-nav-item" data-pane="moment" role="tab" title="日常" data-i18n-title="nav_moment">
+              <span class="side-nav-ic">
+                <!-- 相机 —— 跟微信朋友圈一个图标语汇 -->
+                <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M3.5 8.8A2.3 2.3 0 0 1 5.8 6.5h1.1a1 1 0 0 0 .84-.45l.66-1A1 1 0 0 1 9.2 4.6h5.6a1 1 0 0 1 .8.45l.66 1a1 1 0 0 0 .84.45h1.1a2.3 2.3 0 0 1 2.3 2.3v7.4a2.3 2.3 0 0 1-2.3 2.3H5.8a2.3 2.3 0 0 1-2.3-2.3z"/>
+                  <circle cx="12" cy="12.6" r="3.1"/>
+                </svg>
+              </span>
+              <span class="side-nav-label" data-i18n="nav_moment">日常</span>
             </button>
             <button class="side-nav-item" data-pane="more" role="tab" title="设置" data-i18n-title="nav_settings">
               <span class="side-nav-ic">
@@ -382,7 +443,7 @@
             </div>
 
             <div class="side-section">
-              <span class="side-section-title" data-i18n="pref_assistant">AI</span>
+              <span class="side-section-title" data-i18n="pref_assistant">Jacky Bot</span>
             </div>
             <!-- The assistant always answers in groups now — there used to
                  be a switch for it, but turning it off only confused
@@ -392,7 +453,7 @@
               <div class="more-row static">
                 <span class="more-row-main">
                   <span class="more-row-title" data-i18n="pref_ai_groups">群里可以叫助手</span>
-                  <span class="more-row-desc" data-i18n="pref_ai_groups_desc">在群聊里 @AI，它会读完上下文再回答</span>
+                  <span class="more-row-desc" data-i18n="pref_ai_groups_desc">在群聊里 @Jacky Bot，它会读完上下文再回答</span>
                 </span>
                 <span class="more-row-badge" data-i18n="pref_ai_groups_always">始终开启</span>
               </div>
@@ -477,7 +538,7 @@
               </div>
             </div>
             <form class="ai-composer" id="ai-form">
-              <textarea id="ai-input" rows="1" placeholder="给 AI 发消息…（Enter 发送，Shift+Enter 换行）" data-i18n-ph="ai_input_ph" autocomplete="off"></textarea>
+              <textarea id="ai-input" rows="1" placeholder="给 Jacky Bot 发消息…（Enter 发送，Shift+Enter 换行）" data-i18n-ph="ai_input_ph" autocomplete="off"></textarea>
               <div class="ai-tools">
                 <div class="ai-tools-group">
                   <!-- 模型：每一项都是一个具体的 Qwen 模型，选哪个就回哪个 -->
@@ -740,6 +801,29 @@
     </div>
   </div>
 
+  <!-- MODAL: avatar picker (emoji + photo). Registration & profile share it. -->
+  <div class="modal hidden" id="modal-avatar-picker" role="dialog">
+    <div class="modal-mask"></div>
+    <div class="modal-card modal-card-sm">
+      <div class="modal-head">
+        <h3 data-i18n="avatar_picker_title">选择头像</h3>
+        <button class="icon-btn icon-btn-sm modal-close" data-close="modal-avatar-picker">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="avatar lg" id="ap-preview" style="margin:0 auto 14px;"></div>
+        <div class="emoji-picker-grid" id="ap-grid"></div>
+        <label class="btn btn-ghost btn-sm ap-upload">
+          <span data-i18n="avatar_upload">上传照片</span>
+          <input type="file" id="ap-file" accept="image/*" hidden />
+        </label>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="modal-avatar-picker" data-i18n="cancel">取消</button>
+        <button class="btn btn-primary" id="ap-ok" data-i18n="btn_save">保存</button>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL: confirm -->
   <!-- Create a group. The discover switch lives here, and the owner can
        flip it later from the group's own settings. -->
@@ -835,7 +919,7 @@
   <!-- Socket.io client is served by this same Express app at /socket.io/socket.io.js,
        so there is no third-party CDN to fail (or be blocked). -->
   <script src="/socket.io/socket.io.js"></script>
-  <script src="config.js?v=20261107k"></script>
+  <script src="config.js?v=20261107l"></script>
   <!-- The 550C theme is ~60 KB. Only fetch it when it is actually on:
        localStorage says so right now, and app.js re-checks after login
        for the case where the account has it on but this browser does
@@ -853,7 +937,7 @@
        time even though the theme was enabled. -->
   <script>
   (function () {
-    try { window.__VV_ASSET_V = '20261107k'; } catch (e) { }
+    try { window.__VV_ASSET_V = '20261107l'; } catch (e) { }
     var V = window.__VV_ASSET_V || '';
     var on = false;
     try { on = localStorage.getItem('vve:boot550c') === '1'; } catch (e) { }
@@ -875,8 +959,8 @@
   })();
   </script>
   <!-- 液态玻璃引擎：折射 + 果冻物理 + 体积光 + 光照互通 -->
-  <script src="liquid-glass-maps.js?v=20261107k"></script>
-  <script src="liquid-glass.js?v=20261107k"></script>
-  <script src="app.js?v=20261107k"></script>
+  <script src="liquid-glass-maps.js?v=20261107l"></script>
+  <script src="liquid-glass.js?v=20261107l"></script>
+  <script src="app.js?v=20261107l"></script>
 </body>
 </html>

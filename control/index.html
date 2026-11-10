@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#000000" />
   <title>VVeChat 控制台</title>
-  <link rel="stylesheet" href="style.css?v=20261107k" />
+  <link rel="stylesheet" href="style.css?v=20261107l" />
   <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' fill='%23000'/><text x='32' y='44' font-family='monospace' font-size='36' font-weight='800' text-anchor='middle' fill='%2322e37f'>V</text></svg>" />
 </head>
 <body>
@@ -57,6 +57,12 @@
   </section>
 
   <section class="block">
+    <h2>部署与数据</h2>
+    <p class="hint">网址和数据到底存在哪 —— 点链接直接打开。</p>
+    <div id="deploy" class="events"></div>
+  </section>
+
+  <section class="block">
     <h2>所有用户 <span id="user-count" class="count">0</span></h2>
     <p class="hint">红色「注销」会永久删除该账号，以及它发出的全部消息、好友关系和好友申请。</p>
     <div id="users" class="users"></div>
@@ -87,9 +93,23 @@
   </div>
 </div>
 
+<!-- 二次验证:关键操作(注销账号 / 格式化)前要再输一次密码 -->
+<div id="stepup" class="confirm hidden">
+  <div class="confirm-mask"></div>
+  <div class="confirm-card">
+    <h3>二次验证</h3>
+    <p>这是关键操作，请再输入一次 Jack 的密码。<br><span style="opacity:.7;font-size:12px">验证通过后 5 分钟内不用再输。</span></p>
+    <input id="stepup-pass" type="password" placeholder="密码" autocomplete="current-password" />
+    <div class="confirm-actions">
+      <button id="stepup-no" class="btn ghost">取消</button>
+      <button id="stepup-yes" class="btn danger">验证</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast" class="toast hidden"></div>
 
-<script src="config.js?v=20261107k"></script>
-<script src="app.js?v=20261107k"></script>
+<script src="config.js?v=20261107l"></script>
+<script src="app.js?v=20261107l"></script>
 </body>
 </html>

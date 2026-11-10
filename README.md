@@ -25,6 +25,7 @@ control/             管理控制台（/control）
 | Key | Value | 说明 |
 |---|---|---|
 | `NODE_VERSION` | `18` | better-sqlite3 11.x 只有 Node 18 有预编译包 |
+| `JWT_SECRET` | *随机长字符串* | **必填**：令牌签名 + 密码 pepper 的密钥。生产环境不设的话控制台会红字提示 |
 | `DB_FILE` | `/var/data/vvechat.db` | **挂持久磁盘后填**，否则每次重启数据清空 |
 | `KEEPALIVE_INTERVAL_MS` | `300000` | 保活间隔（默认 5 分钟） |
 | `KEEPALIVE` | `0` | 设为 0 可关闭保活 |
@@ -129,7 +130,7 @@ Build Command 留空，Publish Directory 填 `.`，域名设为 `vvechat-control
 | 发起好友申请 | 所有人 |
 | 删除好友 | 好友本人 |
 | 清空群消息 | 仅 Jack |
-| 注销账号 / 格式化 | 仅 Jack |
+| 注销账号 / 格式化 | 仅 Jack + **二次验证**（再输一次密码，5 分钟有效）|
 
 ## 功能
 
@@ -144,6 +145,14 @@ Build Command 留空，Publish Directory 填 `.`，域名设为 `vvechat-control
 - 删除好友（连带清除双方私聊记录）
 - 保活：每 5 分钟 ping 公网地址，避免免费实例休眠
 - 防火墙：CSP 安全头 + 跨域收紧 + 按 IP 限流（仅统计失败登录）
+- **朋友圈（日常）**：封面 + 动态流，可发文字/图片、点赞、评论
+- **头像**：注册时或设置里自选（40 个表情 **或** 上传照片），全站头像统一
+- **密码分层保护**：普通用户 3 层（bcrypt → HMAC-SHA256 pepper → scrypt），
+  管理员 5 层（再多 HMAC-SHA512 + 关键操作二次验证）；pepper 由
+  `JWT_SECRET` ⊕ 库里的随机盐派生 —— **整库被拖走也解不开密码**
+- 诱导防线：蜜罐字段、弱口令拦截、后台路径探测告警、账号不存在时也跑满
+  同样的 KDF（不泄露账号是否存在）
+- 在线状态：心跳 + TTL（70 秒无心跳判离线），不再靠 disconnect 事件
 
 ---
 
