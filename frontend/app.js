@@ -109,6 +109,14 @@
       moment_del_title: '删除这条动态',
       moment_del_msg: '删掉之后就没了,确定吗?',
       moment_del_ok: '删除',
+      moment_empty: '还没有动态',
+      moment_has_img: '[图片]',
+      moment_detail_title: '这条动态',
+      moment_no_detail: '往右翻一条动态,这里会显示它的点赞和评论',
+      moment_likes: '点赞',
+      moment_comments: '评论',
+      moment_no_likes: '还没有人点赞',
+      moment_no_comments: '还没有评论',
       btn_back: '返回',
       avatar_upload: '上传照片',
       btn_pick_avatar: '选择头像',
@@ -529,6 +537,14 @@
       moment_del_title: 'Delete this moment',
       moment_del_msg: "It can't be undone. Delete it?",
       moment_del_ok: 'Delete',
+      moment_empty: 'No posts yet',
+      moment_has_img: '[Photo]',
+      moment_detail_title: 'This moment',
+      moment_no_detail: 'Scroll a moment on the right — its likes and comments show up here',
+      moment_likes: 'Likes',
+      moment_comments: 'Comments',
+      moment_no_likes: 'No likes yet',
+      moment_no_comments: 'No comments yet',
       btn_back: 'Back',
       avatar_upload: 'Upload a photo',
       btn_pick_avatar: 'Choose avatar',
@@ -3437,8 +3453,6 @@
     $('#chat-window')?.classList.add('hidden');
     $('#chat-empty')?.classList.add('hidden');
     mv.classList.remove('hidden');
-    // 中间那栏列表收起来 —— 主显示区占满,左边细长的侧边栏照旧留着。
-    $('.app-body')?.classList.add('list-collapsed');
     if (state.user) {
       const nameEl = $('#moment-cover-name');
       if (nameEl) nameEl.textContent = state.user.username;
@@ -3451,7 +3465,6 @@
     const mv = $('#moment-view');
     if (!mv || mv.classList.contains('hidden')) return;
     mv.classList.add('hidden');
-    $('.app-body')?.classList.remove('list-collapsed');
     // 把聊天区还回来。
     if (state.currentChat) {
       $('#chat-window')?.classList.remove('hidden');
@@ -3480,45 +3493,110 @@
     const feed = $('#moment-feed');
     if (!feed) return;
     if (!MOMENT.items.length) {
-      feed.innerHTML = `<div class="empty-hint"><p>${lang === 'en' ? 'No posts yet' : '还没有动态'}</p></div>`;
+      feed.innerHTML = `<div class="empty-hint"><p>${t('moment_empty')}</p></div>`;
       return;
     }
     feed.innerHTML = MOMENT.items.map(m => {
       const u = m.user || {};
-      const imgs = (m.images || []).map(src => `<img src="${escapeHtml(src)}" alt="" loading="lazy" title="${t('moment_zoom')}">`).join('');
+      const imgsHtml = (m.images || []).map(src => `<img src="${escapeHtml(src)}" alt="" loading="lazy" title="${t('moment_zoom')}">`).join('');
+      const imgs = imgsHtml ? `<div class="imgs${(m.images || []).length === 1 ? ' one' : ''}">${imgsHtml}</div>` : '';
       const likes = (m.likes || []).map(l => escapeHtml(l.username || '')).filter(Boolean);
       const comments = (m.comments || []).map(c =>
         `<div class="c"><b>${escapeHtml(c.username || '')}</b>: ${escapeHtml(c.text || '')}</div>`).join('');
       const mine = Number(u.id) === Number(state.user && state.user.id);
       const liked = (m.likes || []).some(l => Number(l.id) === Number(state.user && state.user.id));
       return `<div class="moment-post" data-id="${m.id}">
-        <div class="moment-main">
-          <div class="avatar sm moment-post-avatar" style="${avatarBgOf(u)}">${avatarInner(u)}</div>
-          <div class="meta">
-            <div class="name">${escapeHtml(u.username || '')}</div>
-            ${m.content ? `<div class="text">${escapeHtml(m.content)}</div>` : ''}
-            ${imgs ? `<div class="imgs">${imgs}</div>` : ''}
-            <div class="foot">
-              <span>${escapeHtml(momentTime(m.created_at))}</span>
-              <span class="acts">
-                <button type="button" class="moment-act like ${liked ? 'on' : ''}" data-act="like" title="${t('moment_like')}">${liked ? '💗' : '🤍'}</button>
-                <button type="button" class="moment-act" data-act="comment" title="${t('moment_comment')}">💬</button>
-                ${mine ? `<button type="button" class="moment-act" data-act="del" title="${t('moment_delete')}">🗑</button>` : ''}
-              </span>
-            </div>
+        <div class="avatar sm moment-post-avatar" style="${avatarBgOf(u)}">${avatarInner(u)}</div>
+        <div class="meta">
+          <div class="name">${escapeHtml(u.username || '')}</div>
+          ${m.content ? `<div class="text">${escapeHtml(m.content)}</div>` : ''}
+          <div class="foot"><span>${escapeHtml(momentTime(m.created_at))}</span></div>
+          ${imgs}
+          <div class="moment-acts">
+            <button type="button" class="moment-act like ${liked ? 'on' : ''}" data-act="like" title="${t('moment_like')}">${liked ? '💗' : '🤍'}</button>
+            <button type="button" class="moment-act" data-act="comment" title="${t('moment_comment')}">💬</button>
+            ${mine ? `<button type="button" class="moment-act" data-act="del" title="${t('moment_delete')}">🗑</button>` : ''}
           </div>
-        </div>
-        <div class="moment-side">
           ${likes.length ? `<div class="moment-likes">❤️ ${likes.join('，')}</div>` : ''}
           ${comments ? `<div class="moment-comments">${comments}</div>` : ''}
-          <div class="moment-comment-box">
-            <input class="moment-comment-input" type="text" placeholder="${lang === 'en' ? 'Comment…' : '评论…'}" />
-            <button type="button" class="moment-act send" data-act="send">${lang === 'en' ? 'Send' : '发送'}</button>
-          </div>
         </div>
       </div>`;
     }).join('');
+    // 默认第一条是当前这条,然后跟着滚动走。
+    if (!MOMENT.items.some(m => Number(m.id) === Number(MOMENT.activeId))) {
+      MOMENT.activeId = MOMENT.items.length ? MOMENT.items[0].id : null;
+    }
+    renderMomentDetail();
+    observeMoments();
   }
+  // 中间那栏:当前这条动态的详情 —— 谁点赞、谁评论、评论了什么。
+  function renderMomentDetail() {
+    const box = $('#moment-detail');
+    if (!box) return;
+    const m = MOMENT.items.find(x => Number(x.id) === Number(MOMENT.activeId));
+    if (!m) {
+      box.innerHTML = `<div class="moment-detail-empty">${t('moment_no_detail')}</div>`;
+      return;
+    }
+    const u = m.user || {};
+    const likes = m.likes || [];
+    const comments = m.comments || [];
+    const imgsHtml = (m.images || []).map(src => `<img src="${escapeHtml(src)}" alt=""/>`).join('');
+    const imgs = imgsHtml ? `<div class="moment-detail-imgs${(m.images || []).length === 1 ? ' one' : ''}">${imgsHtml}</div>` : '';
+    box.innerHTML = `
+      <div class="moment-detail-author">
+        <div class="avatar lg" style="${avatarBgOf(u)}">${avatarInner(u, 64)}</div>
+        <div>
+          <div class="name">${escapeHtml(u.username || '')}</div>
+          <div class="time">${escapeHtml(momentTime(m.created_at))}</div>
+        </div>
+      </div>
+      ${m.content ? `<div class="moment-detail-text">${escapeHtml(m.content)}</div>` : ''}
+      ${imgs}
+      <div class="moment-detail-sec">
+        <div class="sec-title">❤️ ${t('moment_likes')} (${likes.length})</div>
+        ${likes.length
+          ? likes.map(l => `<div class="row"><span class="who">${escapeHtml(l.username || '')}</span></div>`).join('')
+          : `<div class="row">${t('moment_no_likes')}</div>`}
+      </div>
+      <div class="moment-detail-sec">
+        <div class="sec-title">💬 ${t('moment_comments')} (${comments.length})</div>
+        ${comments.length
+          ? comments.map(c => `<div class="row"><span class="who">${escapeHtml(c.username || '')}</span><span class="txt">${escapeHtml(c.text || '')}</span></div>`).join('')
+          : `<div class="row">${t('moment_no_comments')}</div>`}
+      </div>
+      <div class="moment-comment-box">
+        <input class="moment-comment-input" id="moment-detail-input" type="text" placeholder="${lang === 'en' ? 'Comment…' : '评论…'}" />
+        <button type="button" class="moment-act send" id="moment-detail-send">${lang === 'en' ? 'Send' : '发送'}</button>
+      </div>`;
+  }
+
+  // 滚到哪条,中间那栏就显示哪条的详情。
+  let _momentObserver = null;
+  function observeMoments() {
+    if (_momentObserver) { _momentObserver.disconnect(); _momentObserver = null; }
+    const feed = $('#moment-feed');
+    const view = $('#moment-view');
+    if (!feed || !view || !window.IntersectionObserver) return;
+    _momentObserver = new IntersectionObserver((entries) => {
+      const vis = entries.filter(e => e.isIntersecting);
+      if (!vis.length) return;
+      const mid = view.getBoundingClientRect().top + view.clientHeight / 2;
+      const pick = vis.sort((a, b) => {
+        const da = Math.abs(a.boundingClientRect.top + a.boundingClientRect.height / 2 - mid);
+        const db = Math.abs(b.boundingClientRect.top + b.boundingClientRect.height / 2 - mid);
+        return da - db;
+      })[0];
+      setActiveMoment(Number(pick.target.dataset.id));
+    }, { root: view, rootMargin: '-45% 0px -45% 0px', threshold: 0 });
+    feed.querySelectorAll('.moment-post').forEach(p => _momentObserver.observe(p));
+  }
+  function setActiveMoment(id) {
+    if (Number(MOMENT.activeId) === Number(id)) return;
+    MOMENT.activeId = id;
+    renderMomentDetail();
+  }
+
   function momentImagesChanged() {
     const box = $('#moment-imgs');
     if (!box) return;
@@ -3572,6 +3650,20 @@
         const m = $('#moment-msg'); if (m) m.textContent = e.message;
       } finally { pub.disabled = false; }
     });
+    const detail = $('#moment-detail');
+    if (detail) detail.addEventListener('click', async (e) => {
+      const img = e.target.closest('.moment-detail-imgs img');
+      if (img) { openLightbox(img.src); return; }
+      const send = e.target.closest('#moment-detail-send');
+      if (!send) return;
+      const input = $('#moment-detail-input');
+      const text = ((input && input.value) || '').trim();
+      if (!text || !MOMENT.activeId) return;
+      const r = await api('/moments/' + MOMENT.activeId + '/comment', { method: 'POST', body: { text } });
+      const m = MOMENT.items.find(x => Number(x.id) === Number(MOMENT.activeId));
+      if (m) m.comments = r.comments || [];
+      renderMomentDetail();
+    });
     const feed = $('#moment-feed');
     if (feed) feed.addEventListener('click', async (e) => {
       // 点图片 → 全屏看原图
@@ -3598,16 +3690,10 @@
         await api('/moments/' + id, { method: 'DELETE' });
         await loadMoments();
       } else if (act === 'comment') {
-        const input = post.querySelector('.moment-comment-input');
+        // 评论框在中间那栏(当前这条的详情里),点一下就跳过去。
+        setActiveMoment(id);
+        const input = $('#moment-detail-input');
         if (input) input.focus();
-      } else if (act === 'send') {
-        const input = post.querySelector('.moment-comment-input');
-        const text = (input && input.value || '').trim();
-        if (!text) return;
-        const r = await api('/moments/' + id + '/comment', { method: 'POST', body: { text } });
-        const m = MOMENT.items.find(x => Number(x.id) === id);
-        if (m) m.comments = r.comments || [];
-        renderMoments();
       }
     });
   }
@@ -5443,6 +5529,7 @@
       titleEl.textContent = mode === 'ai'
         ? (lang === 'en' ? 'Assistant' : '助手')
         : mode === 'discover' ? t('nav_discover')
+        : mode === 'moment' ? t('nav_moment')
         : (mode === 'more' ? t('nav_personal') : t('nav_chats'));
     }
   }
@@ -6035,9 +6122,9 @@
     $$('.side-nav-item').forEach(btn => bindOnce(btn, 'click', () => {
       $$('.side-nav-item').forEach(b => b.classList.toggle('active', b === btn));
       const target = btn.dataset.pane;
-      // 「日常」占的是右边的主显示区,左边侧边栏不动。
-      if (target === 'moment') { openMoments(); return; }
-      closeMoments();
+      // 「日常」:左栏切到动态列表,右边主显示区放朋友圈。
+      if (target === 'moment') openMoments();
+      else closeMoments();
       $$('.pane').forEach(p => p.classList.toggle('active', p.id === `pane-${target}`));
       setListMode(target);
       // Discover is a list of groups other people made — pull it fresh.
@@ -6048,8 +6135,11 @@
       // with no way out.
       $('.app-body')?.classList.remove('chat-open');
       closeListPane();
-      if (target === 'ai') openAiView();
-      else closeAiView();
+      // AI 面板和朋友圈互斥:切到其中一个,另一个必须让位。
+      // (closeAiView 会把「选择一个会话」显示回来,压在朋友圈上面。)
+      if (target === 'ai') { closeMoments(); openAiView(); }
+      else if (target === 'moment') { closeAiView(); openMoments(); }
+      else { closeMoments(); closeAiView(); }
     }));
     // The Personalisation panel also carries a Discover entry.
     const prefDiscover = $('#pref-discover-row');

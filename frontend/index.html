@@ -8,9 +8,9 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="theme-color" content="#4C6FFF" />
   <title>VVeChat</title>
-  <link rel="stylesheet" href="style.css?v=20261107o" />
+  <link rel="stylesheet" href="style.css?v=20261107p" />
   <!-- 液态玻璃视觉层（折射引擎移植自 rdev/liquid-glass-react, MIT） -->
-  <link rel="stylesheet" href="liquid-glass.css?v=20261107o" />
+  <link rel="stylesheet" href="liquid-glass.css?v=20261107p" />
   <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><text x='32' y='44' font-family='system-ui' font-size='40' font-weight='800' text-anchor='middle' fill='%234C6FFF'>V</text></svg>" />
 </head>
 <body>
@@ -323,6 +323,21 @@
             </div>
           </div>
 
+          <!-- ============ 日常：当前这条动态的详情 ============ -->
+          <!-- 右边的动态流滚到哪条,这里就显示哪条的点赞和评论。 -->
+          <div id="pane-moment" class="pane">
+            <div class="moment-detail-head">
+              <button type="button" class="moment-compose icon-only" id="btn-moment-compose" title="写点什么" data-i18n-title="moment_write">
+                <span class="ic">✏️</span>
+              </button>
+              <button type="button" class="moment-compose icon-only" id="btn-moment-pick-img" title="加图片" data-i18n-title="moment_add">
+                <span class="ic">🖼️</span>
+              </button>
+              <span class="moment-detail-title" data-i18n="moment_detail_title">这条动态</span>
+            </div>
+            <div class="moment-detail" id="moment-detail"></div>
+          </div>
+
           <!-- ============ 更多：主题与外观设置 ============ -->
           <!-- Discover: the groups other people made. You apply to join,
                the owner says yes — same as a friend request. -->
@@ -482,14 +497,6 @@
               <div class="avatar lg moment-cover-avatar" id="moment-cover-avatar"></div>
             </div>
             <div class="moment-body">
-              <div class="moment-actions">
-                <button type="button" class="moment-compose" id="btn-moment-compose">
-                  <span class="ic">✏️</span><span data-i18n="moment_write">写点什么</span>
-                </button>
-                <button type="button" class="moment-compose" id="btn-moment-pick-img">
-                  <span class="ic">🖼️</span><span data-i18n="moment_add">加图片</span>
-                </button>
-              </div>
               <div id="moment-feed"></div>
             </div>
           </div>
@@ -924,7 +931,7 @@
   <!-- Socket.io client is served by this same Express app at /socket.io/socket.io.js,
        so there is no third-party CDN to fail (or be blocked). -->
   <script src="/socket.io/socket.io.js"></script>
-  <script src="config.js?v=20261107o"></script>
+  <script src="config.js?v=20261107p"></script>
   <!-- The 550C theme is ~60 KB. Only fetch it when it is actually on:
        localStorage says so right now, and app.js re-checks after login
        for the case where the account has it on but this browser does
@@ -942,7 +949,7 @@
        time even though the theme was enabled. -->
   <script>
   (function () {
-    try { window.__VV_ASSET_V = '20261107o'; } catch (e) { }
+    try { window.__VV_ASSET_V = '20261107p'; } catch (e) { }
     var V = window.__VV_ASSET_V || '';
     var on = false;
     try { on = localStorage.getItem('vve:boot550c') === '1'; } catch (e) { }
@@ -964,8 +971,8 @@
   })();
   </script>
   <!-- 液态玻璃引擎：折射 + 果冻物理 + 体积光 + 光照互通 -->
-  <script src="liquid-glass-maps.js?v=20261107o"></script>
-  <script src="liquid-glass.js?v=20261107o"></script>
-  <script src="app.js?v=20261107o"></script>
+  <script src="liquid-glass-maps.js?v=20261107p"></script>
+  <script src="liquid-glass.js?v=20261107p"></script>
+  <script src="app.js?v=20261107p"></script>
 </body>
 </html>
