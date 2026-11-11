@@ -187,6 +187,13 @@ async function call(pathname, { method = 'GET', body, token, headers } = {}) {
     assert.ok(m2, '没找到那条消息');
     assert.equal(m2.sender_avatar_emoji, '🐯');
   });
+  await step('注册接口把刚选的头像原样回给前端', async () => {
+    const r = await call('/register', { method: 'POST', body: {
+      username: 'zzav3' + Date.now().toString().slice(-5), password: 'Str0ng-Pass-42', avatar: PNG,
+    } });
+    assert.equal(r.status, 200, JSON.stringify(r.data));
+    assert.ok(r.data.user.avatar && r.data.user.avatar.startsWith('data:image/png'), '注册返回的头像是空的');
+  });
   await step('会话列表里也带着照片头像', async () => {
     const convs = await call('/conversations', { token: adminToken });
     const withPhoto = (convs.data.conversations || []).filter(c => c.avatar && c.avatar.startsWith('data:image/'));

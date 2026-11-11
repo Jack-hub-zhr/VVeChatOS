@@ -2285,7 +2285,10 @@ app.post('/api/register', rateLimit('auth'), (req, res) => {
   // 默认联系人:Jack、Jacky Bot、文件传输助手。
   seedDefaultContacts(userId);
   const token = jwt.sign({ uid: userId, username }, JWT_SECRET, { expiresIn: '30d' });
-  res.json({ token, user: userPublic({ id: userId, username, avatar: null, bio: '', avatar_color: color }) });
+  res.json({ token, user: userPublic({
+    id: userId, username, avatar: regAvatar, avatar_emoji: regEmoji,
+    bio: '', avatar_color: color,
+  }) });
 });
 
 // login
