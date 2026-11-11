@@ -1671,16 +1671,32 @@ body.dark .mention-hint-bar { background: rgba(255, 255, 255, 0.05); }
   backdrop-filter: blur(var(--blur-l3));
   overflow: hidden;
 }
-.moment-compose {
-  display: block; width: 100%; text-align: left;
-  padding: 15px 18px; border: 0; border-bottom: 1px solid var(--glass-border);
-  background: var(--glass-bg-soft); color: var(--muted);
-  font-size: 14px; font-family: var(--font); cursor: pointer;
+
+.moment-post {
+  display: grid; grid-template-columns: minmax(0, 1fr) 230px; gap: 16px;
+  padding: 16px 18px; border-bottom: 1px solid var(--glass-border);
 }
-.moment-compose:hover { background: var(--glass-bg-frost); }
-.moment-post { display: flex; gap: 12px; padding: 16px 18px; border-bottom: 1px solid var(--glass-border); }
 .moment-post:last-child { border-bottom: 0; }
-.moment-post .meta { flex: 1; min-width: 0; }
+.moment-main { display: flex; gap: 12px; min-width: 0; }
+.moment-main .meta { flex: 1; min-width: 0; }
+/* 右栏:点赞 + 评论 */
+.moment-side { border-left: 1px solid var(--glass-border); padding-left: 14px; min-width: 0; }
+.moment-side .moment-likes:first-child { margin-top: 0; }
+@media (max-width: 760px) {
+  .moment-post { grid-template-columns: 1fr; }
+  .moment-side { border-left: 0; padding-left: 0; }
+}
+/* 发布区:两个按钮 */
+.moment-actions { display: flex; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--glass-border); }
+.moment-compose {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 9px 16px; border: 1px solid var(--glass-border); border-radius: 999px;
+  background: var(--glass-bg-soft); color: var(--ink-2);
+  font-size: 13.5px; font-family: var(--font); cursor: pointer;
+}
+.moment-compose:hover { background: var(--glass-bg-frost); color: var(--ink); }
+.moment-compose .ic { font-size: 14px; }
+.moment-post .imgs img { cursor: zoom-in; }
 .moment-post .name { color: var(--accent); font-weight: 700; font-size: 15px; }
 .moment-post .text { margin: 6px 0 2px; font-size: 14.5px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
 .moment-post .imgs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin: 9px 0 4px; }

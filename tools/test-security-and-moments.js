@@ -162,6 +162,38 @@ async function call(pathname, { method = 'GET', body, token, headers } = {}) {
   });
 
   // ------------------------------------------------------------------
+  console.log('\n[4b] 头像要能传到对方那边');
+  const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+  await step('注册时带照片/表情 → 消息接口把发送者头像带出来', async () => {
+    const a = await call('/register', { method: 'POST', body: { username: 'zzav1' + Date.now().toString().slice(-5), password: 'Str0ng-Pass-42', avatar: PNG } });
+    assert.equal(a.status, 200, JSON.stringify(a.data));
+    const uid = a.data.user.id;
+    // 注册时默认就把 Jack 加成好友了,所以直接能私聊。
+    const fr = await call('/friends', { token: a.data.token });
+    assert.ok((fr.data.friends || []).some(f => f.username === 'Jack'), 'Jack 不是好友');
+    // 给 Jack 发一条消息
+    const s = await call('/messages', { method: 'POST', body: { conv_type: 'user', conv_id: 1, content: '头像测试' }, token: a.data.token });
+    assert.equal(s.status, 200, JSON.stringify(s.data));
+    const msgs = await call('/messages?conv_type=user&conv_id=' + uid + '&limit=5', { token: adminToken });
+    const mine = (msgs.data.messages || []).find(m => m.sender_id === uid);
+    assert.ok(mine, '没找到那条消息');
+    assert.ok(mine.sender_avatar && mine.sender_avatar.startsWith('data:image/png'), '消息里没有带照片头像');
+    // 表情头像也一样
+    const b = await call('/register', { method: 'POST', body: { username: 'zzav2' + Date.now().toString().slice(-5), password: 'Str0ng-Pass-42', avatar_emoji: '🐯' } });
+    assert.equal(b.status, 200, JSON.stringify(b.data));
+    await call('/messages', { method: 'POST', body: { conv_type: 'user', conv_id: 1, content: '表情头像测试' }, token: b.data.token });
+    const msgs2 = await call('/messages?conv_type=user&conv_id=' + b.data.user.id + '&limit=10', { token: adminToken });
+    const m2 = (msgs2.data.messages || []).find(m => m.sender_id === b.data.user.id);
+    assert.ok(m2, '没找到那条消息');
+    assert.equal(m2.sender_avatar_emoji, '🐯');
+  });
+  await step('会话列表里也带着照片头像', async () => {
+    const convs = await call('/conversations', { token: adminToken });
+    const withPhoto = (convs.data.conversations || []).filter(c => c.avatar && c.avatar.startsWith('data:image/'));
+    assert.ok(withPhoto.length >= 1, '会话列表里没有照片头像');
+  });
+
+  // ------------------------------------------------------------------
   console.log('\n[5] 在线状态');
   await step('没连着的人显示离线', async () => {
     const r = await call('/users/status?ids=999999', { token: meToken });

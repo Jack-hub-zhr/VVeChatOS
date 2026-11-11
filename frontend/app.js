@@ -100,6 +100,15 @@
       moment_ph: '这一刻的想法…',
       moment_add_img: '添加图片',
       moment_publish: '发表',
+      moment_write: '写点什么',
+      moment_add: '加图片',
+      moment_like: '点赞',
+      moment_comment: '评论',
+      moment_delete: '删除',
+      moment_zoom: '点击查看原图',
+      moment_del_title: '删除这条动态',
+      moment_del_msg: '删掉之后就没了,确定吗?',
+      moment_del_ok: '删除',
       btn_back: '返回',
       avatar_upload: '上传照片',
       btn_pick_avatar: '选择头像',
@@ -511,6 +520,15 @@
       moment_ph: "What's on your mind…",
       moment_add_img: 'Add photos',
       moment_publish: 'Post',
+      moment_write: 'Write something',
+      moment_add: 'Add photos',
+      moment_like: 'Like',
+      moment_comment: 'Comment',
+      moment_delete: 'Delete',
+      moment_zoom: 'Click to view full size',
+      moment_del_title: 'Delete this moment',
+      moment_del_msg: "It can't be undone. Delete it?",
+      moment_del_ok: 'Delete',
       btn_back: 'Back',
       avatar_upload: 'Upload a photo',
       btn_pick_avatar: 'Choose avatar',
@@ -989,7 +1007,12 @@
     // If we have a message reference, use its sender info directly
     // (avoids stale friend cache showing wrong username like "息")
     if (m && m.sender_id === uid) {
-      return { id: uid, username: m.sender_username, avatar_color: m.sender_avatar_color };
+      return {
+        id: uid, username: m.sender_username,
+        avatar_color: m.sender_avatar_color,
+        avatar: m.sender_avatar || null,
+        avatar_emoji: m.sender_avatar_emoji || null,
+      };
     }
     const f = state.friends.find(f => f.id === uid);
     if (f) return f;
@@ -1083,13 +1106,13 @@
       b.classList.toggle('selected', !_apState.img && b.dataset.emoji === _apState.emoji));
   }
   // 照片先裁成正方形再缩到 256px —— 一张 base64 头像不能背着几 MB。
-  function shrinkToAvatar(file, cb) {
+  function shrinkToAvatar(file, cb, size) {
     if (!file.type.startsWith('image/')) { toast(t('toast_img_only')); return; }
     const reader = new FileReader();
     reader.onload = () => {
       const img = new Image();
       img.onload = () => {
-        const S = 256, side = Math.min(img.width, img.height);
+        const S = size || 256, side = Math.min(img.width, img.height);
         const c = document.createElement('canvas');
         c.width = c.height = S;
         c.getContext('2d').drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, S, S);
@@ -1529,8 +1552,7 @@
     // conversation avatars lost their colour.
     // 表情头像(📁)用柔白底,别再叠色盘;助手走发光圆环。
     const avatarBg = isGroup ? '' : (() => {
-      if (c.avatar_emoji) return ' style="background:rgba(255,255,255,0.55)"';
-      const st = avatarStyle(c); return st ? ` style="${st}"` : '';
+      const st = avatarBgOf(c); return st ? ` style="${st}"` : '';
     })();
     const dot = (isGroup || isOfficial) ? '' : `<span class="online-dot"></span>`;
     const avatarCls = [ac, online?'online':''].filter(Boolean).join(' ');
@@ -1544,7 +1566,7 @@
     const inner = isGroup
       ? groupAvatarInner({ name: c.username, is_official: isOfficial, icon_emoji: c.icon_emoji })
       // 「我」这一条:名字在英文界面显示 Me,但头像是我本人的。
-      : (c.special === 'self' ? avatarInner(state.user) : avatarContent(displayName(c.username, c.special), emojiOf(c), 26));
+      : (c.special === 'self' ? avatarInner(state.user) : avatarInner(c));
     li.innerHTML = `<div class="${avatarCls}"${avatarBg} data-user-avatar="${isGroup ? '' : c.id}">${inner}${dot}</div>
       <div class="meta"><div class="name">${escapeHtml(c.type === 'user' ? displayName(c.username, c.special) : groupDisplayName(c.username, isOfficial))} ${officialTag}</div>
       <div class="preview">${atMePrefix}${senderPrefix}${escapeHtml(preview)}</div></div>
@@ -2124,13 +2146,12 @@
       const online = isOnline(id);
       const bio = f && !isSystemAccount(f.username) ? f.bio : '';
       sub.innerHTML = online ? `<span style="color:var(--online);">● ${t('online')}</span>` : escapeHtml(bio || t('friend'));
-      const emoji = f && f.avatar_emoji;
-      const bg = emoji ? 'background:rgba(255,255,255,0.55)' : avatarStyle(f);
+      const bg = avatarBgOf(f);
       avatar.style.cssText = `cursor:pointer;${bg}`;
       avatar.className = `avatar sm ${online?'online':''}`;
       avatar.style.display = 'flex';
-      // 助手用发光圆环、文件传输助手用 📁 —— 跟列表一模一样。
-      avatar.innerHTML = (f && f.avatar) ? '' : avatarContent(title, emoji, 26);
+      // 助手用发光圆环、文件传输助手用 📁、照片直接铺满 —— 跟列表一模一样。
+      avatar.innerHTML = avatarInner(f);
       // The header avatar opens the same action menu as every other
       // avatar in the app (查看资料 / 添加好友 / 发消息).
       avatar.setAttribute('data-user-avatar', String(id));
@@ -2502,14 +2523,12 @@
     row.dataset.msgId = m.id;
     // avatar — always show. Jack's avatar (sent OR received) gets the gold glow.
     const u = mine ? state.user : userInfo(m.sender_id, m);
-    const bgStyle = u.avatar_color
-      ? `background:linear-gradient(135deg, ${u.avatar_color}, ${shade(u.avatar_color, -25)});`
-      : '';
+    const bgStyle = avatarBgOf(u);
     const isJackAvatar = u.username === 'Jack';
     const glowCls = isJackAvatar ? ' avatar-jack-glow' : '';
     // Task: tap a group member's avatar to open their profile and add them.
-    const msgEmoji = emojiOf(u);
-    const avatarHtml = `<div class="msg-avatar avatar sm${glowCls}" style="${bgStyle}" data-uid="${m.sender_id}" data-user-avatar="${m.sender_id}" role="button" title="${t('view_profile')}">${avatarContent(u.username, msgEmoji, 26)}</div>`;
+    // 照片 / 表情 / 首字母 —— 跟列表里那个一模一样。
+    const avatarHtml = `<div class="msg-avatar avatar sm${glowCls}" style="${bgStyle}" data-uid="${m.sender_id}" data-user-avatar="${m.sender_id}" role="button" title="${t('view_profile')}">${avatarInner(u)}</div>`;
     // sender name — show for group chats when message is from someone else
     const senderName = ctype === 'group' && !mine
       ? `<div class="msg-meta"><span class="sender">${escapeHtml(m.sender_username)}</span></div>`
@@ -3466,26 +3485,30 @@
     }
     feed.innerHTML = MOMENT.items.map(m => {
       const u = m.user || {};
-      const imgs = (m.images || []).map(src => `<img src="${escapeHtml(src)}" alt="" loading="lazy">`).join('');
+      const imgs = (m.images || []).map(src => `<img src="${escapeHtml(src)}" alt="" loading="lazy" title="${t('moment_zoom')}">`).join('');
       const likes = (m.likes || []).map(l => escapeHtml(l.username || '')).filter(Boolean);
       const comments = (m.comments || []).map(c =>
         `<div class="c"><b>${escapeHtml(c.username || '')}</b>: ${escapeHtml(c.text || '')}</div>`).join('');
       const mine = Number(u.id) === Number(state.user && state.user.id);
       const liked = (m.likes || []).some(l => Number(l.id) === Number(state.user && state.user.id));
       return `<div class="moment-post" data-id="${m.id}">
-        <div class="avatar sm moment-post-avatar" style="${avatarBgOf(u)}">${avatarInner(u)}</div>
-        <div class="meta">
-          <div class="name">${escapeHtml(u.username || '')}</div>
-          ${m.content ? `<div class="text">${escapeHtml(m.content)}</div>` : ''}
-          ${imgs ? `<div class="imgs">${imgs}</div>` : ''}
-          <div class="foot">
-            <span>${escapeHtml(momentTime(m.created_at))}</span>
-            <span class="acts">
-              <button type="button" class="moment-act like ${liked ? 'on' : ''}" data-act="like">${liked ? '💗' : '🤍'}</button>
-              <button type="button" class="moment-act" data-act="comment">💬</button>
-              ${mine ? `<button type="button" class="moment-act" data-act="del">🗑</button>` : ''}
-            </span>
+        <div class="moment-main">
+          <div class="avatar sm moment-post-avatar" style="${avatarBgOf(u)}">${avatarInner(u)}</div>
+          <div class="meta">
+            <div class="name">${escapeHtml(u.username || '')}</div>
+            ${m.content ? `<div class="text">${escapeHtml(m.content)}</div>` : ''}
+            ${imgs ? `<div class="imgs">${imgs}</div>` : ''}
+            <div class="foot">
+              <span>${escapeHtml(momentTime(m.created_at))}</span>
+              <span class="acts">
+                <button type="button" class="moment-act like ${liked ? 'on' : ''}" data-act="like" title="${t('moment_like')}">${liked ? '💗' : '🤍'}</button>
+                <button type="button" class="moment-act" data-act="comment" title="${t('moment_comment')}">💬</button>
+                ${mine ? `<button type="button" class="moment-act" data-act="del" title="${t('moment_delete')}">🗑</button>` : ''}
+              </span>
+            </div>
           </div>
+        </div>
+        <div class="moment-side">
           ${likes.length ? `<div class="moment-likes">❤️ ${likes.join('，')}</div>` : ''}
           ${comments ? `<div class="moment-comments">${comments}</div>` : ''}
           <div class="moment-comment-box">
@@ -3511,15 +3534,23 @@
       const t = $('#moment-text'); if (t) t.value = '';
       momentImagesChanged();
       openModal('modal-moment');
+      setTimeout(() => $('#moment-text')?.focus(), 60);
     });
+    // 「加图片」按钮:选完图直接打开发布框,照片已经挂上了。
+    const pickImg = $('#btn-moment-pick-img');
+    if (pickImg) pickImg.addEventListener('click', () => { $('#moment-file')?.click(); });
+    const addImg = $('#btn-moment-add-img');
+    if (addImg) addImg.addEventListener('click', () => { $('#moment-file')?.click(); });
     const file = $('#moment-file');
     if (file) file.addEventListener('change', () => {
-      const files = [...(file.files || [])].slice(0, 9 - MOMENT.imgs.length);
+      const files = [...(file.files || [])].slice(0, 6 - MOMENT.imgs.length);
       file.value = '';
+      if (!files.length) return;
+      let left = files.length;
       files.forEach(f => shrinkToAvatar(f, (url) => {
-        if (MOMENT.imgs.length >= 9) return;
-        MOMENT.imgs.push(url); momentImagesChanged();
-      }));
+        if (MOMENT.imgs.length < 6) { MOMENT.imgs.push(url); momentImagesChanged(); }
+        if (--left === 0) openModal('modal-moment');   // 选完就把发布框打开,照片已经在那儿
+      }, 800));   // 动态里的照片比头像大,压到 800px
     });
     const imgs = $('#moment-imgs');
     if (imgs) imgs.addEventListener('click', (e) => {
@@ -3543,6 +3574,9 @@
     });
     const feed = $('#moment-feed');
     if (feed) feed.addEventListener('click', async (e) => {
+      // 点图片 → 全屏看原图
+      const img = e.target.closest('.moment-post .imgs img');
+      if (img) { openLightbox(img.src); return; }
       const btn = e.target.closest('.moment-act');
       if (!btn) return;
       const post = btn.closest('.moment-post');
@@ -3555,6 +3589,12 @@
         if (m) m.likes = r.likes || [];
         renderMoments();
       } else if (act === 'del') {
+        const ok = await askConfirm({
+          title: t('moment_del_title'),
+          message: t('moment_del_msg'),
+          okText: t('moment_del_ok'),
+        });
+        if (!ok) return;
         await api('/moments/' + id, { method: 'DELETE' });
         await loadMoments();
       } else if (act === 'comment') {

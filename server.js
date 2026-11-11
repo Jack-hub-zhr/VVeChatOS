@@ -3211,6 +3211,8 @@ function buildMessage(row) {
     sender_id: row.sender_id,
     sender_username: row.sender_username,
     sender_avatar_color: row.sender_avatar_color || null,
+    sender_avatar: row.sender_avatar || null,
+    sender_avatar_emoji: row.sender_avatar_emoji || null,
     content: row.is_deleted ? '' : row.content,
     type: row.type || 'text',
     meta,
@@ -3224,7 +3226,8 @@ function buildMessage(row) {
 // a view for reply joins
 db.exec(`
   CREATE VIEW IF NOT EXISTS messages_view AS
-  SELECT m.*, u.username AS sender_username, u.avatar_color AS sender_avatar_color
+  SELECT m.*, u.username AS sender_username, u.avatar_color AS sender_avatar_color,
+         u.avatar AS sender_avatar, u.avatar_emoji AS sender_avatar_emoji
   FROM messages m
   JOIN users u ON u.id = m.sender_id
 `);
@@ -3263,7 +3266,11 @@ app.post('/api/messages', rateLimit('write'), authRequired, (req, res) => {
   const info = db.prepare(
     'INSERT INTO messages (conv_type, conv_id, sender_id, content, type, meta, reply_to, is_deleted, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)'
   ).run(conv_type, normalizedConvId, req.user.id, content, msgType, metaStr, reply_to || null, now());
-  const row = db.prepare('SELECT * FROM messages WHERE id = ?').get(info.lastInsertRowid);
+  // 带上发送者的头像(照片/表情)—— 对方那边实时收到时就能画对头像。
+  const row = db.prepare(`
+    SELECT m.*, u.avatar AS sender_avatar, u.avatar_emoji AS sender_avatar_emoji
+    FROM messages m JOIN users u ON u.id = m.sender_id WHERE m.id = ?
+  `).get(info.lastInsertRowid);
   const msg = buildMessage({ ...row, sender_username: req.user.username });
   broadcastMessage(msg, conv_type, conv_id, req.user.id);
   res.json({ message: msg });
@@ -3364,7 +3371,8 @@ app.get('/api/messages', authRequired, (req, res) => {
     normalizedConvId = userConvId(req.user.id, peerId);
   }
   const rows = db.prepare(`
-    SELECT m.*, u.username AS sender_username, u.avatar_color AS sender_avatar_color
+    SELECT m.*, u.username AS sender_username, u.avatar_color AS sender_avatar_color,
+           u.avatar AS sender_avatar, u.avatar_emoji AS sender_avatar_emoji
     FROM messages m
     JOIN users u ON u.id = m.sender_id
     WHERE m.conv_type = ? AND m.conv_id = ?
