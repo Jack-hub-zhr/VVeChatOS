@@ -3650,12 +3650,8 @@
         const m = $('#moment-msg'); if (m) m.textContent = e.message;
       } finally { pub.disabled = false; }
     });
-    const detail = $('#moment-detail');
-    if (detail) detail.addEventListener('click', async (e) => {
-      const img = e.target.closest('.moment-detail-imgs img');
-      if (img) { openLightbox(img.src); return; }
-      const send = e.target.closest('#moment-detail-send');
-      if (!send) return;
+    // 详情栏里的评论:回车直接发(Shift+Enter 不发),跟聊天框一个习惯。
+    async function sendMomentComment() {
       const input = $('#moment-detail-input');
       const text = ((input && input.value) || '').trim();
       if (!text || !MOMENT.activeId) return;
@@ -3663,6 +3659,18 @@
       const m = MOMENT.items.find(x => Number(x.id) === Number(MOMENT.activeId));
       if (m) m.comments = r.comments || [];
       renderMomentDetail();
+    }
+    const detail = $('#moment-detail');
+    if (detail) detail.addEventListener('click', async (e) => {
+      const img = e.target.closest('.moment-detail-imgs img');
+      if (img) { openLightbox(img.src); return; }
+      if (e.target.closest('#moment-detail-send')) await sendMomentComment();
+    });
+    if (detail) detail.addEventListener('keydown', async (e) => {
+      if (e.key !== 'Enter' || e.shiftKey) return;
+      if (!e.target.closest('#moment-detail-input')) return;
+      e.preventDefault();
+      await sendMomentComment();
     });
     const feed = $('#moment-feed');
     if (feed) feed.addEventListener('click', async (e) => {
