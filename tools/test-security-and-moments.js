@@ -162,6 +162,40 @@ async function call(pathname, { method = 'GET', body, token, headers } = {}) {
   });
 
   // ------------------------------------------------------------------
+  console.log('\n[4c] 草稿(删除时自动存成草稿)');
+  let draftId = null;
+  await step('存成草稿 → 自己看得见,别人看不见', async () => {
+    const r = await call('/moments', { method: 'POST', body: { content: '没写完的一条', images: [], status: 'draft' }, token: meToken });
+    assert.equal(r.status, 200, JSON.stringify(r.data));
+    draftId = r.data.moment.id;
+    assert.equal(r.data.moment.status, 'draft');
+    const mine = await call('/moments', { token: meToken });
+    assert.ok(mine.data.moments.some(m => m.id === draftId && m.status === 'draft'), '自己看不到草稿');
+    const other = await call('/moments', { token: adminToken });
+    assert.ok(!other.data.moments.some(m => m.id === draftId), '草稿被别人看见了');
+  });
+  await step('已发布的改成草稿 → 别人那边就看不到了', async () => {
+    const p = await call('/moments', { method: 'POST', body: { content: '先发布再变草稿', images: [] }, token: meToken });
+    const id = p.data.moment.id;
+    assert.equal(p.data.moment.status, 'published');
+    const r = await call('/moments/' + id, { method: 'PATCH', body: { status: 'draft' }, token: meToken });
+    assert.equal(r.status, 200, JSON.stringify(r.data));
+    assert.equal(r.data.moment.status, 'draft');
+    const other = await call('/moments', { token: adminToken });
+    assert.ok(!other.data.moments.some(m => m.id === id), '改成草稿后别人还能看见');
+  });
+  await step('草稿能接着改完再发表', async () => {
+    const r = await call('/moments/' + draftId, { method: 'PATCH', body: { content: '写完了', status: 'published' }, token: meToken });
+    assert.equal(r.status, 200, JSON.stringify(r.data));
+    assert.equal(r.data.moment.status, 'published');
+    assert.equal(r.data.moment.content, '写完了');
+  });
+  await step('不能改别人的动态', async () => {
+    const r = await call('/moments/' + draftId, { method: 'PATCH', body: { status: 'draft' }, token: adminToken });
+    assert.equal(r.status, 403);
+  });
+
+  // ------------------------------------------------------------------
   console.log('\n[4b] 头像要能传到对方那边');
   const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
   await step('注册时带照片/表情 → 消息接口把发送者头像带出来', async () => {

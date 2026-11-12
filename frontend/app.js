@@ -106,6 +106,14 @@
       moment_comment: '评论',
       moment_delete: '删除',
       moment_zoom: '点击查看原图',
+      moment_draft_title: '删除后自动保存为草稿',
+      moment_draft_sub: '下次打开时自动显示为编辑完成的草稿',
+      moment_draft_yes: '要',
+      moment_draft_no: '不必了',
+      moment_draft_badge: '草稿',
+      moment_draft_edit: '编辑',
+      moment_publishing: '发布中',
+      moment_publish_done: '发布完成',
       moment_del_title: '删除这条动态',
       moment_del_msg: '删掉之后就没了,确定吗?',
       moment_del_ok: '删除',
@@ -534,6 +542,14 @@
       moment_comment: 'Comment',
       moment_delete: 'Delete',
       moment_zoom: 'Click to view full size',
+      moment_draft_title: 'Deleted posts are saved as drafts',
+      moment_draft_sub: 'Next time you open it, it shows up as an edited draft',
+      moment_draft_yes: 'Yes',
+      moment_draft_no: 'No thanks',
+      moment_draft_badge: 'Draft',
+      moment_draft_edit: 'Edit',
+      moment_publishing: 'Posting',
+      moment_publish_done: 'Posted',
       moment_del_title: 'Delete this moment',
       moment_del_msg: "It can't be undone. Delete it?",
       moment_del_ok: 'Delete',
@@ -1222,6 +1238,34 @@
     }
     return data;
   }
+  // 带上传进度的请求:朋友圈发图是 base64 大 POST,fetch 不给进度事件,只能用 XHR。
+  function apiWithProgress(path, opts, onProgress) {
+    if (IS_MOCK) return api(path, opts);
+    const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
+    if (state.token) headers['Authorization'] = `Bearer ${state.token}`;
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open(opts.method || 'GET', `${API_BASE}/api${path}`, true);
+      xhr.timeout = API_TIMEOUT;
+      Object.keys(headers).forEach(k => xhr.setRequestHeader(k, headers[k]));
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable && onProgress) onProgress(Math.min(99, Math.round(e.loaded / e.total * 100)));
+      };
+      xhr.onload = () => {
+        let data = null;
+        try { data = JSON.parse(xhr.responseText); } catch {}
+        if (xhr.status >= 200 && xhr.status < 300) { if (onProgress) onProgress(100); resolve(data); }
+        else {
+          const err = new Error((data && data.error) || `HTTP ${xhr.status}`);
+          err.code = data && data.code;
+          reject(err);
+        }
+      };
+      xhr.onerror = () => reject(new Error(t('err_network')));
+      xhr.ontimeout = () => reject(new Error(t('err_timeout')));
+      xhr.send(opts.body ? JSON.stringify(opts.body) : null);
+    });
+  }
   async function api(path, opts = {}) {
     try { return await apiRaw(path, opts); }
     catch (e) {
@@ -1407,6 +1451,16 @@
     el.style.display = '';   // clear any inline display:none from previous close
   }
   function closeModal(id) {
+    // 没发出去的日常:关掉之前问一句「要不要存草稿」。
+    if (id === 'modal-moment' && !MOMENT.skipDraftAsk && momentDirty()) {
+      askMomentDraft().then(async (v) => {
+        if (v === 'yes') await saveMomentDraft();
+        MOMENT.skipDraftAsk = true;
+        closeModal('modal-moment');
+        MOMENT.skipDraftAsk = false;
+      });
+      return;
+    }
     const el = $('#'+id); if (!el) return;
     el.classList.add('hidden');
     el.style.display = 'none';   // belt + suspenders — make sure it actually hides
@@ -3442,7 +3496,74 @@
   // ============================================================
   // 朋友圈(日常)—— 微信那套:封面 + 一条条动态,能赞能评论。
   // ============================================================
-  const MOMENT = { items: [], imgs: [] };
+  const MOMENT = { items: [], imgs: [], editingId: null, skipDraftAsk: false };
+
+  // 发布进度条
+  function momentProgress(on) {
+    const box = $('#moment-progress');
+    if (!box) return;
+    box.classList.toggle('hidden', !on);
+    box.classList.remove('err');
+    if (on) momentProgressSet(0);
+  }
+  function momentProgressSet(p) {
+    const fill = $('#moment-progress-fill');
+    const txt = $('#moment-progress-text');
+    if (fill) fill.style.width = p + '%';
+    if (txt) txt.textContent = p >= 100 ? t('moment_publish_done') : t('moment_publishing') + ' ' + p + '%';
+  }
+  function momentDirty() {
+    const text = (($('#moment-text') || {}).value || '').trim();
+    return !!(text || MOMENT.imgs.length);
+  }
+  // 「删除后自动保存为草稿」弹窗:第一行黑体大字,第二行灰色小字,底下「要 / 不必了」。
+  function askMomentDraft() {
+    return new Promise((resolve) => {
+      const mask = document.createElement('div');
+      mask.className = 'ask-confirm';
+      mask.innerHTML = `
+        <div class="ask-confirm-mask"></div>
+        <div class="modal-card ask-confirm-card moment-draft-card">
+          <div class="moment-draft-body">
+            <div class="moment-draft-title">${escapeHtml(t('moment_draft_title'))}</div>
+            <div class="moment-draft-sub">${escapeHtml(t('moment_draft_sub'))}</div>
+          </div>
+          <div class="modal-actions moment-draft-actions">
+            <button class="btn btn-primary" data-x="yes" style="flex:1">${escapeHtml(t('moment_draft_yes'))}</button>
+            <button class="btn btn-ghost" data-x="no" style="flex:1">${escapeHtml(t('moment_draft_no'))}</button>
+          </div>
+        </div>`;
+      document.body.appendChild(mask);
+      let closed = false;
+      const done = (v) => {
+        if (closed) return;
+        closed = true;
+        document.removeEventListener('keydown', onKey);
+        mask.remove();
+        resolve(v);
+      };
+      const onKey = (e) => { if (e.key === 'Escape') done(null); };
+      document.addEventListener('keydown', onKey);
+      mask.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-x]');
+        if (b) return done(b.dataset.x === 'yes' ? 'yes' : 'no');
+        if (e.target.classList.contains('ask-confirm-mask')) done(null);
+      });
+    });
+  }
+  // 存成草稿:只有自己看得到,下次打开还能接着改。
+  async function saveMomentDraft() {
+    const text = ($('#moment-text') || {}).value || '';
+    momentProgress(true);
+    try {
+      const body = { content: text, images: MOMENT.imgs, status: 'draft' };
+      if (MOMENT.editingId) await apiWithProgress('/moments/' + MOMENT.editingId, { method: 'PATCH', body }, momentProgressSet);
+      else await apiWithProgress('/moments', { method: 'POST', body }, momentProgressSet);
+      await loadMoments();
+    } catch (e) {
+      toast(e.message);
+    } finally { momentProgress(false); }
+  }
 
   function openMoments() {
     const mv = $('#moment-view');
@@ -3505,20 +3626,24 @@
         `<div class="c"><b>${escapeHtml(c.username || '')}</b>: ${escapeHtml(c.text || '')}</div>`).join('');
       const mine = Number(u.id) === Number(state.user && state.user.id);
       const liked = (m.likes || []).some(l => Number(l.id) === Number(state.user && state.user.id));
-      return `<div class="moment-post" data-id="${m.id}">
+      const isDraft = m.status === 'draft';
+      const acts = isDraft
+        ? `<button type="button" class="moment-act" data-act="edit" title="${t('moment_draft_edit')}">✏️</button>
+           <button type="button" class="moment-act" data-act="del" title="${t('moment_delete')}">🗑</button>`
+        : `<button type="button" class="moment-act like ${liked ? 'on' : ''}" data-act="like" title="${t('moment_like')}">${liked ? '💗' : '🤍'}</button>
+           <button type="button" class="moment-act" data-act="comment" title="${t('moment_comment')}">💬</button>
+           ${mine ? `<button type="button" class="moment-act" data-act="del" title="${t('moment_delete')}">🗑</button>` : ''}`;
+      return `<div class="moment-post${isDraft ? ' is-draft' : ''}" data-id="${m.id}">
         <div class="avatar sm moment-post-avatar" style="${avatarBgOf(u)}">${avatarInner(u)}</div>
         <div class="meta">
           <div class="name">${escapeHtml(u.username || '')}</div>
+          ${isDraft ? `<div class="moment-draft-badge">📝 ${t('moment_draft_badge')}</div>` : ''}
           ${m.content ? `<div class="text">${escapeHtml(m.content)}</div>` : ''}
           <div class="foot"><span>${escapeHtml(momentTime(m.created_at))}</span></div>
           ${imgs}
-          <div class="moment-acts">
-            <button type="button" class="moment-act like ${liked ? 'on' : ''}" data-act="like" title="${t('moment_like')}">${liked ? '💗' : '🤍'}</button>
-            <button type="button" class="moment-act" data-act="comment" title="${t('moment_comment')}">💬</button>
-            ${mine ? `<button type="button" class="moment-act" data-act="del" title="${t('moment_delete')}">🗑</button>` : ''}
-          </div>
-          ${likes.length ? `<div class="moment-likes">❤️ ${likes.join('，')}</div>` : ''}
-          ${comments ? `<div class="moment-comments">${comments}</div>` : ''}
+          <div class="moment-acts">${acts}</div>
+          ${isDraft ? '' : `<div class="moment-likes">❤️ ${likes.join('，')}</div>`}
+          ${isDraft ? '' : `<div class="moment-comments">${comments}</div>`}
         </div>
       </div>`;
     }).join('');
@@ -3608,6 +3733,7 @@
     if (back) back.addEventListener('click', closeMoments);
     const compose = $('#btn-moment-compose');
     if (compose) compose.addEventListener('click', () => {
+      MOMENT.editingId = null;
       MOMENT.imgs = [];
       const t = $('#moment-text'); if (t) t.value = '';
       momentImagesChanged();
@@ -3642,13 +3768,22 @@
       const text = ($('#moment-text') || {}).value || '';
       if (!text.trim() && !MOMENT.imgs.length) { toast(lang === 'en' ? 'Say something first' : '说点什么再发表'); return; }
       pub.disabled = true;
+      momentProgress(true);
       try {
-        await api('/moments', { method: 'POST', body: { content: text, images: MOMENT.imgs } });
+        const body = { content: text, images: MOMENT.imgs };
+        if (MOMENT.editingId) await apiWithProgress('/moments/' + MOMENT.editingId, { method: 'PATCH', body: { ...body, status: 'published' } }, momentProgressSet);
+        else await apiWithProgress('/moments', { method: 'POST', body }, momentProgressSet);
+        MOMENT.editingId = null;
+        // 先把编辑器清空再关,不然关弹窗时会以为还有没发的东西(问要不要存草稿)。
+        const ta = $('#moment-text'); if (ta) ta.value = '';
+        MOMENT.imgs = [];
+        momentImagesChanged();
         closeModal('modal-moment');
         await loadMoments();
       } catch (e) {
+        $('#moment-progress')?.classList.add('err');
         const m = $('#moment-msg'); if (m) m.textContent = e.message;
-      } finally { pub.disabled = false; }
+      } finally { pub.disabled = false; setTimeout(() => momentProgress(false), 400); }
     });
     // 详情栏里的评论:回车直接发(Shift+Enter 不发),跟聊天框一个习惯。
     async function sendMomentComment() {
@@ -3688,14 +3823,33 @@
         const m = MOMENT.items.find(x => Number(x.id) === id);
         if (m) m.likes = r.likes || [];
         renderMoments();
+      } else if (act === 'edit') {
+        const m = MOMENT.items.find(x => Number(x.id) === id);
+        if (!m) return;
+        MOMENT.editingId = id;
+        MOMENT.imgs = (m.images || []).slice();
+        const ta = $('#moment-text'); if (ta) ta.value = m.content || '';
+        momentImagesChanged();
+        openModal('modal-moment');
+        setTimeout(() => $('#moment-text')?.focus(), 60);
       } else if (act === 'del') {
-        const ok = await askConfirm({
-          title: t('moment_del_title'),
-          message: t('moment_del_msg'),
-          okText: t('moment_del_ok'),
-        });
-        if (!ok) return;
-        await api('/moments/' + id, { method: 'DELETE' });
+        const m = MOMENT.items.find(x => Number(x.id) === id);
+        if (m && m.status === 'draft') {
+          const ok = await askConfirm({
+            title: t('moment_del_title'),
+            message: t('moment_del_msg'),
+            okText: t('moment_del_ok'),
+          });
+          if (!ok) return;
+          await api('/moments/' + id, { method: 'DELETE' });
+          await loadMoments();
+          return;
+        }
+        // 已发布的:删掉之前先问「要不要存成草稿」。
+        const pick = await askMomentDraft();
+        if (pick === 'yes') await api('/moments/' + id, { method: 'PATCH', body: { status: 'draft' } });
+        else if (pick === 'no') await api('/moments/' + id, { method: 'DELETE' });
+        else return;
         await loadMoments();
       } else if (act === 'comment') {
         // 评论框在中间那栏(当前这条的详情里),点一下就跳过去。

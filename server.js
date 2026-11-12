@@ -213,6 +213,8 @@ function ensureColumn(table, col, decl) {
   }
 }
 ensureColumn('users', 'bio', 'TEXT');
+// 朋友圈草稿:删除时存草稿 / 发布前的内容。草稿只有作者自己看得到。
+ensureColumn('moments', 'status', "TEXT NOT NULL DEFAULT 'published'");
 ensureColumn('users', 'avatar_color', 'TEXT');
 // 550C boot theme — per-account preference for the startup animation
 ensureColumn('users', 'boot_550c', 'INTEGER NOT NULL DEFAULT 0');
@@ -2443,6 +2445,7 @@ function packMoment(r) {
   try { comments = JSON.parse(r.comments || '[]'); } catch (_) {}
   return {
     id: r.id, content: r.content, images, likes, comments, created_at: r.created_at,
+    status: r.status || 'published',
     user: {
       id: r.user_id, username: r.username, avatar: r.avatar,
       avatar_color: r.avatar_color, avatar_emoji: r.avatar_emoji,
@@ -2453,25 +2456,51 @@ app.get('/api/moments', authRequired, (req, res) => {
   const rows = db.prepare(`
     SELECT m.*, u.username, u.avatar, u.avatar_color, u.avatar_emoji
     FROM moments m JOIN users u ON u.id = m.user_id
+    WHERE m.status = 'published' OR m.user_id = ?
     ORDER BY m.id DESC LIMIT 100
-  `).all();
+  `).all(req.user.id);
   res.json({ moments: rows.map(packMoment) });
 });
 app.post('/api/moments', rateLimit('write'), authRequired, (req, res) => {
-  const { content = '', images = [] } = req.body || {};
+  const { content = '', images = [], status = 'published' } = req.body || {};
   const text = String(content || '').slice(0, 1000).trim();
   const imgs = (Array.isArray(images) ? images : []).slice(0, 9)
     .filter(u => typeof u === 'string' && /^data:image\/(png|jpe?g|webp|gif);base64,/i.test(u));
   if (!text && !imgs.length) return res.status(400).json({ error: '内容不能为空' });
+  const st = status === 'draft' ? 'draft' : 'published';
   const info = db.prepare(
-    'INSERT INTO moments (user_id, content, images, created_at) VALUES (?, ?, ?, ?)'
-  ).run(req.user.id, text, JSON.stringify(imgs), now());
+    'INSERT INTO moments (user_id, content, images, created_at, status) VALUES (?, ?, ?, ?, ?)'
+  ).run(req.user.id, text, JSON.stringify(imgs), now(), st);
   const row = db.prepare(`
     SELECT m.*, u.username, u.avatar, u.avatar_color, u.avatar_emoji
     FROM moments m JOIN users u ON u.id = m.user_id WHERE m.id = ?
   `).get(info.lastInsertRowid);
   const m = packMoment(row);
-  try { io.emit('moment:new', m); } catch (_) {}
+  if (st === 'published') { try { io.emit('moment:new', m); } catch (_) {} }
+  res.json({ ok: true, moment: m });
+});
+// 改内容 / 把草稿发表 / 把已发布的改成草稿
+app.patch('/api/moments/:id', rateLimit('write'), authRequired, (req, res) => {
+  const id = Number(req.params.id);
+  const row = db.prepare('SELECT * FROM moments WHERE id = ?').get(id);
+  if (!row) return res.status(404).json({ error: '动态不存在' });
+  if (Number(row.user_id) !== Number(req.user.id)) {
+    return res.status(403).json({ error: '只能改自己的动态' });
+  }
+  const b = req.body || {};
+  const text = b.content === undefined ? row.content : String(b.content).slice(0, 1000).trim();
+  const imgs = b.images === undefined ? row.images
+    : JSON.stringify((Array.isArray(b.images) ? b.images : []).slice(0, 9)
+      .filter(u => typeof u === 'string' && /^data:image\/(png|jpe?g|webp|gif);base64,/i.test(u)));
+  const st = b.status === 'draft' ? 'draft' : (b.status === 'published' ? 'published' : row.status);
+  db.prepare('UPDATE moments SET content = ?, images = ?, status = ? WHERE id = ?')
+    .run(text, imgs, st, id);
+  const out = db.prepare(`
+    SELECT m.*, u.username, u.avatar, u.avatar_color, u.avatar_emoji
+    FROM moments m JOIN users u ON u.id = m.user_id WHERE m.id = ?
+  `).get(id);
+  const m = packMoment(out);
+  if (st === 'published') { try { io.emit('moment:new', m); } catch (_) {} }
   res.json({ ok: true, moment: m });
 });
 app.post('/api/moments/:id/like', rateLimit('write'), authRequired, (req, res) => {
