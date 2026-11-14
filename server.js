@@ -726,6 +726,20 @@ app.disable('x-powered-by');
 // 客户端自己伪造的 X-Forwarded-For 会被跳过。
 app.set('trust proxy', 2);
 
+// Render 免费版 15 分钟没人访问就停容器 —— keepalive 需要知道公网地址。
+// 只认 *.onrender.com,免得伪造的 Host 头把 keepalive 带到别的地方去。
+let KA_LEARNED_HOST = '';
+app.use((req, res, next) => {
+  if (!KA_LEARNED_HOST) {
+    const host = String(req.headers.host || '');
+    if (/^[a-z0-9.-]+\.onrender\.com$/i.test(host)) {
+      const proto = String(req.headers['x-forwarded-proto'] || 'https').split(',')[0];
+      KA_LEARNED_HOST = proto + '://' + host;
+    }
+  }
+  next();
+});
+
 // ---------- Security headers ----------
 app.use((req, res, next) => {
   // 请求到达的时刻 —— 必须记在第一个中间件里。
@@ -4132,16 +4146,22 @@ if (process.env.KEEPALIVE !== '0') {
     // hit our own public URL — that is traffic from outside the container and
     // it resets Render's idle timer.
     const kaInterval = Math.max(60 * 1000, Number(process.env.KEEPALIVE_INTERVAL_MS || 5 * 60 * 1000));
-    const kaSelf = process.env.RENDER_EXTERNAL_URL
+    const kaPath = process.env.KEEPALIVE_PATH || '/api/health';
+    // keepalive 必须打「公网地址」才有用 —— 打 localhost 重置不了 Render 的空闲计时器,
+    // 容器照样被停掉,下一个人打开控制台还是得等冷启动(这就是控制台慢的真正原因)。
+    // 公网地址优先从环境变量拿,拿不到就用学到的域名,再兜底生产域名。
+    const kaSelf = () => process.env.RENDER_EXTERNAL_URL
       || (process.env.RENDER_SERVICE_URL ? ('https://' + process.env.RENDER_SERVICE_URL) : '')
       || (process.env.RENDER_EXTERNAL_HOSTNAME ? ('https://' + process.env.RENDER_EXTERNAL_HOSTNAME) : '')
-      || ('http://127.0.0.1:' + (process.env.PORT || '10000'));
-    const kaPath = process.env.KEEPALIVE_PATH || '/api/health';
-    let u;
-    try { u = new URL(kaPath, kaSelf); } catch (_) { u = new URL('http://127.0.0.1:' + (process.env.PORT || '10000') + kaPath); }
-    const kaMod = u.protocol === 'https:' ? require('https') : require('http');
+      || KA_LEARNED_HOST
+      || (process.env.RENDER ? 'https://vvechat.onrender.com' : '')
+      || ('http://127.0.0.1:' + (process.env.PORT || '3000'));
 
     const keepAlive = () => {
+      let u;
+      try { u = new URL(kaPath, kaSelf()); }
+      catch (_) { u = new URL('http://127.0.0.1:' + (process.env.PORT || '3000') + kaPath); }
+      const kaMod = u.protocol === 'https:' ? require('https') : require('http');
       const req = kaMod.request(u, {
         method: 'GET',
         timeout: 15000,
@@ -4158,7 +4178,7 @@ if (process.env.KEEPALIVE !== '0') {
     // Stagger the first ping so it never races the server's own listen().
     setTimeout(keepAlive, 45000);
     setInterval(keepAlive, kaInterval).unref();
-    console.log('[keepalive] armed every ' + Math.round(kaInterval / 1000) + 's -> ' + u.href);
+    console.log('[keepalive] armed every ' + Math.round(kaInterval / 1000) + 's -> ' + kaSelf() + kaPath);
   } catch (e) {
     console.error('[keepalive] disabled (setup failed): ' + e.message);
   }
