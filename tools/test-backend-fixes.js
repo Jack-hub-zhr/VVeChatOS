@@ -24,6 +24,10 @@ async function step(name, fn) {
   catch (e) { fails.push(name + ' — ' + e.message); console.log('  ✗', name, '→', e.message); }
 }
 
+// 聊天接口有「每分钟 10 次」的限速,自检用例各自用不同的来源 IP,免得互相踩。
+let _cfSeq = 0;
+const cfHeaders = () => ({ 'CF-Connecting-IP': '203.0.113.' + (200 + (_cfSeq++)) });
+
 async function call(pathname, { method = 'GET', body, token, raw, headers: extra } = {}) {
   const headers = Object.assign({}, extra || {});
   if (body) headers['Content-Type'] = 'application/json';
@@ -132,14 +136,14 @@ function loadFns() {
   });
   await step('文件消息能发出去', async () => {
     const r = await call('/messages', {
-      method: 'POST', token: userToken,
+      method: 'POST', token: userToken, headers: cfHeaders(),
       body: { conv_type: 'user', conv_id: fa.id, content: fileId, type: 'file', meta: { name: '自检.txt', size: 26 } }
     });
     assert.equal(r.status, 200, JSON.stringify(r.data));
     assert.equal(r.data.message.type, 'file');
   });
   await step('跟自己说话不需要好友关系', async () => {
-    const r = await call('/messages', { method: 'POST', token: userToken, body: { conv_type: 'user', conv_id: myId, content: '给自己记一笔' } });
+    const r = await call('/messages', { method: 'POST', token: userToken, headers: cfHeaders(), body: { conv_type: 'user', conv_id: myId, content: '给自己记一笔' } });
     assert.equal(r.status, 200, JSON.stringify(r.data));
     const g = await call('/messages?conv_type=user&conv_id=' + myId, { token: userToken });
     assert.equal(g.status, 200, JSON.stringify(g.data));
@@ -197,7 +201,7 @@ function loadFns() {
     const bot = (c.data.conversations || []).find((x) => x.username === 'Jacky Bot');
     assert.ok(bot, '会话列表里没有 Jacky Bot');
     const sent = await call('/messages', {
-      method: 'POST', token: adminToken,
+      method: 'POST', token: adminToken, headers: cfHeaders(),
       body: { conv_type: 'user', conv_id: bot.id, content: '自检:在吗' }
     });
     assert.equal(sent.status, 200, JSON.stringify(sent.data));

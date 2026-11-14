@@ -21,6 +21,10 @@ async function step(name, fn) {
   try { await fn(); pass++; console.log('  ✓', name); }
   catch (e) { fails.push(name + ' — ' + e.message); console.log('  ✗', name, '→', e.message); }
 }
+// 聊天接口有「每分钟 10 次」的限速,自检用例各自用不同的来源 IP,免得互相踩。
+let _cfSeq = 0;
+const cfHeaders = () => ({ 'CF-Connecting-IP': '203.0.113.' + (200 + (_cfSeq++)) });
+
 async function call(pathname, { method = 'GET', body, token, headers } = {}) {
   const h = Object.assign({}, headers || {});
   if (body) h['Content-Type'] = 'application/json';
@@ -206,7 +210,7 @@ async function call(pathname, { method = 'GET', body, token, headers } = {}) {
     const fr = await call('/friends', { token: a.data.token });
     assert.ok((fr.data.friends || []).some(f => f.username === 'Jack'), 'Jack 不是好友');
     // 给 Jack 发一条消息
-    const s = await call('/messages', { method: 'POST', body: { conv_type: 'user', conv_id: 1, content: '头像测试' }, token: a.data.token });
+    const s = await call('/messages', { method: 'POST', headers: cfHeaders(), body: { conv_type: 'user', conv_id: 1, content: '头像测试' }, token: a.data.token });
     assert.equal(s.status, 200, JSON.stringify(s.data));
     const msgs = await call('/messages?conv_type=user&conv_id=' + uid + '&limit=5', { token: adminToken });
     const mine = (msgs.data.messages || []).find(m => m.sender_id === uid);
@@ -215,7 +219,7 @@ async function call(pathname, { method = 'GET', body, token, headers } = {}) {
     // 表情头像也一样
     const b = await call('/register', { method: 'POST', body: { username: 'zzav2' + Date.now().toString().slice(-5), password: 'Str0ng-Pass-42', avatar_emoji: '🐯' } });
     assert.equal(b.status, 200, JSON.stringify(b.data));
-    await call('/messages', { method: 'POST', body: { conv_type: 'user', conv_id: 1, content: '表情头像测试' }, token: b.data.token });
+    await call('/messages', { method: 'POST', headers: cfHeaders(), body: { conv_type: 'user', conv_id: 1, content: '表情头像测试' }, token: b.data.token });
     const msgs2 = await call('/messages?conv_type=user&conv_id=' + b.data.user.id + '&limit=10', { token: adminToken });
     const m2 = (msgs2.data.messages || []).find(m => m.sender_id === b.data.user.id);
     assert.ok(m2, '没找到那条消息');

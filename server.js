@@ -5,6 +5,8 @@
  * - SQLite (better-sqlite3) for persistence
  * - JWT for auth
  */
+// 全站时间统一按 Asia/Shanghai 算,免得控制台上的时间戳和实际差 8 小时。
+process.env.TZ = process.env.TZ || 'Asia/Shanghai';
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
@@ -15,6 +17,7 @@ const jwt = require('jsonwebtoken');
 const Database = require('better-sqlite3');
 const { Server: SocketIOServer } = require('socket.io');
 const { createFirewall } = require('./firewall.js');
+const { realIp, realIpOf, validateChatInput, createChatRateLimiter, escapeHtml } = require('./security-core.js');
 const crypto = require('crypto');
 const authCrypto = require('./auth-crypto.js');
 
@@ -264,6 +267,14 @@ function verifyAny(plain, stored) {
 
 // ---------- helpers ----------
 function now() { return Date.now(); }
+// 统一按 Asia/Shanghai 显示时间(控制台看到的就是攻击发生的时刻)。
+function shTime(ts) {
+  if (!ts) return '';
+  const d = new Date(Number(ts));
+  const p = (n) => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' +
+    p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+}
 // The assistant's account name. Declared up here because userPublic()
 // needs it and userPublic() is defined above the seed block.
 // 它一路叫过来:Qwen → AI → Jacky Bot。
@@ -711,7 +722,9 @@ function userConvId(a, b) { return a < b ? `u_${a}_${b}` : `u_${b}_${a}`; }
 // ---------- app ----------
 const app = express();
 app.disable('x-powered-by');
-app.set('trust proxy', true); // Render sits behind a proxy; needed for correct client IPs
+// Cloudflare → Render → 本进程,两跳。数字(而不是 true)表示「只信最后两跳」,
+// 客户端自己伪造的 X-Forwarded-For 会被跳过。
+app.set('trust proxy', 2);
 
 // ---------- Security headers ----------
 app.use((req, res, next) => {
@@ -764,10 +777,10 @@ const RATE_LIMIT = {
   auth: 60,      // 60 req/min for login/register (a person can retry freely)
   write: 240,    // 240 req/min for mutating endpoints
 };
+// 来源 IP:只信 Cloudflare 注入的 CF-Connecting-IP,兜底用 socket 真实地址。
+// X-Forwarded-For / X-Real-IP 客户端可以随便伪造,安全逻辑一律不读。
 function clientIp(req) {
-  const xff = req.headers['x-forwarded-for'];
-  if (typeof xff === 'string' && xff.length) return xff.split(',')[0].trim();
-  return req.ip || (req.socket && req.socket.remoteAddress) || 'unknown';
+  return realIp(req);
 }
 function rateLimit(kind) {
   return (req, res, next) => {
@@ -821,13 +834,55 @@ const firewall = createFirewall({
 });
 app.use(firewall.middleware);
 
+// ---------- 聊天纵深防御 ----------
+// 第一道:输入校验(schema + 注入模式 + 剥标签)
+// 第二道:速率限制(按 IP,10 次/分钟、100 次/小时)
+const chatLimiter = createChatRateLimiter({ perMinute: 10, perHour: 100 });
+setInterval(() => chatLimiter.sweep(), 60 * 1000).unref();
+
+function validateContent(req, res, next) {
+  const v = validateChatInput(req.body || {});
+  if (!v.ok) {
+    // 被应用层拒绝的注入尝试也要留痕、也要算进「已拦截」。
+    firewall.noteRejected(req, v.kind, 'high', '正文校验失败:' + v.detail, 'chat-schema');
+    return res.status(400).json({ error: v.error });
+  }
+  if (req.body) req.body.content = v.text;
+  next();
+}
+function makeChatGuard(field, extra) {
+  return (req, res, next) => {
+    const ip = clientIp(req);
+    const rl = chatLimiter.check(ip);
+    if (!rl.ok) {
+      firewall.noteRejected(req, 'rate_limit', 'medium',
+        '聊天接口限速命中:' + rl.scope + '(每分钟 ' + chatLimiter.perMinute + ' 次 / 每小时 ' + chatLimiter.perHour + ' 次)');
+      // 只给通用提示,不泄露任何内部细节。
+      return res.status(429).json({ error: 'Too many requests' });
+    }
+    const v = validateChatInput(req.body || {}, Object.assign({ field }, extra || {}));
+    if (!v.ok) {
+      firewall.noteRejected(req, v.kind, 'high', '聊天正文校验失败:' + v.detail, 'chat-schema');
+      return res.status(400).json({ error: v.error });
+    }
+    if (req.body) req.body[field] = v.text;
+    next();
+  };
+}
+const chatGuard = makeChatGuard('content');
+// AI 对话的正文在 message 字段;history 是历史对话,不算进「单次请求总负载」。
+const aiChatGuard = makeChatGuard('message', { exclude: ['history'] });
+
 // 24 小时待命的安全 agent:每 5 分钟自检一遍防火墙还活着没,
 // 有异常就写进事件表 —— 控制台那边立刻能看到。
-const firewallAgentGet = async (url) => {
+const firewallAgentGet = async (url, opts = {}) => {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 8000);
   try {
-    const r = await fetch(url, { signal: ctrl.signal, headers: { 'User-Agent': 'VVeChat-SelfCheck' } });
+    const r = await fetch(url, {
+      signal: ctrl.signal,
+      headers: { 'User-Agent': 'VVeChat-SelfCheck', ...(opts.headers || {}) },
+    });
     try { await r.text(); } catch (_) {}
     return { status: r.status };
   } finally { clearTimeout(timer); }
@@ -971,6 +1026,11 @@ app.get('/api/control/snapshot', authRequired, requireAdmin, (req, res) => {
   const convos = db.prepare(`
     SELECT DISTINCT conv_id FROM messages WHERE conv_type = 'user' ORDER BY conv_id
   `).all();
+  // 消息条数一条 SQL 统计出来(原来是一条会话查一次,N+1)。
+  const counts = new Map(db.prepare(`
+    SELECT conv_id, COUNT(*) AS n FROM messages
+    WHERE conv_type='user' AND is_deleted = 0 GROUP BY conv_id
+  `).all().map(r => [r.conv_id, r.n]));
   const conversations = [];
   for (const c of convos) {
     const m = /^u_(\d+)_(\d+)$/.exec(c.conv_id);
@@ -979,28 +1039,23 @@ app.get('/api/control/snapshot', authRequired, requireAdmin, (req, res) => {
     const ua = db.prepare('SELECT id, username, avatar_color FROM users WHERE id = ?').get(a);
     const ub = db.prepare('SELECT id, username, avatar_color FROM users WHERE id = ?').get(b);
     if (!ua || !ub) continue;
-    const msgs = db.prepare(`
-      SELECT m.id, m.content, m.type, m.created_at, m.is_deleted, u.username AS sender
-      FROM messages m JOIN users u ON u.id = m.sender_id
-      WHERE m.conv_type='user' AND m.conv_id = ? AND m.is_deleted = 0
-      ORDER BY m.id ASC
-    `).all(c.conv_id);
     conversations.push({
       conv_id: c.conv_id,
       user_a: ua,
       user_b: ub,
-      messages: msgs,
+      message_count: counts.get(c.conv_id) || 0,
     });
   }
 
+  // 群消息只带最近 300 条 —— 控制台打开慢的第二主因(全量拉)。
   const groupMsgs = db.prepare(`
     SELECT m.id, m.content, m.type, m.created_at, g.name AS group_name, u.username AS sender
     FROM messages m
     JOIN groups g ON CAST(g.id AS TEXT) = m.conv_id
     JOIN users u ON u.id = m.sender_id
     WHERE m.conv_type='group' AND m.is_deleted = 0
-    ORDER BY m.id ASC
-  `).all();
+    ORDER BY m.id DESC LIMIT 300
+  `).all().reverse();
 
   // 群列表也带上 —— 否则没人认领的群（owner 被删了）在管理台里找不到，
   // 清理脚本没法收尾。
@@ -1011,6 +1066,18 @@ app.get('/api/control/snapshot', authRequired, requireAdmin, (req, res) => {
     FROM groups g ORDER BY g.id ASC
   `).all(ASSISTANT_NAME);
   res.json({ ok: true, generated_at: now(), users, groups, conversations, group_messages: groupMsgs });
+});
+
+// 控制台按需取某段会话的消息(快照里不再全量带消息,打开快很多)。
+app.get('/api/control/conversation/:id', authRequired, requireAdmin, (req, res) => {
+  const convId = String(req.params.id || '');
+  const msgs = db.prepare(`
+    SELECT m.id, m.content, m.type, m.created_at, u.username AS sender
+    FROM messages m JOIN users u ON u.id = m.sender_id
+    WHERE m.conv_type='user' AND m.conv_id = ? AND m.is_deleted = 0
+    ORDER BY m.id ASC LIMIT 1000
+  `).all(convId);
+  res.json({ ok: true, conv_id: convId, messages: msgs });
 });
 
 // Delete one account and every trace of it (messages, friendships, requests).
@@ -1091,28 +1158,68 @@ app.post('/api/control/format-all', rateLimit('write'), authRequired, requireAdm
 
 // ============================================================
 // 防火墙 —— 控制台的安全中心
-//   GET  /api/security/overview  概览 + 最近的事件(带攻击 IP)
-//   POST /api/security/unblock   解封一个 IP
-//   POST /api/security/scan      立刻跑一次安全 agent 自检
+//   GET  /api/security/overview   概览 + 最近的事件(带攻击 IP)
+//   GET  /api/security/events.csv 导出事件(CSV)
+//   POST /api/security/block       手动封一个 IP
+//   POST /api/security/unblock     解封一个 IP
+//   POST /api/security/scan        立刻跑一次安全 agent 自检
+//   GET  /api/security/rules       agent 自己写的规则
 // ============================================================
 app.get('/api/security/overview', authRequired, requireAdmin, (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 60, 200);
   res.json({
     ok: true,
     stats: firewall.snapshot(),
-    events: firewall.listEvents(limit)
+    events: firewall.listEvents(limit),
+    rules: firewall.listRules().slice(0, 100)
   });
+});
+// 导出事件 CSV。带 BOM,Excel 打开中文不乱码。
+app.get('/api/security/events.csv', authRequired, requireAdmin, (req, res) => {
+  const limit = Math.min(Number(req.query.limit) || 500, 5000);
+  const rows = firewall.listEvents(limit);
+  const head = ['时间', 'IP', '类型', '级别', '方法', '路径', '动作', '规则', 'User-Agent', '详情'];
+  const cell = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""').replace(/\r?\n/g, ' ') + '"';
+  const lines = [head.map(cell).join(',')];
+  for (const e of rows) {
+    lines.push([
+      shTime(e.ts), e.ip, e.kind, e.severity, e.method, e.path,
+      e.action === 'blocked' ? '已拦截' : '已记录', e.rule || '', e.ua || '', e.detail || '',
+    ].map(cell).join(','));
+  }
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="vvechat-security-events.csv"');
+  res.send('\uFEFF' + lines.join('\n'));
+});
+// 手动封禁(事件列表里一键封)。reason / rule 一起记下来。
+app.post('/api/security/block', rateLimit('write'), authRequired, requireAdmin, (req, res) => {
+  const b = req.body || {};
+  const ip = String(b.ip || '').trim();
+  if (!ip) return res.status(400).json({ error: '缺少 ip' });
+  const minutes = Math.min(Math.max(Number(b.minutes) || 60, 1), 60 * 24 * 7);
+  const reason = String(b.reason || '管理员手动封禁').slice(0, 120);
+  const rule = String(b.rule || '').slice(0, 120);
+  firewall.block(ip, reason, minutes, rule);
+  firewall.record({
+    ip, kind: 'manual_block', severity: 'high', action: 'blocked',
+    detail: '管理员手动封禁 ' + minutes + ' 分钟 — ' + reason, rule,
+  });
+  res.json({ ok: true, stats: firewall.snapshot() });
 });
 app.post('/api/security/unblock', rateLimit('write'), authRequired, requireAdmin, (req, res) => {
   const ip = String((req.body || {}).ip || '').trim();
   if (!ip) return res.status(400).json({ error: '缺少 ip' });
   const had = firewall.unblock(ip);
   firewall.record({ ip, kind: 'manual_unblock', severity: 'low', action: 'logged', detail: '管理员手动解封' });
-  res.json({ ok: true, removed: had });
+  res.json({ ok: true, removed: had, stats: firewall.snapshot() });
 });
 app.post('/api/security/scan', rateLimit('write'), authRequired, requireAdmin, async (req, res) => {
   await firewall.runAgentCheck(firewallAgentGet, 'http://127.0.0.1:' + PORT);
   res.json({ ok: true, stats: firewall.snapshot() });
+});
+// agent 自己写的规则(它有权限补规则,补了什么得看得见)。
+app.get('/api/security/rules', authRequired, requireAdmin, (req, res) => {
+  res.json({ ok: true, rules: firewall.listRules() });
 });
 
 app.get('/api/admin/stats', authRequired, requireAdmin, (req, res) => {
@@ -1741,7 +1848,7 @@ function relayStream(res, upstreamBody, source, opts) {
   });
 }
 
-app.post('/api/ai/chat', rateLimit('write'), authRequired, async (req, res) => {
+app.post('/api/ai/chat', rateLimit('write'), authRequired, aiChatGuard, async (req, res) => {
   const { message, history, model, thinking, level, search, chat_id } = req.body || {};
   const userMsg = String(message || '').trim();
   if (!userMsg) return res.status(400).json({ error: '消息不能为空' });
@@ -2461,7 +2568,7 @@ app.get('/api/moments', authRequired, (req, res) => {
   `).all(req.user.id);
   res.json({ moments: rows.map(packMoment) });
 });
-app.post('/api/moments', rateLimit('write'), authRequired, (req, res) => {
+app.post('/api/moments', rateLimit('write'), authRequired, validateContent, (req, res) => {
   const { content = '', images = [], status = 'published' } = req.body || {};
   const text = String(content || '').slice(0, 1000).trim();
   const imgs = (Array.isArray(images) ? images : []).slice(0, 9)
@@ -2516,7 +2623,7 @@ app.post('/api/moments/:id/like', rateLimit('write'), authRequired, (req, res) =
   db.prepare('UPDATE moments SET likes = ? WHERE id = ?').run(JSON.stringify(likes), id);
   res.json({ ok: true, likes });
 });
-app.post('/api/moments/:id/comment', rateLimit('write'), authRequired, (req, res) => {
+app.post('/api/moments/:id/comment', rateLimit('write'), authRequired, validateContent, (req, res) => {
   const id = Number(req.params.id);
   const text = String((req.body || {}).text || '').slice(0, 300).trim();
   if (!text) return res.status(400).json({ error: '评论不能为空' });
@@ -3265,7 +3372,7 @@ db.exec(`
 `);
 
 // send message
-app.post('/api/messages', rateLimit('write'), authRequired, (req, res) => {
+app.post('/api/messages', rateLimit('write'), authRequired, chatGuard, (req, res) => {
   let { conv_type, conv_id, content, type, meta, reply_to } = req.body || {};
   if (!['user', 'group'].includes(conv_type)) return res.status(400).json({ error: 'invalid conv_type' });
   if (!content) return res.status(400).json({ error: '内容不能为空' });
@@ -3648,7 +3755,27 @@ io.on('connection', (socket) => {
   // realtime send
   socket.on('message:send', (data, ack) => {
     try {
-      let { conv_type, conv_id, content, type, meta, reply_to } = data || {};
+      // 聊天纵深防御:socket 这条路也必须过校验和限速,
+      // 否则攻击者绕开 HTTP 就把防护全绕了。
+      const sockIp = realIpOf(socket.handshake.headers, socket.handshake.address);
+      const rl = chatLimiter.check(sockIp);
+      if (!rl.ok) {
+        firewall.noteRejected({
+          headers: socket.handshake.headers, method: 'SOCKET',
+          path: '/socket.io/message:send', body: data, _vveArrivedAt: Date.now(),
+        }, 'rate_limit', 'medium', '聊天接口限速命中(socket):' + rl.scope);
+        throw new Error('Too many requests');
+      }
+      const v = validateChatInput(data || {});
+      if (!v.ok) {
+        firewall.noteRejected({
+          headers: socket.handshake.headers, method: 'SOCKET',
+          path: '/socket.io/message:send', body: data, _vveArrivedAt: Date.now(),
+        }, v.kind, 'high', '聊天正文校验失败(socket):' + v.detail, 'chat-schema');
+        throw new Error(v.error);
+      }
+      let { conv_type, conv_id, type, meta, reply_to } = data || {};
+      let content = v.text;
       if (!['user', 'group'].includes(conv_type)) throw new Error('invalid conv_type');
       if (!content) throw new Error('内容不能为空');
       if (type === 'image' && content.length > 5 * 1024 * 1024) throw new Error('图片过大（>5MB）');
@@ -3848,6 +3975,13 @@ if (fs.existsSync(FRONTEND_DIR)) {
   // streaming endpoints (SSE, socket.io) must NOT be compressed — a
   // buffered stream would defeat the whole point of streaming.
   const gzipStatic = require('zlib');
+  // ---------- 404:自己写,不露 Express 指纹 ----------
+  // Express 默认会回 "Cannot GET /xxx",扫描器一眼就知道这是 Express。
+  app.use((req, res, next) => {
+    if (!req.path.startsWith('/api/')) return next();
+    res.status(404).json({ error: 'not found' });
+  });
+
   // Static assets are served by hand rather than by express.static, so
   // the response can be gzipped AND cached for a year. The two matter:
   // app.js is 210 KB raw, and the browser was told "no-store" before,
@@ -3956,6 +4090,21 @@ if (fs.existsSync(CONTROL_DIR)) {
 } else {
   console.warn('[VVeChat] frontend dir missing at', FRONTEND_DIR);
 }
+
+// ---------- 全局错误处理:客户端只拿到通用信息 ----------
+// 堆栈、内部路径、SQL 报错一律只进服务端日志。
+app.use((err, req, res, next) => {
+  try {
+    console.warn('[VVeChat] ' + new Date().toISOString() + ' ' + (req.method || '?') + ' ' +
+      (req.path || '?') + ' ← ' + clientIp(req) + ' : ' + (err && err.message ? err.message : err));
+  } catch (_) {}
+  if (res.headersSent) { try { return next(err); } catch (_) {} return; }
+  const type = err && err.type;
+  if (type === 'entity.too.large') return res.status(413).json({ error: '内容太大' });
+  if (type === 'entity.parse.failed' || err instanceof SyntaxError) return res.status(400).json({ error: '请求格式不对' });
+  if (err && err.status === 400) return res.status(400).json({ error: '请求格式不对' });
+  return res.status(500).json({ error: '服务器内部错误' });
+});
 
 
 // Never let one error kill the service.

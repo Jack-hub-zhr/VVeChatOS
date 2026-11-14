@@ -15,6 +15,11 @@
    另外有一个常驻的「安全 agent」:24 小时待命,
    每 5 分钟自检一遍防火墙还活着没、有没有异常流量,
    有问题立刻写进事件表 —— 控制台那边就能看到。
+   自检不通过时,它会自己写一条新规则补上漏掉的检测(写进 firewall_rules 表),
+   规则立刻生效 —— 不用等人来改代码。
+
+   来源 IP:只信 Cloudflare 注入的 CF-Connecting-IP,兜底用 socket 真实地址。
+   X-Forwarded-For / X-Real-IP 客户端能伪造,安全逻辑一律不读。
    ============================================================ */
 'use strict';
 
@@ -42,11 +47,16 @@ const BODY_RULES = [
   { re: /javascript\s*:|on(error|load|mouseover)\s*=/i, kind: 'xss', sev: 'medium' },
   { re: /(\|\s*(bash|sh)\b)|(;\s*rm\s+-rf)|(\$\()|(&&\s*curl)|(\bwget\s+http)/i, kind: 'cmdi', sev: 'high' },
   { re: /\{\{\s*\d+\s*\*\s*\d+\s*\}\}|\$\{jndi:|<\#assign/i, kind: 'template_injection', sev: 'high' },
+  // 原型污染:把 __proto__ / constructor[ 塞进 JSON,让下游 merge 污染原型。
+  { re: /__proto__|constructor\s*\[|prototype\s*\[/i, kind: 'proto_pollution', sev: 'high' },
 ];
 
 const UA_RULES = [
   { re: /sqlmap|nikto|acunetix|nessus|masscan|zgrab|nuclei|wpscan|joomscan|arachni|havij|gobuster|dirbuster|metsploit|burp|metasploit|zaproxy|commix|xsser/i, kind: 'scanner_ua', sev: 'high' },
 ];
+
+// agent 自检失败时会往 firewall_rules 表里写新规则,启动时加载进来。
+const EXTRA_RULES = [];
 
 const BAD_METHODS = ['TRACE', 'TRACK', 'CONNECT', 'DEBUG'];
 
@@ -113,7 +123,24 @@ function createFirewall(opts) {
           detail TEXT
         );
         CREATE INDEX IF NOT EXISTS idx_security_events_ts ON security_events(ts DESC);
+        CREATE TABLE IF NOT EXISTS firewall_rules (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          scope TEXT NOT NULL,
+          pattern TEXT NOT NULL,
+          kind TEXT NOT NULL,
+          severity TEXT NOT NULL,
+          source TEXT NOT NULL DEFAULT 'manual',
+          created_at INTEGER NOT NULL
+        );
       `);
+      // 老库补列:完整请求头 / 请求正文 / 命中的规则
+      for (const [col, decl] of [['rule', 'TEXT'], ['headers', 'TEXT'], ['payload', 'TEXT']]) {
+        try {
+          const cols = db.prepare(`PRAGMA table_info(security_events)`).all().map(r => r.name);
+          if (!cols.includes(col)) db.exec(`ALTER TABLE security_events ADD COLUMN ${col} ${decl}`);
+        } catch (_) {}
+      }
+      loadExtraRules();
     }
   } catch (e) {
     log('[firewall] cannot create security_events:', e.message);
@@ -131,19 +158,55 @@ function createFirewall(opts) {
       path: ev.path || null,
       ua: (ev.ua || '').slice(0, 240) || null,
       action: ev.action || 'logged',
-      detail: (ev.detail || '').slice(0, 400) || null
+      detail: (ev.detail || '').slice(0, 400) || null,
+      rule: (ev.rule || '').slice(0, 120) || null,
+      headers: ev.headers ? String(ev.headers).slice(0, 2000) : null,
+      payload: ev.payload ? String(ev.payload).slice(0, 2000) : null
     };
     if (db) {
       try {
         db.prepare(
-          'INSERT INTO security_events (ts, ip, kind, severity, method, path, ua, action, detail) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-        ).run(row.ts, row.ip, row.kind, row.severity, row.method, row.path, row.ua, row.action, row.detail);
+          'INSERT INTO security_events (ts, ip, kind, severity, method, path, ua, action, detail, rule, headers, payload) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        ).run(row.ts, row.ip, row.kind, row.severity, row.method, row.path, row.ua, row.action, row.detail, row.rule, row.headers, row.payload);
         // 只留最近 2000 条,免得表无限长。
         db.prepare('DELETE FROM security_events WHERE id < (SELECT MAX(id) - 2000 FROM security_events)').run();
       } catch (e) { /* 记不进去也不能影响请求 */ }
     }
     for (const fn of listeners) { try { fn(row); } catch (_) {} }
     return row;
+  }
+
+  // agent 自检失败时写进数据库的规则,启动时加载,写完立刻生效。
+  function loadExtraRules() {
+    EXTRA_RULES.length = 0;
+    if (!db) return 0;
+    try {
+      const rows = db.prepare('SELECT scope, pattern, kind, severity FROM firewall_rules ORDER BY id ASC').all();
+      for (const r of rows) {
+        try {
+          EXTRA_RULES.push({ scope: r.scope, re: new RegExp(r.pattern, 'i'), kind: r.kind, sev: r.severity, pattern: r.pattern });
+        } catch (e) { log('[firewall] bad rule pattern:', r.pattern); }
+      }
+    } catch (_) {}
+    return EXTRA_RULES.length;
+  }
+  // 加一条规则(scope: path | body)。source 记是谁写的(agent / 管理员)。
+  function addRule(rule) {
+    if (!db) return { ok: false, error: '没有数据库' };
+    const scope = rule.scope === 'path' ? 'path' : 'body';
+    const pattern = String(rule.pattern || '');
+    try { new RegExp(pattern, 'i'); } catch (e) { return { ok: false, error: '正则不合法' }; }
+    try {
+      const info = db.prepare(
+        'INSERT INTO firewall_rules (scope, pattern, kind, severity, source, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+      ).run(scope, pattern, rule.kind || 'suspicious', rule.severity || 'high', rule.source || 'manual', now());
+      loadExtraRules();
+      return { ok: true, id: info.lastInsertRowid, count: EXTRA_RULES.length };
+    } catch (e) { return { ok: false, error: e.message }; }
+  }
+  function listRules() {
+    if (!db) return [];
+    try { return db.prepare('SELECT * FROM firewall_rules ORDER BY id DESC').all(); } catch (_) { return []; }
   }
 
   function isBlocked(ip) {
@@ -153,10 +216,11 @@ function createFirewall(opts) {
     return b;
   }
 
-  function block(ip, reason, minutes) {
+  function block(ip, reason, minutes, rule) {
     const b = blocked.get(ip) || { count: 0 };
     b.count++;
     b.reason = reason;
+    b.rule = rule || '';
     b.at = now();
     b.until = now() + minutes * 60 * 1000;
     blocked.set(ip, b);
@@ -193,18 +257,30 @@ function createFirewall(opts) {
     for (const r of PATH_RULES) {
       if (r.re.test(hay)) return { kind: r.kind, sev: r.sev, detail: 'path' };
     }
+    for (const r of EXTRA_RULES) {
+      if (r.scope === 'path' && r.re.test(hay)) return { kind: r.kind, sev: r.sev, detail: 'path', rule: r.pattern };
+    }
     // 查询串永远扫注入载荷(那里不可能有用户正文)。
     for (const r of BODY_RULES) {
       if (r.re.test(hay)) return { kind: r.kind, sev: r.sev, detail: 'query' };
+    }
+    for (const r of EXTRA_RULES) {
+      if (r.scope !== 'path' && r.re.test(hay)) return { kind: r.kind, sev: r.sev, detail: 'query', rule: r.pattern };
     }
     // 正文只在「不是用户内容」的接口上扫。
     if (!isContentPath(p)) {
       for (const r of BODY_RULES) {
         if (r.re.test(hayBody)) return { kind: r.kind, sev: r.sev, detail: 'body' };
       }
+      for (const r of EXTRA_RULES) {
+        if (r.scope !== 'path' && r.re.test(hayBody)) return { kind: r.kind, sev: r.sev, detail: 'body', rule: r.pattern };
+      }
     }
     for (const r of UA_RULES) {
       if (u && r.re.test(u)) return { kind: r.kind, sev: r.sev, detail: 'ua' };
+    }
+    for (const r of EXTRA_RULES) {
+      if (r.scope === 'ua' && u && r.re.test(u)) return { kind: r.kind, sev: r.sev, detail: 'ua', rule: r.pattern };
     }
     return null;
   }
@@ -236,14 +312,18 @@ function createFirewall(opts) {
   // ---------- Express 中间件 ----------
   function middleware(req, res, next) {
     stats.scanned++;
+    // 请求到达的时刻 —— 事件时间用它,精确等于攻击发生的时间。
+    const arrivedAt = Date.now();
+    req._vveArrivedAt = arrivedAt;
     const ip = getIp(req);
     const b = isBlocked(ip);
     if (b) {
       stats.blocked++;
       record({
-        ip, kind: 'blocked_ip', severity: 'high',
+        ts: arrivedAt, ip, kind: 'blocked_ip', severity: 'high',
         method: req.method, path: req.path, ua: req.headers['user-agent'],
-        action: 'blocked', detail: 'repeat: ' + (b.reason || '')
+        action: 'blocked', detail: 'repeat: ' + (b.reason || ''), rule: b.rule || '',
+        headers: safeJson(req.headers), payload: safeJson(req.body)
       });
       return res.status(403).json({ error: '请求已被防火墙拦截' });
     }
@@ -255,23 +335,46 @@ function createFirewall(opts) {
       // 内网/回环地址永远不封(自检自己就是从这儿发起的)。
       if ((hit.sev === 'high' || hit.sev === 'medium') && !internal) {
         const minutes = hit.sev === 'high' ? BRUTE_BASE_MINUTES : 5;
-        block(ip, hit.kind, minutes);
+        block(ip, hit.kind, minutes, hit.rule);
         record({
-          ip, kind: hit.kind, severity: hit.sev,
+          ts: arrivedAt, ip, kind: hit.kind, severity: hit.sev,
           method: req.method, path: req.path, ua: req.headers['user-agent'],
-          action: 'blocked', detail: hit.detail + ' — 封 ' + minutes + ' 分钟'
+          action: 'blocked', detail: hit.detail + ' — 封 ' + minutes + ' 分钟', rule: hit.rule || '',
+          headers: safeJson(req.headers), payload: safeJson(req.body)
         });
         log('[firewall] blocked', ip, hit.kind, hit.detail);
         return res.status(403).json({ error: '请求已被防火墙拦截' });
       }
       record({
-        ip, kind: hit.kind, severity: hit.sev,
+        ts: arrivedAt, ip, kind: hit.kind, severity: hit.sev,
         method: req.method, path: req.path, ua: req.headers['user-agent'],
-        action: internal ? 'logged' : 'logged',
-        detail: hit.detail + (internal ? ' — 内网地址,不封禁' : '')
+        action: 'logged',
+        detail: hit.detail + (internal ? ' — 内网地址,不封禁' : ''), rule: hit.rule || '',
+        headers: safeJson(req.headers), payload: safeJson(req.body)
       });
     }
     next();
+  }
+
+  function safeJson(v) {
+    if (v === undefined || v === null) return null;
+    try { return JSON.stringify(v).slice(0, 2000); } catch (_) { return null; }
+  }
+
+  // 应用层拒绝掉的请求(聊天正文的注入校验之类)也得留痕、也得算进「已拦截」。
+  function noteRejected(req, kind, severity, detail, rule) {
+    const ip = getIp(req);
+    stats.blocked++;
+    record({
+      ts: (req && req._vveArrivedAt) || now(),
+      ip, kind: kind || 'app_rejected', severity: severity || 'medium',
+      method: req && req.method, path: req && req.path,
+      ua: req && req.headers && req.headers['user-agent'],
+      action: 'blocked', detail: detail || '', rule: rule || '',
+      headers: req && req.headers ? safeJson(req.headers) : null,
+      payload: safeJson(req && req.body)
+    });
+    log('[firewall] app-layer rejected', ip, kind);
   }
 
   // 登录失败:调用方(登录接口)在认证失败时调一下
@@ -303,7 +406,8 @@ function createFirewall(opts) {
 
   function snapshot() {
     const ipList = Array.from(blocked.entries()).map(([ip, b]) => ({
-      ip, reason: b.reason, until: b.until, count: b.count
+      ip, reason: b.reason, rule: b.rule || '', until: b.until, count: b.count,
+      remaining_s: b.until ? Math.max(0, Math.round((b.until - now()) / 1000)) : 0
     }));
     let events = 0;
     let today = 0;
@@ -325,6 +429,7 @@ function createFirewall(opts) {
       agent: {
         checks: stats.agentChecks,
         failures: stats.agentFailures,
+        fixes: stats.agentFixes || 0,
         lastCheckAt: stats.agentCheckAt || 0,
         lastCheckOk: stats.lastCheckOk !== false,
         intervalMs: agentInterval
@@ -341,33 +446,80 @@ function createFirewall(opts) {
   let agentTimer = null;
   let agentBusy = false;
 
+  // 自检用的探针。每个都带一条「万一没拦住,就写这条规则」的补救方案。
+  const PROBES = [
+    { name: '环境变量探测', method: 'GET', path: '/.env', query: '', ua: '', body: '',
+      rule: { scope: 'path', pattern: '/\\.env', kind: 'env_probe', severity: 'high' } },
+    { name: '路径穿越', method: 'GET', path: '/../../etc/passwd', query: '', ua: '', body: '',
+      rule: { scope: 'path', pattern: '\\.\\./\\.\\./', kind: 'path_traversal', severity: 'high' } },
+    { name: 'CMS 探测', method: 'GET', path: '/wp-admin/install.php', query: '', ua: '', body: '',
+      rule: { scope: 'path', pattern: '/wp-admin', kind: 'cms_probe', severity: 'medium' } },
+    { name: 'SQL 注入', method: 'GET', path: '/api/messages', query: "x=' OR '1'='1", ua: '', body: '',
+      rule: { scope: 'body', pattern: "('|\\x27)\\s*(or|and)\\s+['\\\"0-9]", kind: 'sqli', severity: 'high' } },
+    { name: 'XSS', method: 'GET', path: '/', query: 'q=<script>alert(1)</script>', ua: '', body: '',
+      rule: { scope: 'body', pattern: '<\\s*script\\b', kind: 'xss', severity: 'medium' } },
+    { name: '扫描器 UA', method: 'GET', path: '/', query: '', ua: 'sqlmap/1.5', body: '',
+      rule: { scope: 'ua', pattern: 'sqlmap|nuclei|nikto|masscan', kind: 'scanner_ua', severity: 'high' } },
+    { name: 'DROP TABLE', method: 'GET', path: '/', query: '?a=;drop%20table%20users', ua: '', body: '',
+      rule: { scope: 'body', pattern: ';\\s*(drop|delete)\\s+', kind: 'sqli', severity: 'high' } },
+    { name: '原型污染', method: 'GET', path: '/', query: '?a=__proto__', ua: '', body: '',
+      rule: { scope: 'body', pattern: '__proto__', kind: 'proto_pollution', severity: 'high' } },
+  ];
+
   async function selfTest(baseUrl, get) {
     // 用已知载荷过一遍检测规则。
     // 注意:不发这些请求 —— 万一规则真把它们拦了,拦的可是防火墙自己
     // (自检走的是 127.0.0.1)。检测是纯函数,直接问它「这个你拦不拦」。
-    const probes = [
-      { method: 'GET', path: '/.env', query: '', ua: '', body: '' },
-      { method: 'GET', path: '/../../etc/passwd', query: '', ua: '', body: '' },
-      { method: 'GET', path: '/wp-admin/install.php', query: '', ua: '', body: '' },
-      { method: 'GET', path: '/api/messages', query: "x=' OR '1'='1", ua: '', body: '' },
-      { method: 'GET', path: '/', query: 'q=<script>alert(1)</script>', ua: '', body: '' },
-      { method: 'GET', path: '/', query: '', ua: 'sqlmap/1.5', body: '' },
-      { method: 'GET', path: '/', query: '?a=;drop%20table%20users', ua: '', body: '' }
-    ];
     const missed = [];
-    for (const p of probes) {
+    for (const p of PROBES) {
       if (!detectProbe(p.method, p.path, p.query, p.ua, p.body)) {
-        missed.push((p.path + p.query).slice(0, 60));
+        missed.push({ name: p.name, rule: p.rule });
       }
     }
     // 服务本身还得是活的
     if (get) {
       try {
         const r = await get(baseUrl + '/api/health');
-        if (r.status !== 200) missed.push('/api/health → ' + r.status);
-      } catch (e) { missed.push('/api/health → ' + e.message); }
+        if (r.status !== 200) missed.push({ name: '服务存活', rule: null });
+      } catch (e) { missed.push({ name: '服务存活:' + e.message, rule: null }); }
     }
+    // IP 可信度校验:带伪造的 X-Forwarded-For / X-Real-IP 发一个请求,
+    // 看事件表里记的是不是真实来源 IP。
+    const trust = await checkIpTrust(baseUrl, get);
+    for (const t of trust) missed.push({ name: t, rule: null });
     return missed;
+  }
+
+  // IP 可信度校验:伪造 X-Forwarded-For / X-Real-IP,事件里必须是真实 IP。
+  async function checkIpTrust(baseUrl, get) {
+    const forged = '203.0.113.66';
+    let before = 0;
+    try { before = db ? db.prepare('SELECT COUNT(*) AS n FROM security_events').get().n : 0; } catch (_) {}
+    if (get) {
+      try {
+        await get(baseUrl + '/.env', { headers: { 'X-Forwarded-For': forged, 'X-Real-IP': forged } });
+      } catch (_) {}
+    }
+    if (!db) return [];
+    await new Promise(r => setTimeout(r, 400));
+    let row = null;
+    try { row = db.prepare('SELECT ip FROM security_events WHERE id > ? ORDER BY id DESC LIMIT 1').get(before); } catch (_) {}
+    if (!row) return [];                       // 没留下事件就查不了,不算失败
+    if (row.ip === forged) return ['来源 IP 被伪造(' + row.ip + ')—— 还在采信 X-Forwarded-For / X-Real-IP'];
+    return [];
+  }
+
+  // agent 有权限自己写规则:漏掉的载荷直接补一条检测规则,立刻生效。
+  function remediate(missed) {
+    const written = [];
+    for (const m of missed) {
+      if (!m || !m.rule || !m.rule.pattern) continue;
+      const exists = (listRules() || []).some(r => r.pattern === m.rule.pattern && r.scope === m.rule.scope);
+      if (exists) continue;
+      const r = addRule({ ...m.rule, source: 'agent' });
+      if (r.ok) written.push(m.rule.kind + ' ← ' + m.rule.pattern);
+    }
+    return written;
   }
 
   async function runAgentCheck(get, baseUrl) {
@@ -380,11 +532,29 @@ function createFirewall(opts) {
       stats.lastCheckOk = bad.length === 0;
       if (bad.length) {
         stats.agentFailures++;
+        const names = bad.map(b => b.name);
         record({
           ip: 'self-check', kind: 'agent_self_test_failed', severity: 'high',
-          action: 'logged', detail: '防火墙没能拦住: ' + bad.join(' / ')
+          action: 'logged', detail: '防火墙没能拦住: ' + names.join(' / ')
         });
-        log('[firewall] self-check failed:', bad.join(' / '));
+        log('[firewall] self-check failed:', names.join(' / '));
+        // agent 自己动手:给漏掉的载荷补规则,然后立刻重测。
+        const written = remediate(bad);
+        if (written.length) {
+          stats.agentFixes = (stats.agentFixes || 0) + written.length;
+          record({
+            ip: 'agent', kind: 'agent_rule_written', severity: 'medium',
+            action: 'logged', detail: 'agent 补了 ' + written.length + ' 条规则: ' + written.join('; ')
+          });
+          const again = await selfTest(baseUrl, get);
+          stats.lastCheckOk = again.length === 0;
+          if (again.length === 0) {
+            record({
+              ip: 'agent', kind: 'agent_rule_effective', severity: 'low',
+              action: 'logged', detail: '补规则后重测通过,防火墙恢复正常'
+            });
+          }
+        }
       }
       // 巡场:最近 5 分钟被拦了 50 次以上 —— 有人在集中扫。
       if (db) {
@@ -419,6 +589,7 @@ function createFirewall(opts) {
   return {
     middleware,
     noteAuthFailure,
+    noteRejected,
     record,
     listEvents,
     snapshot,
@@ -428,6 +599,9 @@ function createFirewall(opts) {
     detectProbe,
     startAgent,
     runAgentCheck,
+    addRule,
+    listRules,
+    loadExtraRules,
     onEvent(fn) { listeners.push(fn); }
   };
 }

@@ -35,10 +35,21 @@
     if (!name) return '?';
     return /[\u4e00-\u9fa5]/.test(name) ? name.slice(-1) : name.slice(0, 1).toUpperCase();
   }
+  // 时间一律按 Asia/Shanghai 显示 —— 和服务器上记的攻击时间一致。
   function fmtTime(ts) {
     if (!ts) return '';
     const d = new Date(Number(ts));
-    return d.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleString('zh-CN', {
+      timeZone: 'Asia/Shanghai', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+    });
+  }
+  function fmtRemain(s) {
+    s = Number(s) || 0;
+    if (s <= 0) return '0 分钟';
+    const m = Math.ceil(s / 60);
+    if (m < 60) return m + ' 分钟';
+    return Math.floor(m / 60) + ' 小时 ' + (m % 60) + ' 分';
   }
   function toast(msg, ms = 2400) {
     const t = $('#toast');
@@ -179,25 +190,41 @@
   });
 
   // ---------------- data ----------------
+  // 三个接口并行跑,别一个接一个等 —— 控制台打开慢主要是这个。
   async function load() {
-    try {
-      const d = await api('/api/control/snapshot');
-      state.data = d;
-      render(d);
-      $('#stamp').textContent = '更新于 ' + fmtTime(d.generated_at);
-    } catch (e) {
-      toast('加载失败：' + e.message);
+    const t0 = (window.performance && performance.now) ? performance.now() : Date.now();
+    const grab = (p) => api(p).then(d => ({ ok: true, d })).catch(e => ({ ok: false, e: e.message }));
+    const [snap, sec, dep] = await Promise.all([
+      grab('/api/control/snapshot'),
+      grab('/api/security/overview?limit=60'),
+      grab('/api/control/deploy'),
+    ]);
+    if (snap.ok) {
+      state.data = snap.d;
+      render(snap.d);
+      $('#stamp').textContent = '更新于 ' + fmtTime(snap.d.generated_at);
+    } else {
+      toast('加载失败：' + snap.e);
     }
-    await loadSecurity();
-    await loadDeploy();
+    if (sec.ok) {
+      state.security = sec.d;
+      renderSecurity(sec.d);
+    } else if ($('#fw-stats')) {
+      $('#fw-stats').innerHTML = '<div class="empty-note">安全数据读取失败：' + esc(sec.e) + '</div>';
+    }
+    if (dep.ok) renderDeploy(dep.d);
+    else if ($('#deploy')) $('#deploy').innerHTML = '<div class="empty-note">读取失败：' + esc(dep.e) + '</div>';
+    const ms = ((window.performance && performance.now) ? performance.now() : Date.now()) - t0;
+    const stamp = $('#stamp');
+    if (stamp) stamp.title = '加载耗时 ' + Math.round(ms) + ' ms';
+    console.log('[control] loaded in', Math.round(ms), 'ms');
   }
 
   // ---------------- 部署信息 ----------------
-  async function loadDeploy() {
+  function renderDeploy(d) {
     const box = $('#deploy');
     if (!box) return;
     try {
-      const d = await api('/api/control/deploy');
       const mb = d.db_size ? (d.db_size / 1048576).toFixed(2) + ' MB' : '—';
       const up = d.uptime_s ? Math.round(d.uptime_s / 60) + ' 分钟' : '—';
       box.innerHTML = `
@@ -229,6 +256,29 @@
       if (box) box.innerHTML = '<div class="empty-note">安全数据读取失败：' + esc(e.message) + '</div>';
     }
   }
+  // 事件详情:完整 UA / 请求头 / 正文
+  function eventDetail(e) {
+    const L = [];
+    L.push('时间: ' + fmtTime(e.ts));
+    L.push('来源 IP: ' + e.ip);
+    L.push('类型: ' + e.kind + '   级别: ' + e.severity);
+    L.push('结果: ' + (e.action === 'blocked' ? '已拦截' : '已记录'));
+    if (e.rule) L.push('命中规则: ' + e.rule);
+    L.push('请求: ' + (e.method || '-') + ' ' + (e.path || '-'));
+    L.push('说明: ' + (e.detail || '-'));
+    L.push('User-Agent: ' + (e.ua || '-'));
+    if (e.headers) {
+      let h = {};
+      try { h = JSON.parse(e.headers); } catch (_) {}
+      const keys = Object.keys(h || {});
+      if (keys.length) {
+        L.push('请求头:');
+        for (const k of keys) L.push('  ' + k + ': ' + h[k]);
+      }
+    }
+    if (e.payload) L.push('请求正文: ' + e.payload);
+    return L.join('\n');
+  }
 
   function renderSecurity(d) {
     const s = d.stats || {};
@@ -248,7 +298,7 @@
     const agentEl = $('#fw-agent');
     if (agentEl) {
       agentEl.textContent = 'agent · 自检 ' + agent.checks + ' 次 · 失败 ' + agent.failures +
-        ' 次 · 上次 ' + (agent.lastCheckAt ? fmtTime(agent.lastCheckAt) : '—') +
+        ' 次 · 自动补规则 ' + (agent.fixes || 0) + ' 条 · 上次 ' + (agent.lastCheckAt ? fmtTime(agent.lastCheckAt) : '—') +
         (agent.lastCheckOk === false ? ' · ⚠ 自检未通过' : ' · 正常');
     }
 
@@ -275,7 +325,9 @@
         row.innerHTML =
           '<span class="t">' + (b.until ? fmtTime(b.until) : '—') + '</span>' +
           '<span class="ip">' + esc(b.ip) + '</span>' +
-          '<span class="d">' + esc(b.reason || '') + ' · ' + (b.count || 1) + ' 次</span>' +
+          '<span class="d">' + esc(b.reason || '') +
+          (b.rule ? ' · 规则 ' + esc(b.rule) : '') +
+          ' · ' + (b.count || 1) + ' 次 · 剩余 ' + fmtRemain(b.remaining_s) + '</span>' +
           '<span class="a blocked">封禁中</span>';
         const btn = el('button', { class: 'unblock' }, '解封');
         btn.addEventListener('click', async () => {
@@ -304,16 +356,66 @@
       ev.appendChild(el('div', { class: 'empty-note' }, '暂无安全事件 —— 一切正常'));
       return;
     }
+    const bannedNow = new Set(ips.map(b => b.ip));
     for (const e of events) {
-      const row = el('div', { class: 'event' });
-      row.innerHTML =
+      const row = el('div', { class: 'event event-row' });
+      const top = el('div', { class: 'event-top' });
+      top.innerHTML =
         '<span class="t">' + fmtTime(e.ts) + '</span>' +
         '<span class="ip">' + esc(e.ip) + '</span>' +
         '<span class="k">' + esc(e.kind) + '</span>' +
         '<span class="d">' + esc(e.detail || '') + '</span>' +
         '<span class="a ' + (e.action === 'blocked' ? 'blocked' : 'logged') + '">' +
         (e.action === 'blocked' ? '已拦截' : '已记录') + '</span>';
+      row.appendChild(top);
+
+      // 一键封禁 / 解封
+      const isBanned = bannedNow.has(e.ip);
+      const banBtn = el('button', { class: 'unblock' }, isBanned ? '解封' : '封禁');
+      banBtn.addEventListener('click', async () => {
+        banBtn.disabled = true;
+        try {
+          if (isBanned) {
+            await api('/api/security/unblock', { method: 'POST', body: { ip: e.ip } });
+            toast('已解封 ' + e.ip);
+          } else {
+            const ok = await askConfirm('封禁 IP', '把 ' + e.ip + ' 封 60 分钟?', '封禁');
+            if (!ok) { banBtn.disabled = false; return; }
+            await api('/api/security/block', {
+              method: 'POST',
+              body: { ip: e.ip, minutes: 60, reason: '控制台手动封禁:' + e.kind, rule: e.kind },
+            });
+            toast('已封禁 ' + e.ip);
+          }
+          await loadSecurity();
+        } catch (err) {
+          toast('操作失败：' + err.message);
+          banBtn.disabled = false;
+        }
+      });
+      top.appendChild(banBtn);
+
+      // 详情(点开看完整 UA / 请求头 / 正文)
+      const det = el('details', { class: 'event-detail' });
+      det.innerHTML = '<summary>详情</summary><pre>' + esc(eventDetail(e)) + '</pre>';
+      row.appendChild(det);
       ev.appendChild(row);
+    }
+
+    // agent 自己补的规则
+    const rules = d.rules || [];
+    if (rules.length) {
+      const wrap = el('div', { class: 'events' });
+      wrap.appendChild(el('h3', { class: 'sub-title' }, 'agent 自动补的规则'));
+      for (const r of rules) {
+        const row = el('div', { class: 'event' });
+        row.innerHTML =
+          '<span class="t">' + fmtTime(r.created_at) + '</span>' +
+          '<span class="k">' + esc(r.kind) + '</span>' +
+          '<span class="d">' + esc(r.scope) + ' · ' + esc(r.pattern) + ' · ' + esc(r.source) + '</span>';
+        wrap.appendChild(row);
+      }
+      box.appendChild(wrap);
     }
   }
 
@@ -383,25 +485,42 @@
     for (const c of d.conversations) {
       const box = el('div', { class: 'convo' });
       const head = el('div', { class: 'convo-head' });
-      head.innerHTML = `<span style="color:#8b5cf6">${esc(c.user_a.username)}</span><span class="arrow">↔</span><span style="color:#3b82f6">${esc(c.user_b.username)}</span><span style="color:var(--muted);font-weight:400;font-size:12px">（${c.messages.length} 条）</span>`;
+      head.innerHTML = `<span style="color:#8b5cf6">${esc(c.user_a.username)}</span><span class="arrow">↔</span><span style="color:#3b82f6">${esc(c.user_b.username)}</span><span style="color:var(--muted);font-weight:400;font-size:12px">（${c.message_count || 0} 条）</span>`;
       box.appendChild(head);
       const ms = el('div', { class: 'msgs' });
-      if (!c.messages.length) {
-        ms.appendChild(el('div', { class: 'empty-note' }, '（无消息）'));
-      }
-      for (const m of c.messages) {
-        const line = el('div', { class: 'msg-line' + (m.type === 'image' ? ' image' : '') });
-        line.innerHTML = `<span class="who">${esc(m.sender)}</span>${m.type === 'image' ? '[图片]' : esc(m.content)}<span class="when">${fmtTime(m.created_at)}</span>`;
-        ms.appendChild(line);
-      }
       box.appendChild(ms);
+      // 消息按需拉 —— 全量拉是控制台打开慢的主因。
+      const more = el('button', { class: 'btn tiny' }, '查看消息');
+      more.addEventListener('click', async () => {
+        more.disabled = true;
+        more.textContent = '加载中…';
+        try {
+          const r = await api('/api/control/conversation/' + encodeURIComponent(c.conv_id));
+          ms.innerHTML = '';
+          if (!r.messages || !r.messages.length) {
+            ms.appendChild(el('div', { class: 'empty-note' }, '（无消息）'));
+          } else {
+            for (const m of r.messages) {
+              const line = el('div', { class: 'msg-line' + (m.type === 'image' ? ' image' : '') });
+              line.innerHTML = `<span class="who">${esc(m.sender)}</span>${m.type === 'image' ? '[图片]' : esc(m.content)}<span class="when">${fmtTime(m.created_at)}</span>`;
+              ms.appendChild(line);
+            }
+          }
+          more.remove();
+        } catch (e) {
+          more.disabled = false;
+          more.textContent = '查看消息';
+          toast('加载消息失败：' + e.message);
+        }
+      });
+      box.appendChild(more);
       cw.appendChild(box);
     }
 
     // official group messages
     const gw = $('#groups');
     gw.innerHTML = '';
-    $('#group-count').textContent = d.group_messages.length;
+    $('#group-count').textContent = (d.group_messages || []).length;
     if (!d.group_messages.length) {
       gw.appendChild(el('div', { class: 'empty-note' }, '官方群暂无消息'));
     } else {
@@ -429,6 +548,33 @@
 
   // ---------------- actions ----------------
   $('#btn-refresh').addEventListener('click', load);
+
+  // 导出安全事件 CSV(要带 token,所以用 fetch 取回 blob 再存)。
+  const exportBtn = $('#btn-export');
+  if (exportBtn) {
+    exportBtn.addEventListener('click', async () => {
+      exportBtn.disabled = true;
+      try {
+        const r = await fetch(API_BASE + '/api/security/events.csv?limit=1000', {
+          headers: { 'Authorization': 'Bearer ' + state.token },
+        });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const blob = await r.blob();
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'vvechat-security-events.csv';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+        toast('已导出 CSV');
+      } catch (e) {
+        toast('导出失败：' + e.message);
+      } finally {
+        exportBtn.disabled = false;
+      }
+    });
+  }
 
   $('#btn-scan').addEventListener('click', async () => {
     const btn = $('#btn-scan');
@@ -488,10 +634,8 @@
         state.data = probe;
         $('#gate').classList.add('hidden');
         $('#panel').classList.remove('hidden');
-        render(probe);
-        $('#stamp').textContent = '更新于 ' + fmtTime(probe.generated_at);
         setTopbarEnabled(true);
-        await loadSecurity();
+        await load();
       }
     } catch (_) {
       state.token = '';

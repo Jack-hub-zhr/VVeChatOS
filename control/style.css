@@ -294,3 +294,33 @@ a { color: var(--green); }
 @supports (padding: max(0px)) {
   .panel { padding-bottom: max(60px, calc(env(safe-area-inset-bottom) + 40px)); }
 }
+
+/* ---------- 事件行:概要 + 可展开详情 ---------- */
+.event.event-row { display: block; padding: 0; }
+.event-row .event-top {
+  display: grid;
+  grid-template-columns: minmax(0, 92px) minmax(0, 124px) minmax(0, 168px) minmax(0, 1fr) minmax(0, 76px) auto;
+  gap: 10px; align-items: center;
+  padding: 8px 10px;
+}
+.event-detail { border-top: 1px solid var(--line-soft); }
+.event-detail > summary {
+  cursor: pointer; font-size: 11px; color: var(--green);
+  padding: 4px 10px; user-select: none;
+}
+.event-detail > summary:hover { text-decoration: underline; }
+.event-detail pre {
+  margin: 0; padding: 6px 12px 10px;
+  font-size: 11px; line-height: 1.55; color: var(--ink-2);
+  white-space: pre-wrap; word-break: break-all;
+  max-height: 320px; overflow: auto;
+}
+.btn.tiny { padding: 4px 10px; font-size: 11px; font-weight: 600; margin: 6px 0 10px; }
+@media (max-width: 760px) {
+  .event-row .event-top { grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; }
+  .event-row .event-top .t { grid-row: 1; grid-column: 1; }
+  .event-row .event-top .a { grid-row: 1; grid-column: 2; }
+  .event-row .event-top .ip { grid-row: 2; grid-column: 1 / -1; }
+  .event-row .event-top .k { grid-row: 3; grid-column: 1 / -1; }
+  .event-row .event-top .d { grid-row: 4; grid-column: 1 / -1; }
+}
