@@ -1365,14 +1365,8 @@
     document.body.classList.remove('theme-light', 'theme-dark', 'theme-auto');
     document.body.classList.add('theme-' + mode);
     document.body.classList.toggle('theme-550c', c550);
-    // 液态玻璃：终端主题(550C)是硬边风格，跟液态玻璃是两种语言，
-    // 深色主题下也收敛一点，别把整页都糊成毛玻璃。
-    try {
-      if (window.LiquidGlass) window.LiquidGlass.setTheme(c550 ? '550c' : 'light');
-    } catch (_) {}
     // Update checkmarks in the menu
     $$('.theme-menu-item').forEach(b => b.classList.toggle('active', b.dataset.theme === mode));
-    if (window.LiquidGlass) { try { window.LiquidGlass.markDirty(); } catch (_) {} }
   }
   // ----- 550C boot theme: local (instant) + server (per-account) -----
   // The switch is stored in localStorage so the boot animation can be
@@ -1494,41 +1488,29 @@
   // ============================================================
   // 液态玻璃
   // ------------------------------------------------------------
-  // 把界面里的玻璃面板和可点元素登记给引擎：面板之间会互相照亮，
-  // 按钮按下去会有果冻形变 + 体积光。
-  // 折射（SVG 位移贴图）只给少数小卡片用 —— 逐像素算一次的成本不低，
-  // 铺满整个界面会拖垮手机。
+  // 界面里的玻璃面板挂上 .glass —— 折射层(.glass::before)和
+  // 高光轮廓(.glass::after)在 liquid-glass.css 里，
+  // 折射滤镜由 liquid-glass.js 建（全站共用一个）。
   // ============================================================
   let _lgApplied = false;
   function applyLiquidGlass() {
     if (!window.LiquidGlass) return;
     const LG = window.LiquidGlass;
-    // 主题可能比液态玻璃引擎先应用完(引擎是异步加载的)——
-    // 那样 setTheme 就没赶上,整页的玻璃模式会卡在错的状态。补一次。
-    try { LG.setTheme(boot550cOn() ? '550c' : 'light'); } catch (_) {}
-    // 会互相照亮的玻璃面板 —— 现在开真折射。
-    // 以前这些面板只有「受光 + 磨砂」,折射被那一层 backdrop blur 冲掉了,
-    // 看上去就是一块磨砂板;把模糊关掉之后,边缘的折射才看得出来。
-    // 玻璃球被拉伸成每个面板自己的宽高:宽的(输入条、弹窗)两端像透镜,
-    // 高的(聊天列)上下两端鼓出来 —— 折射环跟着这条弧度走。
     const panels = [
-      '.topbar', '.list-pane', '.side-nav', '.mobile-tabbar', '.rail-pane',
+      '.topbar', '.list-pane', '.side-nav', '.rail-pane',
       '.right-pane', '.chat-composer', '.ai-composer',
-      '.modal-card', '.theme-menu', '.emoji-picker', '.mention-menu', '.plus-action'
+      '.modal-card', '.theme-menu', '.emoji-picker', '.mention-menu',
+      '.plus-action', '.tabbar'
     ];
     for (const sel of panels) {
-      document.querySelectorAll(sel).forEach(el => LG.register(el, { glow: true, refract: true }));
+      document.querySelectorAll(sel).forEach(el => LG.register(el));
     }
-    // 会果冻形变的可点元素
-    const pressables = '.side-nav-item, .topbar .icon-btn, .btn, .ai-tool-btn, .msg-action-btn, ' +
-                       '.emoji-pick, .cg-emoji-pick, .list-toggle, .settings-action, .plus-action';
-    document.querySelectorAll(pressables).forEach(el => LG.register(el, { press: true }));
     _lgApplied = true;
   }
-  // 弹窗类的小卡片可以上真折射 —— 面积小，成本可控。
+  // 弹窗类的小卡片同样上玻璃
   function applyLiquidGlassToCard(el) {
     if (!window.LiquidGlass || !el) return;
-    window.LiquidGlass.register(el, { glow: true, press: false, refract: true });
+    window.LiquidGlass.register(el);
   }
 
   // The identity card at the top of the sidebar.
