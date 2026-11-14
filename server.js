@@ -4068,9 +4068,10 @@ if (fs.existsSync(FRONTEND_DIR)) {
 // ============================================================
 const CONTROL_DIR = path.join(__dirname, 'control');
 if (fs.existsSync(CONTROL_DIR)) {
+  // ETag + no-cache:每次都跟服务器确认一下,没改就回 304 —— 比 no-store 每次全量下载快得多。
   app.use('/control', express.static(CONTROL_DIR, {
-    maxAge: 0, etag: false, lastModified: false,
-    setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0'),
+    maxAge: 0, etag: true, lastModified: true,
+    setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache'),
   }));
   app.get('/control/*', (req, res) => {
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
