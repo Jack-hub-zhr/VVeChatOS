@@ -728,6 +728,10 @@ app.set('trust proxy', 2);
 
 // ---------- Security headers ----------
 app.use((req, res, next) => {
+  // 请求到达的时刻 —— 必须记在第一个中间件里。
+  // 防火墙中间件排在 express.json 后面,慢速上传(几 KB 拖十几分钟)
+  // 会让防火墙记的时间比攻击真正发生的时间晚很多。
+  req._vveArrivedAt = Date.now();
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');

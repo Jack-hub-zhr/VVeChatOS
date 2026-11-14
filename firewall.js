@@ -313,7 +313,8 @@ function createFirewall(opts) {
   function middleware(req, res, next) {
     stats.scanned++;
     // 请求到达的时刻 —— 事件时间用它,精确等于攻击发生的时间。
-    const arrivedAt = Date.now();
+    // (server 的第一个中间件就打了这个时间戳,body 传得慢也不会偏。)
+    const arrivedAt = req._vveArrivedAt || Date.now();
     req._vveArrivedAt = arrivedAt;
     const ip = getIp(req);
     const b = isBlocked(ip);
