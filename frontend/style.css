@@ -5582,3 +5582,131 @@ body.dark .msg-dots {
 body.dark .msg-banner-inner {
   background: rgba(34, 40, 52, 0.88);
 }
+
+/* ============================================================
+   CAPSULE SHAPE — 除了消息框，其余 UI 全部胶囊型
+   ------------------------------------------------------------
+   「胶囊」不是把圆角调到最大就完事：一个胶囊要求左右两端的
+   圆角等于自身高度的一半。所以面板要么改成真胶囊（上下留白
+   让高度和圆角匹配），要么用 --r-caps 这种「相对高度」的值。
+
+   这里统一给一级面板和独立控件一个胶囊变量，消息框保留 14px
+   （气泡是文字容器，胶囊会把长消息挤成一根）。
+   ============================================================ */
+:root {
+  /* 一级面板的胶囊圆角：面板通常有足够的高度，圆角接近半高 */
+  --r-caps: 26px;
+  /* 控件类的胶囊圆角 */
+  --r-caps-sm: 999px;
+}
+
+/* ---------- 一级面板：胶囊 ---------- */
+.rail-pane,
+.list-pane,
+.right-pane {
+  border-radius: var(--r-caps) !important;
+}
+
+/* 侧栏里的分组列表：胶囊 */
+#chats-list, #groups-list, #friends-list {
+  border-radius: var(--r-caps) !important;
+  overflow: hidden;
+}
+
+/* ---------- 列表行：胶囊 ---------- */
+.list-item,
+.chat-item,
+.ai-chat-item {
+  border-radius: var(--r-caps-sm) !important;
+}
+.list-item::before,
+.chat-item::before {
+  border-radius: inherit;
+}
+
+/* ---------- 搜索框 / 输入框：胶囊 ---------- */
+.search,
+.chat-composer,
+.ai-composer,
+.reply-preview,
+.img-preview,
+.mention-preview {
+  border-radius: var(--r-caps-sm) !important;
+}
+
+/* ---------- 浮层：胶囊 ---------- */
+.modal-card,
+.theme-menu,
+.emoji-picker,
+.mention-menu,
+.ctx-menu,
+.search-suggestions,
+.mobile-menu-sheet,
+.msg-action-bar,
+.msg-popup,
+.auth-card {
+  border-radius: var(--r-caps) !important;
+}
+
+/* ---------- 独立控件：胶囊 ---------- */
+.plus-action,
+.ai-new-chat,
+.more-row,
+.settings-row,
+.icon-btn,
+.btn,
+.admin-pill,
+.tab2,
+.side-nav-item {
+  border-radius: var(--r-caps-sm) !important;
+}
+
+/* 消息框保持原样（文字容器不能是胶囊） */
+.msg-bubble,
+.quote-bubble {
+  border-radius: 14px !important;
+}
+
+/* ============================================================
+   TRANSPARENT GLASS TAKEOVER
+   ------------------------------------------------------------
+   liquid-glass.css is loaded BEFORE this file (so App's own styling
+   wins on things like radius), but that also means every hard-coded
+   `background: rgba(255,255,255,.32)` down here used to paint over
+   the transparent glass and make the panels opaque white.
+
+   These rules take the background back. Specificity is .glass.glass
+   (0,2,0) so it beats a plain .list-pane (0,1,0) without !important.
+
+   The result: panels are ~94% transparent, and the ONLY thing you
+   see is the refracted wallpaper behind them plus the highlight edge.
+   ============================================================ */
+.glass.glass {
+  background: var(--glass-tint) !important;
+  border-color: rgba(255, 255, 255, 0.30) !important;
+}
+.glass.glass.glass--soft {
+  background: var(--glass-tint-soft) !important;
+}
+body.dark .glass.glass {
+  background: var(--glass-tint) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+}
+body.dark .glass.glass.glass--soft {
+  background: var(--glass-tint-soft) !important;
+}
+
+/* The panels that had a hard white tint of their own. Their bottom
+   surfaces still need a hint of colour, so they get a very light one. */
+.glass.glass.topbar,
+.glass.glass.rail-pane,
+.glass.glass.list-pane,
+.glass.glass.right-pane {
+  border-color: rgba(255, 255, 255, 0.22) !important;
+}
+body.dark .glass.glass.topbar,
+body.dark .glass.glass.rail-pane,
+body.dark .glass.glass.list-pane,
+body.dark .glass.glass.right-pane {
+  border-color: rgba(255, 255, 255, 0.09) !important;
+}

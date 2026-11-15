@@ -1500,30 +1500,53 @@
     // Keep this list in sync with the panels that style.css paints — a
     // panel that is NOT here stays flat, and a panel that IS here gets
     // the refraction layer + the highlight edge.
+    // Level 1 — the big surfaces. They own the refraction.
     const panels = [
-      // app shell
       '.topbar', '.rail-pane', '.list-pane', '.right-pane',
-      '.side-nav', '.side-nav-item.active',
-      // composers
+      // composers sit INSIDE right-pane, so they come out nested and
+      // only take the highlight — the refraction stays with the pane
       '.chat-composer', '.ai-composer',
-      // popovers & menus
+      // independent controls
+      '.side-nav-item.active', '.plus-action', '.ai-new-chat', '.tabbar'
+    ];
+    // Level 2 — popovers and menus. A LITTLE extra blur lifts them off
+    // whatever is underneath.
+    const softPanels = [
       '.modal-card', '.auth-card',
       '.theme-menu', '.emoji-picker', '.mention-menu',
       '.ctx-menu', '.search-suggestions',
       '.mobile-menu-sheet', '.msg-action-bar',
-      '.msg-popup', '.msg-banner-inner',
-      // small glassy surfaces that stand on their own
-      '.plus-action', '.ai-new-chat', '.tabbar'
-      // NOTE: rows that live INSIDE a panel (.list-item, .settings-row,
-      // .more-row, .ai-chat-item, .chat-item) must NOT be glassed — an
-      // element with its own backdrop-filter becomes a backdrop root and
-      // stops the parent panel's refraction layer from sampling the
-      // wallpaper. They keep the flat tint instead.
+      '.msg-popup', '.msg-banner-inner'
     ];
     for (const sel of panels) {
       document.querySelectorAll(sel).forEach(el => LG.register(el));
     }
+    for (const sel of softPanels) {
+      document.querySelectorAll(sel).forEach(el => {
+        LG.register(el);
+        el.classList.add('glass--soft');
+      });
+    }
     _lgApplied = true;
+  }
+
+  // ---------- 点击光晕 ----------
+  // 一团白光在点击处晕开、四散。跟着指针走，700ms 后自动消失。
+  let _rippleBound = false;
+  function ensureRippleBound() {
+    if (_rippleBound) return;
+    _rippleBound = true;
+    document.addEventListener('pointerdown', (e) => {
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      // 输入框里打字不该冒光晕
+      if (e.target.closest('input, textarea, [contenteditable]')) return;
+      const r = document.createElement('div');
+      r.className = 'lg-ripple';
+      r.style.setProperty('--x', e.clientX + 'px');
+      r.style.setProperty('--y', e.clientY + 'px');
+      document.body.appendChild(r);
+      setTimeout(() => r.remove(), 700);
+    }, { passive: true });
   }
   // 弹窗类的小卡片同样上玻璃
   function applyLiquidGlassToCard(el) {
@@ -6672,6 +6695,7 @@
       initSplash();         // show full-screen Hello before auth (skipped if logged in)
       startHelloCycler();   // animate the auth tagline across languages
       applyLiquidGlassEarly();  // the login card is glass too
+      ensureRippleBound();      // 点击处晕开一团白光
       $$('.lang-toggle, .lang-btn').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); setLang(lang === 'zh' ? 'en' : 'zh'); }));
       $$('.auth-card .tab').forEach(t => t.addEventListener('click', () => switchAuthTab(t.dataset.tab)));
       $('#btn-pick-avatar')?.addEventListener('click', () => openAvatarPicker(_regAvatar, (v) => { _regAvatar = v; paintRegPreview(); }));
