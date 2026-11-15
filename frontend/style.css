@@ -288,8 +288,6 @@ body.dark [data-liquid-glass] {
   padding: 36px 32px 28px;
   display: flex; flex-direction: column; gap: 18px;
   background: rgba(255, 255, 255, 0.40);
-  backdrop-filter: saturate(180%);
-  -webkit-backdrop-filter: saturate(180%);
   border: 1px solid var(--glass-border);
   border-radius: var(--r-card);
   box-shadow:
@@ -457,8 +455,6 @@ body.dark .auth-card { background: rgba(20, 24, 32, 0.60); border-color: rgba(25
   border: 1px solid var(--glass-border-soft);
   color: var(--ink-2);
   transition: background 0.2s, color 0.2s, transform 0.15s, box-shadow 0.2s;
-  backdrop-filter: saturate(180%);
-  -webkit-backdrop-filter: saturate(180%);
   box-shadow: var(--glass-highlight), 0 4px 12px rgba(30, 80, 150, 0.08);
   flex-shrink: 0;
 }
@@ -503,8 +499,6 @@ body.dark .auth-card { background: rgba(20, 24, 32, 0.60); border-color: rgba(25
   color: #12508f;
   border-radius: 999px;
   background: linear-gradient(135deg, rgba(146, 202, 255, 0.62), rgba(88, 158, 240, 0.44));
-  backdrop-filter: saturate(200%);
-  -webkit-backdrop-filter: saturate(200%);
   border: 1px solid rgba(255, 255, 255, 0.78);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.95),
@@ -815,8 +809,6 @@ body.dark .tab2.active { background: rgba(96, 165, 250, 0.25); color: #93c5fd; }
     0 0 0 0.5px rgba(255, 130, 130, 0.10),
     0 0 20px rgba(255, 255, 255, 0.04),
     0 4px 18px rgba(30, 80, 150, 0.08);
-  backdrop-filter: saturate(180%);
-  -webkit-backdrop-filter: saturate(180%);
 }
 body.dark #chats-list, body.dark #groups-list, body.dark #friends-list {
   background: rgba(20, 24, 32, 0.45);
@@ -1010,8 +1002,6 @@ body.dark .right-pane {
   height: 64px;
   border-bottom: 1px solid var(--glass-border-soft);
   background: rgba(255, 255, 255, 0.20);
-  backdrop-filter: saturate(180%);
-  -webkit-backdrop-filter: saturate(180%);
   flex-shrink: 0;
   min-width: 0;
 }
@@ -1155,7 +1145,6 @@ body.dark .chat-header { background: rgba(20, 24, 32, 0.30); border-bottom-color
   border: 1px solid rgba(255, 255, 255, 0.7);
   box-shadow: 0 4px 14px rgba(30, 80, 150, 0.06);
 
-  -webkit-backdrop-filter: ;
   overflow: hidden;
 }
 .msg-row:not(.me) .msg-bubble,
@@ -1247,8 +1236,6 @@ body.dark .chat-header { background: rgba(20, 24, 32, 0.30); border-bottom-color
   background-image: none !important;
   border: 0 !important;
   box-shadow: none !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
   border-radius: 14px !important;
   overflow: visible !important;
   max-width: min(300px, 62vw) !important;
@@ -1747,8 +1734,6 @@ body.dark .mention-hint-bar { background: rgba(255, 255, 255, 0.05); }
   border-radius: 999px !important;
   border: 1px solid var(--glass-border-soft);
   box-shadow: var(--glass-highlight);
-  backdrop-filter: saturate(180%);
-  -webkit-backdrop-filter: saturate(180%);
   flex-shrink: 0;
   cursor: default;
   /* Soft circular glow that follows the circle shape (no square clip) */
@@ -1767,7 +1752,6 @@ body.dark .mention-hint-bar { background: rgba(255, 255, 255, 0.05); }
   font-size: 10px; padding: 0;
   border-radius: 999px !important;
   box-shadow: none;
-  backdrop-filter: none; -webkit-backdrop-filter: none;
   border: none;
   vertical-align: middle;
   margin-left: 2px;
@@ -1915,8 +1899,6 @@ body.dark .msg-action-bar {
   align-items: center;
   justify-content: center;
   background: rgba(255, 255, 255, 0.78);
-  backdrop-filter: saturate(180%);
-  -webkit-backdrop-filter: saturate(180%);
   cursor: pointer;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
@@ -1945,8 +1927,6 @@ body.dark .msg-action-bar {
 }
 body.dark .hello-splash {
   background: rgba(10, 14, 22, 0.82);
-  backdrop-filter: saturate(180%);
-  -webkit-backdrop-filter: saturate(180%);
 }
 body.dark .hello-splash-text {
   background: linear-gradient(135deg, #45CFE0 0%, #7C9CFF 60%, #4C6FFF 100%);
@@ -2173,7 +2153,6 @@ body.dark .modal-card { background: rgba(20, 24, 32, 0.70); border-color: rgba(2
   position: fixed; inset: 0; z-index: 200;
   background: rgba(28, 42, 62, 0.85);
 
-  -webkit-backdrop-filter: ;
   display: flex; align-items: center; justify-content: center;
   padding: 20px;
   cursor: zoom-out;
@@ -2230,8 +2209,6 @@ body.dark .modal-card { background: rgba(20, 24, 32, 0.70); border-color: rgba(2
   min-width: 160px;
   padding: 6px;
   background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: saturate(200%);
-  -webkit-backdrop-filter: saturate(200%);
   border: 1px solid var(--glass-border);
   border-radius: 16px;
   box-shadow: var(--glass-shadow-lg);
@@ -2271,8 +2248,6 @@ body.dark .modal-card { background: rgba(20, 24, 32, 0.70); border-color: rgba(2
   background: rgba(255, 255, 255, 0.55);
   border: 1px solid var(--glass-border-soft);
   color: var(--ink-2);
-  backdrop-filter: saturate(180%);
-  -webkit-backdrop-filter: saturate(180%);
   box-shadow: 0 4px 14px rgba(30, 80, 150, 0.10), var(--glass-highlight);
   transition: background 0.2s, transform 0.2s, color 0.2s;
   flex-shrink: 0;
@@ -3038,8 +3013,6 @@ body.dark .msg-dots:hover { background: rgba(255, 255, 255, 0.10); }
     border-radius: 12px !important;
     background: rgba(255, 255, 255, 0.55) !important;
     box-shadow: var(--glass-highlight);
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
     flex: 0 0 auto;
     display: inline-flex;
     justify-content: flex-start;
@@ -3061,8 +3034,6 @@ body.dark .msg-dots:hover { background: rgba(255, 255, 255, 0.10); }
      renders as a smear and which also breaks hit-testing on the icons. */
   .mobile-menu-sheet > .icon-btn,
   .mobile-menu-sheet > .theme-toggle {
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
     background: rgba(255, 255, 255, 0.55);
   }
   body.dark .mobile-menu-sheet > .icon-btn,
@@ -3110,8 +3081,6 @@ body.dark .msg-dots:hover { background: rgba(255, 255, 255, 0.10); }
     border: none !important;
     background: transparent !important;
     box-shadow: none !important;
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
     padding: 0;
     flex-shrink: 0;
   }
@@ -3717,8 +3686,6 @@ body.dark .ai-welcome-title { color: var(--ink); }
   color: var(--ink);
   border: 1px solid var(--glass-border-soft);
   border-bottom-left-radius: 6px;
-  backdrop-filter: saturate(180%);
-  -webkit-backdrop-filter: saturate(180%);
   box-shadow: var(--glass-shadow);
 }
 .ai-error { color: var(--danger); font-size: 13px; }
@@ -4683,8 +4650,6 @@ body.dark .mobile-menu-scrim { background: rgba(0, 0, 0, 0.34); }
   padding: 6px;
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: saturate(190%);
-  -webkit-backdrop-filter: saturate(190%);
   border: 1px solid var(--glass-border);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.85),
@@ -5104,8 +5069,6 @@ body.theme-dark .mention-preview .cancel:hover {
   inset: 0;
   pointer-events: auto;
   background: rgba(16, 24, 40, 0.18);
-  backdrop-filter: saturate(140%);
-  -webkit-backdrop-filter: saturate(140%);
   opacity: 0;
   transition: opacity .22s ease;
 }
@@ -5391,8 +5354,6 @@ body.dark .file-card { background: rgba(255, 255, 255, 0.08); }
   border-radius: var(--r-ctrl);
   background: var(--glass-bg-strong);
   border: 1px solid var(--glass-border);
-  backdrop-filter: saturate(180%);
-  -webkit-backdrop-filter: saturate(180%);
   box-shadow: var(--glass-shadow-lg);
   cursor: pointer;
 }
@@ -5436,4 +5397,188 @@ body.dark .file-card { background: rgba(255, 255, 255, 0.08); }
   display: inline-block; margin-bottom: 6px; padding: 2px 9px;
   border-radius: 999px; font-size: 11px; font-weight: 700;
   color: var(--accent); background: rgba(76, 111, 255, .12);
+}
+
+/* ============================================================
+   NO-BLUR FALLBACKS
+   ------------------------------------------------------------
+   Every backdrop-filter was removed from this file (the refraction
+   layer in liquid-glass.css owns the blur now). These rules restore
+   the "it reads as glass" feeling for the small surfaces that are
+   NOT .glass panels: a slightly denser tint plus a hairline edge and
+   a soft shadow. No blur anywhere — nothing here creates a backdrop
+   root, so .glass::before can still refract the wallpaper through
+   them.
+   ============================================================ */
+
+/* ---------- buttons & pills ---------- */
+.icon-btn {
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.75),
+    0 2px 8px rgba(38, 62, 100, 0.10);
+}
+body.dark .icon-btn {
+  background: rgba(255, 255, 255, 0.10);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 2px 8px rgba(0, 0, 0, 0.34);
+}
+
+.beta-tag {
+  background: linear-gradient(135deg, rgba(146, 202, 255, 0.62), rgba(88, 158, 240, 0.44));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -1px 0 rgba(40, 110, 190, 0.14),
+    0 3px 14px rgba(48, 116, 205, 0.30),
+    0 0 0 0.5px rgba(120, 180, 250, 0.30);
+}
+
+.admin-pill {
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    0 2px 8px rgba(38, 62, 100, 0.10);
+}
+body.dark .admin-pill {
+  background: rgba(255, 255, 255, 0.10);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 2px 8px rgba(0, 0, 0, 0.34);
+}
+.admin-pill.admin-pill-xs {
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.theme-toggle {
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.75),
+    0 2px 8px rgba(38, 62, 100, 0.10);
+}
+body.dark .theme-toggle {
+  background: rgba(20, 24, 32, 0.66);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 2px 8px rgba(0, 0, 0, 0.34);
+}
+
+/* ---------- surfaces ---------- */
+.auth-card {
+  background: rgba(255, 255, 255, 0.80);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 24px 70px rgba(30, 80, 150, 0.20);
+}
+body.dark .auth-card {
+  background: rgba(28, 33, 44, 0.86);
+}
+
+.chat-header {
+  background: rgba(255, 255, 255, 0.34);
+}
+body.dark .chat-header {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+#chats-list, #groups-list, #friends-list {
+  background: rgba(255, 255, 255, 0.44);
+}
+body.dark #chats-list,
+body.dark #groups-list,
+body.dark #friends-list {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.msg-bubble {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    0 2px 10px rgba(38, 62, 100, 0.08);
+}
+.msg-row.me .msg-bubble {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.30),
+    0 4px 16px rgba(76, 111, 255, 0.24);
+}
+
+.ai-bubble.bot {
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 3px 12px rgba(38, 62, 100, 0.10);
+}
+body.dark .ai-bubble.bot {
+  background: rgba(34, 40, 52, 0.86);
+}
+
+.ctx-menu,
+.search-suggestions {
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.88),
+    0 12px 34px rgba(30, 80, 150, 0.22),
+    0 2px 8px rgba(30, 80, 150, 0.10);
+}
+body.dark .ctx-menu,
+body.dark .search-suggestions {
+  background: rgba(26, 31, 42, 0.95);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.10),
+    0 12px 34px rgba(0, 0, 0, 0.55);
+}
+
+.mobile-menu-sheet {
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.90),
+    0 12px 36px rgba(30, 80, 150, 0.22),
+    0 2px 8px rgba(30, 80, 150, 0.10);
+}
+body.dark .mobile-menu-sheet {
+  background: rgba(24, 29, 40, 0.94);
+}
+
+/* ---------- inputs ---------- */
+input, textarea {
+  background: rgba(255, 255, 255, 0.58);
+}
+body.dark input,
+body.dark textarea {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* ---------- full-screen scrims: opaque enough on their own ---------- */
+.lightbox,
+.msg-popup-scrim,
+.mobile-menu-scrim {
+  background: rgba(16, 22, 34, 0.62);
+}
+body.dark .lightbox,
+body.dark .msg-popup-scrim,
+body.dark .mobile-menu-scrim {
+  background: rgba(0, 0, 0, 0.68);
+}
+
+/* ---------- the 550C boot splash ---------- */
+.hello-splash {
+  background: rgba(10, 13, 18, 0.94);
+}
+body.dark .hello-splash {
+  background: rgba(6, 8, 12, 0.96);
+}
+
+/* ---------- small dots next to a message ---------- */
+.msg-dots {
+  background: rgba(255, 255, 255, 0.42);
+}
+body.dark .msg-dots {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+/* ---------- the banner strip ---------- */
+.msg-banner-inner {
+  background: rgba(255, 255, 255, 0.80);
+}
+body.dark .msg-banner-inner {
+  background: rgba(34, 40, 52, 0.88);
 }

@@ -1496,11 +1496,29 @@
   function applyLiquidGlass() {
     if (!window.LiquidGlass) return;
     const LG = window.LiquidGlass;
+    // Every surface that should read as a sheet of liquid glass.
+    // Keep this list in sync with the panels that style.css paints — a
+    // panel that is NOT here stays flat, and a panel that IS here gets
+    // the refraction layer + the highlight edge.
     const panels = [
-      '.topbar', '.list-pane', '.side-nav', '.rail-pane',
-      '.right-pane', '.chat-composer', '.ai-composer',
-      '.modal-card', '.theme-menu', '.emoji-picker', '.mention-menu',
-      '.plus-action', '.tabbar'
+      // app shell
+      '.topbar', '.rail-pane', '.list-pane', '.right-pane',
+      '.side-nav', '.side-nav-item.active',
+      // composers
+      '.chat-composer', '.ai-composer',
+      // popovers & menus
+      '.modal-card', '.auth-card',
+      '.theme-menu', '.emoji-picker', '.mention-menu',
+      '.ctx-menu', '.search-suggestions',
+      '.mobile-menu-sheet', '.msg-action-bar',
+      '.msg-popup', '.msg-banner-inner',
+      // small glassy surfaces that stand on their own
+      '.plus-action', '.ai-new-chat', '.tabbar'
+      // NOTE: rows that live INSIDE a panel (.list-item, .settings-row,
+      // .more-row, .ai-chat-item, .chat-item) must NOT be glassed — an
+      // element with its own backdrop-filter becomes a backdrop root and
+      // stops the parent panel's refraction layer from sampling the
+      // wallpaper. They keep the flat tint instead.
     ];
     for (const sel of panels) {
       document.querySelectorAll(sel).forEach(el => LG.register(el));
@@ -2674,6 +2692,7 @@
     const canReply = !m.is_deleted;
     const bar = document.createElement('div');
     bar.className = 'msg-action-bar';
+    applyLiquidGlassToCard(bar);
     // Each action button has a Chinese tooltip explaining what it does.
     // Tooltips are shown both via native title (hover) and a visible label
     // above each icon so they're always readable on touch devices.
@@ -2980,6 +2999,7 @@
       dropdown = document.createElement('div');
       dropdown.id = 'search-suggestions';
       dropdown.className = 'search-suggestions hidden';
+      applyLiquidGlassToCard(dropdown);
       s.appendChild(dropdown);
     }
     input.addEventListener('input', (e) => {
