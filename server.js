@@ -4084,6 +4084,13 @@ if (fs.existsSync(CONTROL_DIR)) {
   app.get('*', (req, res, next) => {
     const p = req.path || '';
     if (p.startsWith('/api/') || p.startsWith('/socket.io/')) return next();
+    // A missing ASSET must 404, not fall back to the SPA shell. Handing
+    // HTML back for a missing .js/.css makes the browser fail on the MIME
+    // type and the page silently half-works. The fallback is for ROUTES
+    // (no extension), not for files.
+    if (/\.[a-z0-9]{2,5}$/i.test(p)) {
+      return res.status(404).type('text/plain').send('Not found');
+    }
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
     // The SPA shell: gzip it, but always revalidate it — it points at
     // the versioned assets.
