@@ -1531,6 +1531,17 @@
     window.LiquidGlass.register(el);
   }
 
+  // Glass the surfaces that exist before the app shell does — the login
+  // card in particular. renderAll() only runs once the user is signed in,
+  // so without this the auth screen never gets the treatment.
+  function applyLiquidGlassEarly() {
+    if (!window.LiquidGlass) return;
+    const early = ['.auth-card', '.modal-card', '.theme-menu', '.emoji-picker'];
+    for (const sel of early) {
+      document.querySelectorAll(sel).forEach(el => window.LiquidGlass.register(el));
+    }
+  }
+
   // The identity card at the top of the sidebar.
   function renderSideMe() {
     const av = $('#side-avatar');
@@ -3523,6 +3534,7 @@
     return new Promise((resolve) => {
       const mask = document.createElement('div');
       mask.className = 'ask-confirm';
+      applyLiquidGlassToCard(mask.querySelector('.modal-card'));
       mask.innerHTML = `
         <div class="ask-confirm-mask"></div>
         <div class="modal-card ask-confirm-card moment-draft-card">
@@ -6659,6 +6671,7 @@
       window.addEventListener('resize', updateUiScale);
       initSplash();         // show full-screen Hello before auth (skipped if logged in)
       startHelloCycler();   // animate the auth tagline across languages
+      applyLiquidGlassEarly();  // the login card is glass too
       $$('.lang-toggle, .lang-btn').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); setLang(lang === 'zh' ? 'en' : 'zh'); }));
       $$('.auth-card .tab').forEach(t => t.addEventListener('click', () => switchAuthTab(t.dataset.tab)));
       $('#btn-pick-avatar')?.addEventListener('click', () => openAvatarPicker(_regAvatar, (v) => { _regAvatar = v; paintRegPreview(); }));
