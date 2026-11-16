@@ -41,13 +41,18 @@
   --glass-bg-frost: rgba(255, 255, 255, 0.20);
   --glass-border: rgba(255, 255, 255, 0.72);
   --glass-border-soft: rgba(255, 255, 255, 0.48);
+  --glass-blur: 34px;
+  --glass-blur-strong: 48px;
   --glass-shadow: 0 10px 34px rgba(38, 62, 100, 0.10);
   --glass-shadow-lg: 0 22px 68px rgba(38, 62, 100, 0.16);
   --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.85);
   --glass-chromatic: 0 0 0 0.5px rgba(255, 90, 90, 0.10), 0 0 0 1px rgba(80, 80, 255, 0.06);
 
-  /* 磨砂统一由 .glass::before 的 backdrop-filter 负责(liquid-glass.css)。
-     这里不再分层给模糊度 —— 散落的 blur 会跟玻璃的折射互相打架。 */
+  /* 分层玻璃:UI 层级越高,身后的背景越模糊。
+     第一层(主面板/壁纸)完全不糊 —— 折射要看得见;
+     卡片与控件第二层,弹窗与菜单第三层。 */
+  --blur-l2: 8px;
+  --blur-l3: 18px;
 
   /* Accent */
   --accent: #4C6FFF;
@@ -247,11 +252,39 @@ input::placeholder, textarea::placeholder { color: var(--muted-2); }
    ============================================================ */
 
 /* ============================================================
-   GLASS BASE — 已迁到 liquid-glass.css
-   ⚠️ 面板本身绝不能再写 backdrop-filter：
-   面板一旦是 backdrop root，.glass::before 的折射就采不到壁纸，
-   折射会静默失效（表现为面板「没反应」，但看不出报错）。
+   SOFT LIGHT GLASS UTILITY
+   Center frosted + edge highlights (iOS-style illuminated glass)
    ============================================================ */
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: saturate(180%);
+  -webkit-backdrop-filter: saturate(180%);
+  border: 1px solid var(--glass-border);
+  /* Inner top highlight + inner bottom edge + outer soft glow + drop shadow */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.04),
+    0 0 0 0.5px rgba(255, 130, 130, 0.10),
+    0 0 30px rgba(255, 255, 255, 0.05),
+    0 8px 28px rgba(30, 80, 150, 0.10),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  border-radius: var(--r-card);
+}
+
+.glass-strong {
+  background: var(--glass-bg-strong);
+  backdrop-filter: saturate(180%);
+  -webkit-backdrop-filter: saturate(180%);
+  border: 1px solid var(--glass-border);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.05),
+    0 0 0 0.5px rgba(255, 130, 130, 0.14),
+    0 0 40px rgba(255, 255, 255, 0.08),
+    0 12px 40px rgba(30, 80, 150, 0.14),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  border-radius: var(--r-card);
+}
 
 /* (Liquid glass effect removed — back to pure CSS frosted glass) */
 
@@ -288,6 +321,8 @@ body.dark [data-liquid-glass] {
   padding: 36px 32px 28px;
   display: flex; flex-direction: column; gap: 18px;
   background: rgba(255, 255, 255, 0.40);
+  backdrop-filter: saturate(180%);
+  -webkit-backdrop-filter: saturate(180%);
   border: 1px solid var(--glass-border);
   border-radius: var(--r-card);
   box-shadow:
@@ -455,6 +490,8 @@ body.dark .auth-card { background: rgba(20, 24, 32, 0.60); border-color: rgba(25
   border: 1px solid var(--glass-border-soft);
   color: var(--ink-2);
   transition: background 0.2s, color 0.2s, transform 0.15s, box-shadow 0.2s;
+  backdrop-filter: blur(var(--blur-l2)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--blur-l2)) saturate(180%);
   box-shadow: var(--glass-highlight), 0 4px 12px rgba(30, 80, 150, 0.08);
   flex-shrink: 0;
 }
@@ -499,6 +536,8 @@ body.dark .auth-card { background: rgba(20, 24, 32, 0.60); border-color: rgba(25
   color: #12508f;
   border-radius: 999px;
   background: linear-gradient(135deg, rgba(146, 202, 255, 0.62), rgba(88, 158, 240, 0.44));
+  backdrop-filter: blur(var(--blur-l2)) saturate(200%);
+  -webkit-backdrop-filter: blur(var(--blur-l2)) saturate(200%);
   border: 1px solid rgba(255, 255, 255, 0.78);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.95),
@@ -555,8 +594,8 @@ body.theme-dark .beta-tag {
   border-radius: 0;
   overflow: hidden;
   background: rgba(255, 255, 255, 0.10);
-  
-  
+  backdrop-filter: saturate(180%);
+  -webkit-backdrop-filter: saturate(180%);
   border: none;
   box-shadow: none;
 }
@@ -571,8 +610,8 @@ body.dark .app-shell { background: rgba(20, 24, 32, 0.30); border-color: rgba(25
   height: 60px;
   border-bottom: 1px solid var(--glass-border-soft);
   background: rgba(255, 255, 255, 0.20);
-  
-  
+  backdrop-filter: saturate(180%);
+  -webkit-backdrop-filter: saturate(180%);
   flex-shrink: 0;
   z-index: 5;
 }
@@ -631,8 +670,8 @@ body.dark .brand-name { text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4); }
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.30),
     0 8px 24px rgba(30, 80, 150, 0.10);
-  
-  
+  backdrop-filter: saturate(180%);
+  -webkit-backdrop-filter: saturate(180%);
   flex-shrink: 0;
   overflow: hidden;
 }
@@ -652,8 +691,8 @@ body.dark .rail-pane {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.30),
     0 8px 24px rgba(30, 80, 150, 0.10);
-  
-  
+  backdrop-filter: saturate(180%);
+  -webkit-backdrop-filter: saturate(180%);
   flex-shrink: 0;
   overflow: hidden;
   transition: width 0.28s cubic-bezier(0.22, 1, 0.36, 1),
@@ -730,8 +769,11 @@ body.dark .list-me .avatar.md { color: #e6ecf5; }
   border-radius: 22px;
   border: 1px solid var(--glass-border);
   background: rgba(255, 255, 255, 0.12);
-  /* 磨砂交给 .glass::before —— 消息文字压在壁纸上,不磨会花,
-     但折射要看得见,所以模糊量由 --glass-blur 统一控制。 */
+  /* 聊天区只留一点点模糊:消息文字直接压在壁纸上,完全不清会花,
+     但也不能多 —— 背景要看得清(第一层最透)。
+     4px 把壁纸上那些亮丝带化成柔光,结构还在。 */
+  backdrop-filter: blur(4px) saturate(180%);
+  -webkit-backdrop-filter: blur(4px) saturate(180%);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.20),
     0 8px 24px rgba(30, 80, 150, 0.08);
@@ -746,8 +788,8 @@ body.dark .list-me .avatar.md { color: #e6ecf5; }
   border: 1px solid var(--glass-border-soft);
   border-radius: var(--r-pill);
   align-self: flex-start;
-  
-  
+  backdrop-filter: saturate(180%);
+  -webkit-backdrop-filter: saturate(180%);
 }
 body.dark .tabbar { background: rgba(255, 255, 255, 0.06); }
 .tab2 {
@@ -809,6 +851,8 @@ body.dark .tab2.active { background: rgba(96, 165, 250, 0.25); color: #93c5fd; }
     0 0 0 0.5px rgba(255, 130, 130, 0.10),
     0 0 20px rgba(255, 255, 255, 0.04),
     0 4px 18px rgba(30, 80, 150, 0.08);
+  backdrop-filter: saturate(180%);
+  -webkit-backdrop-filter: saturate(180%);
 }
 body.dark #chats-list, body.dark #groups-list, body.dark #friends-list {
   background: rgba(20, 24, 32, 0.45);
@@ -1002,6 +1046,8 @@ body.dark .right-pane {
   height: 64px;
   border-bottom: 1px solid var(--glass-border-soft);
   background: rgba(255, 255, 255, 0.20);
+  backdrop-filter: saturate(180%);
+  -webkit-backdrop-filter: saturate(180%);
   flex-shrink: 0;
   min-width: 0;
 }
@@ -1145,6 +1191,7 @@ body.dark .chat-header { background: rgba(20, 24, 32, 0.30); border-bottom-color
   border: 1px solid rgba(255, 255, 255, 0.7);
   box-shadow: 0 4px 14px rgba(30, 80, 150, 0.06);
 
+  -webkit-backdrop-filter: ;
   overflow: hidden;
 }
 .msg-row:not(.me) .msg-bubble,
@@ -1236,6 +1283,8 @@ body.dark .chat-header { background: rgba(20, 24, 32, 0.30); border-bottom-color
   background-image: none !important;
   border: 0 !important;
   box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
   border-radius: 14px !important;
   overflow: visible !important;
   max-width: min(300px, 62vw) !important;
@@ -1286,8 +1335,8 @@ body.dark .chat-header { background: rgba(20, 24, 32, 0.30); border-bottom-color
   padding: 12px 16px 14px;
   border-top: 1px solid var(--glass-border-soft);
   background: rgba(255, 255, 255, 0.20);
-  
-  
+  backdrop-filter: blur(var(--blur-l2)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--blur-l2)) saturate(180%);
   flex-shrink: 0;
   display: flex; flex-direction: column; gap: 8px;
 }
@@ -1440,8 +1489,8 @@ body.dark .mention-hint-bar { background: rgba(255, 255, 255, 0.05); }
   width: 260px; max-height: 230px; overflow-y: auto;
   padding: 6px;
   background: rgba(255, 255, 255, 0.88);
-  
-  
+  backdrop-filter: blur(var(--blur-l2)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--blur-l2)) saturate(180%);
   border: 1px solid var(--glass-border);
   border-radius: 16px;
   box-shadow: var(--glass-shadow-lg);
@@ -1546,7 +1595,7 @@ body.dark .mention-hint-bar { background: rgba(255, 255, 255, 0.05); }
   width: 320px; max-height: 260px; overflow-y: auto;
   padding: 10px;
   background: rgba(255, 255, 255, 0.85);
-  
+  backdrop-filter: blur(var(--blur-l2)) saturate(180%);
   border: 1px solid var(--glass-border);
   border-radius: 18px;
   box-shadow: var(--glass-shadow-lg);
@@ -1734,6 +1783,8 @@ body.dark .mention-hint-bar { background: rgba(255, 255, 255, 0.05); }
   border-radius: 999px !important;
   border: 1px solid var(--glass-border-soft);
   box-shadow: var(--glass-highlight);
+  backdrop-filter: blur(var(--blur-l2)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--blur-l2)) saturate(180%);
   flex-shrink: 0;
   cursor: default;
   /* Soft circular glow that follows the circle shape (no square clip) */
@@ -1752,6 +1803,7 @@ body.dark .mention-hint-bar { background: rgba(255, 255, 255, 0.05); }
   font-size: 10px; padding: 0;
   border-radius: 999px !important;
   box-shadow: none;
+  backdrop-filter: none; -webkit-backdrop-filter: none;
   border: none;
   vertical-align: middle;
   margin-left: 2px;
@@ -1819,8 +1871,8 @@ body.dark .msg-jack-label {
   display: flex; gap: 6px;
   padding: 7px 8px;
   background: rgba(255, 255, 255, 0.55);
-  
-  
+  backdrop-filter: blur(var(--blur-l2)) saturate(200%);
+  -webkit-backdrop-filter: blur(var(--blur-l2)) saturate(200%);
   border: 1px solid rgba(255, 255, 255, 0.55);
   border-radius: 18px;
   box-shadow:
@@ -1899,6 +1951,8 @@ body.dark .msg-action-bar {
   align-items: center;
   justify-content: center;
   background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(var(--blur-l2)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--blur-l2)) saturate(180%);
   cursor: pointer;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
@@ -1927,6 +1981,8 @@ body.dark .msg-action-bar {
 }
 body.dark .hello-splash {
   background: rgba(10, 14, 22, 0.82);
+  backdrop-filter: saturate(180%);
+  -webkit-backdrop-filter: saturate(180%);
 }
 body.dark .hello-splash-text {
   background: linear-gradient(135deg, #45CFE0 0%, #7C9CFF 60%, #4C6FFF 100%);
@@ -2040,8 +2096,8 @@ body.dark .hello-splash-hint {
   display: flex; flex-direction: column;
   margin: 0 auto;
   background: rgba(255, 255, 255, 0.50);
-  
-  
+  backdrop-filter: blur(var(--blur-l3)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--blur-l3)) saturate(180%);
   border: 1px solid var(--glass-border);
   border-radius: 24px;
   box-shadow:
@@ -2153,6 +2209,7 @@ body.dark .modal-card { background: rgba(20, 24, 32, 0.70); border-color: rgba(2
   position: fixed; inset: 0; z-index: 200;
   background: rgba(28, 42, 62, 0.85);
 
+  -webkit-backdrop-filter: ;
   display: flex; align-items: center; justify-content: center;
   padding: 20px;
   cursor: zoom-out;
@@ -2209,6 +2266,8 @@ body.dark .modal-card { background: rgba(20, 24, 32, 0.70); border-color: rgba(2
   min-width: 160px;
   padding: 6px;
   background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(var(--blur-l3)) saturate(200%);
+  -webkit-backdrop-filter: blur(var(--blur-l3)) saturate(200%);
   border: 1px solid var(--glass-border);
   border-radius: 16px;
   box-shadow: var(--glass-shadow-lg);
@@ -2248,6 +2307,8 @@ body.dark .modal-card { background: rgba(20, 24, 32, 0.70); border-color: rgba(2
   background: rgba(255, 255, 255, 0.55);
   border: 1px solid var(--glass-border-soft);
   color: var(--ink-2);
+  backdrop-filter: blur(var(--blur-l2)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--blur-l2)) saturate(180%);
   box-shadow: 0 4px 14px rgba(30, 80, 150, 0.10), var(--glass-highlight);
   transition: background 0.2s, transform 0.2s, color 0.2s;
   flex-shrink: 0;
@@ -2270,8 +2331,8 @@ body.theme-auto:not(.theme-light):not(.theme-dark) .theme-toggle { color: var(--
   min-width: 150px;
   padding: 6px;
   background: rgba(255, 255, 255, 0.85);
-  
-  
+  backdrop-filter: blur(var(--blur-l3)) saturate(200%);
+  -webkit-backdrop-filter: blur(var(--blur-l3)) saturate(200%);
   border: 1px solid var(--glass-border);
   border-radius: 14px;
   box-shadow: 0 12px 36px rgba(30, 80, 150, 0.20), var(--glass-highlight);
@@ -2369,8 +2430,8 @@ body.dark .theme-menu { background: rgba(20, 24, 32, 0.92); border-color: rgba(2
     overflow: hidden;
     z-index: 10;
     background: rgba(255, 255, 255, 0.40);
-    
-    
+    backdrop-filter: blur(4px) saturate(180%);
+    -webkit-backdrop-filter: blur(4px) saturate(180%);
     border: 1px solid var(--glass-border);
   }
   body.dark .right-pane { background: rgba(20, 24, 32, 0.50); }
@@ -2396,8 +2457,8 @@ body.dark .theme-menu { background: rgba(20, 24, 32, 0.92); border-color: rgba(2
   .topbar {
     height: 48px; padding: 0 10px 0 12px; gap: 6px;
     background: rgba(255, 255, 255, 0.72) !important;
-    
-    
+    backdrop-filter: saturate(180%);
+    -webkit-backdrop-filter: saturate(180%);
   }
   body.dark .topbar { background: rgba(20, 24, 32, 0.72) !important; }
   /* Hide root console bar on small screens (too cramped) */
@@ -3013,6 +3074,8 @@ body.dark .msg-dots:hover { background: rgba(255, 255, 255, 0.10); }
     border-radius: 12px !important;
     background: rgba(255, 255, 255, 0.55) !important;
     box-shadow: var(--glass-highlight);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
     flex: 0 0 auto;
     display: inline-flex;
     justify-content: flex-start;
@@ -3034,6 +3097,8 @@ body.dark .msg-dots:hover { background: rgba(255, 255, 255, 0.10); }
      renders as a smear and which also breaks hit-testing on the icons. */
   .mobile-menu-sheet > .icon-btn,
   .mobile-menu-sheet > .theme-toggle {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
     background: rgba(255, 255, 255, 0.55);
   }
   body.dark .mobile-menu-sheet > .icon-btn,
@@ -3081,6 +3146,8 @@ body.dark .msg-dots:hover { background: rgba(255, 255, 255, 0.10); }
     border: none !important;
     background: transparent !important;
     box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
     padding: 0;
     flex-shrink: 0;
   }
@@ -3686,6 +3753,8 @@ body.dark .ai-welcome-title { color: var(--ink); }
   color: var(--ink);
   border: 1px solid var(--glass-border-soft);
   border-bottom-left-radius: 6px;
+  backdrop-filter: saturate(180%);
+  -webkit-backdrop-filter: saturate(180%);
   box-shadow: var(--glass-shadow);
 }
 .ai-error { color: var(--danger); font-size: 13px; }
@@ -3760,8 +3829,8 @@ body.dark .ai-welcome-title { color: var(--ink); }
   border-radius: 20px;
   background: var(--glass-bg-strong);
   border: 1px solid var(--glass-border-soft);
-  
-  
+  backdrop-filter: blur(var(--blur-l2)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--blur-l2)) saturate(180%);
   box-shadow: var(--glass-highlight), var(--glass-shadow);
 }
 .ai-composer textarea {
@@ -4389,8 +4458,8 @@ body.dark .mobile-menu-scrim { background: rgba(0, 0, 0, 0.34); }
     margin: 0; padding: 5px 6px;
     border-radius: 28px;
     background: rgba(255, 255, 255, 0.72);
-    
-    
+    backdrop-filter: saturate(180%);
+    -webkit-backdrop-filter: saturate(180%);
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.55),
       0 8px 26px rgba(30, 80, 150, 0.18);
@@ -4454,8 +4523,8 @@ body.dark .mobile-menu-scrim { background: rgba(0, 0, 0, 0.34); }
     border-radius: 0 20px 0 0;
     border-top: 0; border-bottom: 0; border-left: 0;
     background: rgba(255, 255, 255, 0.96);
-    
-    
+    backdrop-filter: saturate(180%);
+    -webkit-backdrop-filter: saturate(180%);
     box-shadow: 8px 0 30px rgba(30, 80, 150, 0.22);
   }
   body.dark .app-body.chat-open .list-pane { background: rgba(18, 22, 30, 0.97); }
@@ -4581,8 +4650,8 @@ body.dark .mobile-menu-scrim { background: rgba(0, 0, 0, 0.34); }
     /* 真的不透明 —— 用玻璃变量(0.62)的话底下的助手界面照样透出来,
        一片糊。这里给到 97%,底下几乎看不穿,但边缘还留着玻璃感。 */
     background: rgba(255, 255, 255, 0.97);
-    
-    
+    backdrop-filter: saturate(190%);
+    -webkit-backdrop-filter: saturate(190%);
     box-shadow: 6px 0 28px rgba(30, 80, 150, 0.20);
   }
   body.dark .app-body.ai-active.list-open .list-pane {
@@ -4650,6 +4719,8 @@ body.dark .mobile-menu-scrim { background: rgba(0, 0, 0, 0.34); }
   padding: 6px;
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(var(--blur-l2)) saturate(190%);
+  -webkit-backdrop-filter: blur(var(--blur-l2)) saturate(190%);
   border: 1px solid var(--glass-border);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.85),
@@ -4947,8 +5018,8 @@ body.theme-dark .mention-preview .cancel:hover {
   padding: 8px;
   border-radius: 20px;
   background: var(--glass-bg-strong);
-  
-  
+  backdrop-filter: blur(var(--blur-l3)) saturate(200%);
+  -webkit-backdrop-filter: blur(var(--blur-l3)) saturate(200%);
   border: 1px solid var(--glass-border);
   box-shadow: var(--glass-shadow-lg), var(--glass-highlight);
   animation: userMenuIn 0.16s cubic-bezier(0.22, 1, 0.36, 1) both;
@@ -5069,6 +5140,8 @@ body.theme-dark .mention-preview .cancel:hover {
   inset: 0;
   pointer-events: auto;
   background: rgba(16, 24, 40, 0.18);
+  backdrop-filter: saturate(140%);
+  -webkit-backdrop-filter: saturate(140%);
   opacity: 0;
   transition: opacity .22s ease;
 }
@@ -5086,8 +5159,8 @@ body.theme-dark .mention-preview .cancel:hover {
   padding: 12px 12px 10px;
   border-radius: 26px;
   background: var(--glass-bg-strong);
-  
-  
+  backdrop-filter: blur(var(--blur-l3)) saturate(200%);
+  -webkit-backdrop-filter: blur(var(--blur-l3)) saturate(200%);
   border: 1px solid var(--glass-border);
   box-shadow: var(--glass-shadow-lg), var(--glass-highlight);
   opacity: 0;
@@ -5354,6 +5427,8 @@ body.dark .file-card { background: rgba(255, 255, 255, 0.08); }
   border-radius: var(--r-ctrl);
   background: var(--glass-bg-strong);
   border: 1px solid var(--glass-border);
+  backdrop-filter: blur(var(--blur-l3)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--blur-l3)) saturate(180%);
   box-shadow: var(--glass-shadow-lg);
   cursor: pointer;
 }
@@ -5397,316 +5472,4 @@ body.dark .file-card { background: rgba(255, 255, 255, 0.08); }
   display: inline-block; margin-bottom: 6px; padding: 2px 9px;
   border-radius: 999px; font-size: 11px; font-weight: 700;
   color: var(--accent); background: rgba(76, 111, 255, .12);
-}
-
-/* ============================================================
-   NO-BLUR FALLBACKS
-   ------------------------------------------------------------
-   Every backdrop-filter was removed from this file (the refraction
-   layer in liquid-glass.css owns the blur now). These rules restore
-   the "it reads as glass" feeling for the small surfaces that are
-   NOT .glass panels: a slightly denser tint plus a hairline edge and
-   a soft shadow. No blur anywhere — nothing here creates a backdrop
-   root, so .glass::before can still refract the wallpaper through
-   them.
-   ============================================================ */
-
-/* ---------- buttons & pills ---------- */
-.icon-btn {
-  background: rgba(255, 255, 255, 0.72);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.75),
-    0 2px 8px rgba(38, 62, 100, 0.10);
-}
-body.dark .icon-btn {
-  background: rgba(255, 255, 255, 0.10);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    0 2px 8px rgba(0, 0, 0, 0.34);
-}
-
-.beta-tag {
-  background: linear-gradient(135deg, rgba(146, 202, 255, 0.62), rgba(88, 158, 240, 0.44));
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.95),
-    inset 0 -1px 0 rgba(40, 110, 190, 0.14),
-    0 3px 14px rgba(48, 116, 205, 0.30),
-    0 0 0 0.5px rgba(120, 180, 250, 0.30);
-}
-
-.admin-pill {
-  background: rgba(255, 255, 255, 0.72);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.8),
-    0 2px 8px rgba(38, 62, 100, 0.10);
-}
-body.dark .admin-pill {
-  background: rgba(255, 255, 255, 0.10);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    0 2px 8px rgba(0, 0, 0, 0.34);
-}
-.admin-pill.admin-pill-xs {
-  background: rgba(255, 255, 255, 0.78);
-}
-
-.theme-toggle {
-  background: rgba(255, 255, 255, 0.72);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.75),
-    0 2px 8px rgba(38, 62, 100, 0.10);
-}
-body.dark .theme-toggle {
-  background: rgba(20, 24, 32, 0.66);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    0 2px 8px rgba(0, 0, 0, 0.34);
-}
-
-/* ---------- surfaces ---------- */
-.auth-card {
-  background: rgba(255, 255, 255, 0.80);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.85),
-    0 24px 70px rgba(30, 80, 150, 0.20);
-}
-body.dark .auth-card {
-  background: rgba(28, 33, 44, 0.86);
-}
-
-.chat-header {
-  background: rgba(255, 255, 255, 0.34);
-}
-body.dark .chat-header {
-  background: rgba(255, 255, 255, 0.05);
-}
-
-#chats-list, #groups-list, #friends-list {
-  background: rgba(255, 255, 255, 0.44);
-}
-body.dark #chats-list,
-body.dark #groups-list,
-body.dark #friends-list {
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.msg-bubble {
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.55),
-    0 2px 10px rgba(38, 62, 100, 0.08);
-}
-.msg-row.me .msg-bubble {
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.30),
-    0 4px 16px rgba(76, 111, 255, 0.24);
-}
-
-.ai-bubble.bot {
-  background: rgba(255, 255, 255, 0.82);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.85),
-    0 3px 12px rgba(38, 62, 100, 0.10);
-}
-body.dark .ai-bubble.bot {
-  background: rgba(34, 40, 52, 0.86);
-}
-
-.ctx-menu,
-.search-suggestions {
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.88),
-    0 12px 34px rgba(30, 80, 150, 0.22),
-    0 2px 8px rgba(30, 80, 150, 0.10);
-}
-body.dark .ctx-menu,
-body.dark .search-suggestions {
-  background: rgba(26, 31, 42, 0.95);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.10),
-    0 12px 34px rgba(0, 0, 0, 0.55);
-}
-
-.mobile-menu-sheet {
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.90),
-    0 12px 36px rgba(30, 80, 150, 0.22),
-    0 2px 8px rgba(30, 80, 150, 0.10);
-}
-body.dark .mobile-menu-sheet {
-  background: rgba(24, 29, 40, 0.94);
-}
-
-/* ---------- inputs ---------- */
-input, textarea {
-  background: rgba(255, 255, 255, 0.58);
-}
-body.dark input,
-body.dark textarea {
-  background: rgba(255, 255, 255, 0.08);
-}
-
-/* ---------- full-screen scrims: opaque enough on their own ---------- */
-.lightbox,
-.msg-popup-scrim,
-.mobile-menu-scrim {
-  background: rgba(16, 22, 34, 0.62);
-}
-body.dark .lightbox,
-body.dark .msg-popup-scrim,
-body.dark .mobile-menu-scrim {
-  background: rgba(0, 0, 0, 0.68);
-}
-
-/* ---------- the 550C boot splash ---------- */
-.hello-splash {
-  background: rgba(10, 13, 18, 0.94);
-}
-body.dark .hello-splash {
-  background: rgba(6, 8, 12, 0.96);
-}
-
-/* ---------- small dots next to a message ---------- */
-.msg-dots {
-  background: rgba(255, 255, 255, 0.42);
-}
-body.dark .msg-dots {
-  background: rgba(255, 255, 255, 0.07);
-}
-
-/* ---------- the banner strip ---------- */
-.msg-banner-inner {
-  background: rgba(255, 255, 255, 0.80);
-}
-body.dark .msg-banner-inner {
-  background: rgba(34, 40, 52, 0.88);
-}
-
-/* ============================================================
-   CAPSULE SHAPE — 除了消息框，其余 UI 全部胶囊型
-   ------------------------------------------------------------
-   「胶囊」不是把圆角调到最大就完事：一个胶囊要求左右两端的
-   圆角等于自身高度的一半。所以面板要么改成真胶囊（上下留白
-   让高度和圆角匹配），要么用 --r-caps 这种「相对高度」的值。
-
-   这里统一给一级面板和独立控件一个胶囊变量，消息框保留 14px
-   （气泡是文字容器，胶囊会把长消息挤成一根）。
-   ============================================================ */
-:root {
-  /* 一级面板的胶囊圆角：面板通常有足够的高度，圆角接近半高 */
-  --r-caps: 26px;
-  /* 控件类的胶囊圆角 */
-  --r-caps-sm: 999px;
-}
-
-/* ---------- 一级面板：胶囊 ---------- */
-.rail-pane,
-.list-pane,
-.right-pane {
-  border-radius: var(--r-caps) !important;
-}
-
-/* 侧栏里的分组列表：胶囊 */
-#chats-list, #groups-list, #friends-list {
-  border-radius: var(--r-caps) !important;
-  overflow: hidden;
-}
-
-/* ---------- 列表行：胶囊 ---------- */
-.list-item,
-.chat-item,
-.ai-chat-item {
-  border-radius: var(--r-caps-sm) !important;
-}
-.list-item::before,
-.chat-item::before {
-  border-radius: inherit;
-}
-
-/* ---------- 搜索框 / 输入框：胶囊 ---------- */
-.search,
-.chat-composer,
-.ai-composer,
-.reply-preview,
-.img-preview,
-.mention-preview {
-  border-radius: var(--r-caps-sm) !important;
-}
-
-/* ---------- 浮层：胶囊 ---------- */
-.modal-card,
-.theme-menu,
-.emoji-picker,
-.mention-menu,
-.ctx-menu,
-.search-suggestions,
-.mobile-menu-sheet,
-.msg-action-bar,
-.msg-popup,
-.auth-card {
-  border-radius: var(--r-caps) !important;
-}
-
-/* ---------- 独立控件：胶囊 ---------- */
-.plus-action,
-.ai-new-chat,
-.more-row,
-.settings-row,
-.icon-btn,
-.btn,
-.admin-pill,
-.tab2,
-.side-nav-item {
-  border-radius: var(--r-caps-sm) !important;
-}
-
-/* 消息框保持原样（文字容器不能是胶囊） */
-.msg-bubble,
-.quote-bubble {
-  border-radius: 14px !important;
-}
-
-/* ============================================================
-   TRANSPARENT GLASS TAKEOVER
-   ------------------------------------------------------------
-   liquid-glass.css is loaded BEFORE this file (so App's own styling
-   wins on things like radius), but that also means every hard-coded
-   `background: rgba(255,255,255,.32)` down here used to paint over
-   the transparent glass and make the panels opaque white.
-
-   These rules take the background back. Specificity is .glass.glass
-   (0,2,0) so it beats a plain .list-pane (0,1,0) without !important.
-
-   The result: panels are ~94% transparent, and the ONLY thing you
-   see is the refracted wallpaper behind them plus the highlight edge.
-   ============================================================ */
-.glass.glass {
-  background: var(--glass-tint) !important;
-  border-color: rgba(255, 255, 255, 0.30) !important;
-}
-.glass.glass.glass--soft {
-  background: var(--glass-tint-soft) !important;
-}
-body.dark .glass.glass {
-  background: var(--glass-tint) !important;
-  border-color: rgba(255, 255, 255, 0.14) !important;
-}
-body.dark .glass.glass.glass--soft {
-  background: var(--glass-tint-soft) !important;
-}
-
-/* The panels that had a hard white tint of their own. Their bottom
-   surfaces still need a hint of colour, so they get a very light one. */
-.glass.glass.topbar,
-.glass.glass.rail-pane,
-.glass.glass.list-pane,
-.glass.glass.right-pane {
-  border-color: rgba(255, 255, 255, 0.22) !important;
-}
-body.dark .glass.glass.topbar,
-body.dark .glass.glass.rail-pane,
-body.dark .glass.glass.list-pane,
-body.dark .glass.glass.right-pane {
-  border-color: rgba(255, 255, 255, 0.09) !important;
 }

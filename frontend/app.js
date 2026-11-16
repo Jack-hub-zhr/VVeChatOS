@@ -1365,8 +1365,14 @@
     document.body.classList.remove('theme-light', 'theme-dark', 'theme-auto');
     document.body.classList.add('theme-' + mode);
     document.body.classList.toggle('theme-550c', c550);
+    // 液态玻璃：终端主题(550C)是硬边风格，跟液态玻璃是两种语言，
+    // 深色主题下也收敛一点，别把整页都糊成毛玻璃。
+    try {
+      if (window.LiquidGlass) window.LiquidGlass.setTheme(c550 ? '550c' : 'light');
+    } catch (_) {}
     // Update checkmarks in the menu
     $$('.theme-menu-item').forEach(b => b.classList.toggle('active', b.dataset.theme === mode));
+    if (window.LiquidGlass) { try { window.LiquidGlass.markDirty(); } catch (_) {} }
   }
   // ----- 550C boot theme: local (instant) + server (per-account) -----
   // The switch is stored in localStorage so the boot animation can be
@@ -1488,81 +1494,41 @@
   // ============================================================
   // 液态玻璃
   // ------------------------------------------------------------
-  // 界面里的玻璃面板挂上 .glass —— 折射层(.glass::before)和
-  // 高光轮廓(.glass::after)在 liquid-glass.css 里，
-  // 折射滤镜由 liquid-glass.js 建（全站共用一个）。
+  // 把界面里的玻璃面板和可点元素登记给引擎：面板之间会互相照亮，
+  // 按钮按下去会有果冻形变 + 体积光。
+  // 折射（SVG 位移贴图）只给少数小卡片用 —— 逐像素算一次的成本不低，
+  // 铺满整个界面会拖垮手机。
   // ============================================================
   let _lgApplied = false;
   function applyLiquidGlass() {
     if (!window.LiquidGlass) return;
     const LG = window.LiquidGlass;
-    // Every surface that should read as a sheet of liquid glass.
-    // Keep this list in sync with the panels that style.css paints — a
-    // panel that is NOT here stays flat, and a panel that IS here gets
-    // the refraction layer + the highlight edge.
-    // Level 1 — the big surfaces. They own the refraction.
+    // 主题可能比液态玻璃引擎先应用完(引擎是异步加载的)——
+    // 那样 setTheme 就没赶上,整页的玻璃模式会卡在错的状态。补一次。
+    try { LG.setTheme(boot550cOn() ? '550c' : 'light'); } catch (_) {}
+    // 会互相照亮的玻璃面板 —— 现在开真折射。
+    // 以前这些面板只有「受光 + 磨砂」,折射被那一层 backdrop blur 冲掉了,
+    // 看上去就是一块磨砂板;把模糊关掉之后,边缘的折射才看得出来。
+    // 玻璃球被拉伸成每个面板自己的宽高:宽的(输入条、弹窗)两端像透镜,
+    // 高的(聊天列)上下两端鼓出来 —— 折射环跟着这条弧度走。
     const panels = [
-      '.topbar', '.rail-pane', '.list-pane', '.right-pane',
-      // composers sit INSIDE right-pane, so they come out nested and
-      // only take the highlight — the refraction stays with the pane
-      '.chat-composer', '.ai-composer',
-      // independent controls
-      '.side-nav-item.active', '.plus-action', '.ai-new-chat', '.tabbar'
-    ];
-    // Level 2 — popovers and menus. A LITTLE extra blur lifts them off
-    // whatever is underneath.
-    const softPanels = [
-      '.modal-card', '.auth-card',
-      '.theme-menu', '.emoji-picker', '.mention-menu',
-      '.ctx-menu', '.search-suggestions',
-      '.mobile-menu-sheet', '.msg-action-bar',
-      '.msg-popup', '.msg-banner-inner'
+      '.topbar', '.list-pane', '.side-nav', '.mobile-tabbar', '.rail-pane',
+      '.right-pane', '.chat-composer', '.ai-composer',
+      '.modal-card', '.theme-menu', '.emoji-picker', '.mention-menu', '.plus-action'
     ];
     for (const sel of panels) {
-      document.querySelectorAll(sel).forEach(el => LG.register(el));
+      document.querySelectorAll(sel).forEach(el => LG.register(el, { glow: true, refract: true }));
     }
-    for (const sel of softPanels) {
-      document.querySelectorAll(sel).forEach(el => {
-        LG.register(el);
-        el.classList.add('glass--soft');
-      });
-    }
+    // 会果冻形变的可点元素
+    const pressables = '.side-nav-item, .topbar .icon-btn, .btn, .ai-tool-btn, .msg-action-btn, ' +
+                       '.emoji-pick, .cg-emoji-pick, .list-toggle, .settings-action, .plus-action';
+    document.querySelectorAll(pressables).forEach(el => LG.register(el, { press: true }));
     _lgApplied = true;
   }
-
-  // ---------- 点击光晕 ----------
-  // 一团白光在点击处晕开、四散。跟着指针走，700ms 后自动消失。
-  let _rippleBound = false;
-  function ensureRippleBound() {
-    if (_rippleBound) return;
-    _rippleBound = true;
-    document.addEventListener('pointerdown', (e) => {
-      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-      // 输入框里打字不该冒光晕
-      if (e.target.closest('input, textarea, [contenteditable]')) return;
-      const r = document.createElement('div');
-      r.className = 'lg-ripple';
-      r.style.setProperty('--x', e.clientX + 'px');
-      r.style.setProperty('--y', e.clientY + 'px');
-      document.body.appendChild(r);
-      setTimeout(() => r.remove(), 700);
-    }, { passive: true });
-  }
-  // 弹窗类的小卡片同样上玻璃
+  // 弹窗类的小卡片可以上真折射 —— 面积小，成本可控。
   function applyLiquidGlassToCard(el) {
     if (!window.LiquidGlass || !el) return;
-    window.LiquidGlass.register(el);
-  }
-
-  // Glass the surfaces that exist before the app shell does — the login
-  // card in particular. renderAll() only runs once the user is signed in,
-  // so without this the auth screen never gets the treatment.
-  function applyLiquidGlassEarly() {
-    if (!window.LiquidGlass) return;
-    const early = ['.auth-card', '.modal-card', '.theme-menu', '.emoji-picker'];
-    for (const sel of early) {
-      document.querySelectorAll(sel).forEach(el => window.LiquidGlass.register(el));
-    }
+    window.LiquidGlass.register(el, { glow: true, press: false, refract: true });
   }
 
   // The identity card at the top of the sidebar.
@@ -2726,7 +2692,6 @@
     const canReply = !m.is_deleted;
     const bar = document.createElement('div');
     bar.className = 'msg-action-bar';
-    applyLiquidGlassToCard(bar);
     // Each action button has a Chinese tooltip explaining what it does.
     // Tooltips are shown both via native title (hover) and a visible label
     // above each icon so they're always readable on touch devices.
@@ -3033,7 +2998,6 @@
       dropdown = document.createElement('div');
       dropdown.id = 'search-suggestions';
       dropdown.className = 'search-suggestions hidden';
-      applyLiquidGlassToCard(dropdown);
       s.appendChild(dropdown);
     }
     input.addEventListener('input', (e) => {
@@ -3557,7 +3521,6 @@
     return new Promise((resolve) => {
       const mask = document.createElement('div');
       mask.className = 'ask-confirm';
-      applyLiquidGlassToCard(mask.querySelector('.modal-card'));
       mask.innerHTML = `
         <div class="ask-confirm-mask"></div>
         <div class="modal-card ask-confirm-card moment-draft-card">
@@ -6694,8 +6657,6 @@
       window.addEventListener('resize', updateUiScale);
       initSplash();         // show full-screen Hello before auth (skipped if logged in)
       startHelloCycler();   // animate the auth tagline across languages
-      applyLiquidGlassEarly();  // the login card is glass too
-      ensureRippleBound();      // 点击处晕开一团白光
       $$('.lang-toggle, .lang-btn').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); setLang(lang === 'zh' ? 'en' : 'zh'); }));
       $$('.auth-card .tab').forEach(t => t.addEventListener('click', () => switchAuthTab(t.dataset.tab)));
       $('#btn-pick-avatar')?.addEventListener('click', () => openAvatarPicker(_regAvatar, (v) => { _regAvatar = v; paintRegPreview(); }));

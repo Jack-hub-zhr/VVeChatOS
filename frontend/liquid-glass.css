@@ -1,212 +1,155 @@
 /* ============================================================
-   LIQUID GLASS — 透明玻璃材质
+   LIQUID GLASS — 液态玻璃视觉层
    ------------------------------------------------------------
-   四层结构：
-
-   ① .glass           透明底色 + 胶囊圆角 + 投影
-   ② .glass::before   折射层：SVG 位移贴图把背景掰弯
-   ③ .glass::after    高光轮廓：边缘亮线 + 内阴影
-   ④ .glass:hover     悬停：轮廓更亮、投影更深
-
-   「透明」的意思：底色几乎不遮背景（rgba .06），
-   玻璃感来自折射和高光，不是来自一层白。
-
-   二级界面（弹窗 / 下拉 / 菜单）用 .glass--soft，
-   多一点点模糊，把浮层从底层内容里托出来。
-
-   折射引擎在 liquid-glass.js —— 全站只建一个 SVG 滤镜，
-   所有 .glass 共用 url(#lg-refract)。
-
-   ⚠️ 嵌套的 backdrop-filter 会互相采样 → Chrome 渲染成重影。
-   JS 侧 register() 会给有玻璃祖先的元素加 .glass-nested，
-   那一层只有高光，没有折射。
+   折射引擎在 liquid-glass.js（移植自 rdev/liquid-glass-react，MIT）。
+   这一层只管「看起来像液态玻璃」的表面处理：
+     · 面板的玻璃底色 / 描边 / 投影（App 的设计语言，别乱动）
+     · 边缘高光层（.lg-ring，跟着鼠标走 —— rdev 的「边缘吃光」）
+     · 550C 终端主题不折射（硬边等宽字体跟玻璃混在一起会脏）
    ============================================================ */
 
-:root {
-  --glass-blur: 0px;      /* 一级界面：不模糊，只折射 */
-  --glass-blur-soft: 3px; /* 二级界面：一点点模糊 */
-  --glass-sat: 185%;      /* 折射后的饱和度 */
-  --glass-refract: url(#lg-refract);
-  --glass-tint: rgba(255, 255, 255, 0.055);  /* 透明底 */
-  --glass-tint-soft: rgba(255, 255, 255, 0.10);
+/* ---------- 玻璃容器 ---------- */
+.lg-glass {
+  position: relative;
+  isolation: isolate;
+}
+/* 元素本来就有定位（fixed / absolute / sticky）—— 只加隔离层，
+   绝不能改它的 position，否则浮层会被拉回文档流。 */
+.lg-lit-host {
+  isolation: isolate;
 }
 
-/* ---------- ① 基础样式：透明玻璃 ---------- */
-.glass {
-  background: var(--glass-tint);
-  border: 1px solid rgba(255, 255, 255, 0.30);
-  border-radius: var(--r-glass, 999px);
-  box-shadow:
-    0 10px 30px rgba(38, 62, 100, 0.10),
-    0 1px 2px rgba(38, 62, 100, 0.05);
-  transition: background .28s ease, box-shadow .28s ease, transform .18s ease;
-}
-
-/* 定位上下文（::before / ::after 要贴着面板）。
-   用 :where() 把优先级压到 0 —— App 自己的面板样式照常生效，
-   否则整个界面会被统一成同一块玻璃，丢掉品牌层次。 */
-:where(.glass) { position: relative; }
-
-/* ---------- ② 折射层 ---------- */
-.glass::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  z-index: -1;              /* 压在内容下面 —— 文字永远清晰 */
-  pointer-events: none;
-  backdrop-filter: blur(var(--glass-blur)) var(--glass-refract) saturate(var(--glass-sat));
-  -webkit-backdrop-filter: blur(var(--glass-blur)) var(--glass-refract) saturate(var(--glass-sat));
-}
-
-/* Safari 把 backdrop-filter: url(#…) 渲染成一块灰斑，
-   JS 检测到 Safari 会给 body 加 .lg-norefract —— 那儿只留磨砂。 */
-body.lg-norefract .glass::before {
-  backdrop-filter: blur(calc(var(--glass-blur) + 4px)) saturate(var(--glass-sat));
-  -webkit-backdrop-filter: blur(calc(var(--glass-blur) + 4px)) saturate(var(--glass-sat));
-}
-/* 550C 终端主题是硬边风格，不折射也不磨砂。 */
-body.theme-550c .glass::before {
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-
-/* 嵌套：不再叠一层 backdrop-filter（否则 Chrome 把相邻层一起采样，
-   渲染成「层层叠叠」的重影）。这一层只保留高光轮廓。 */
-.glass.glass-nested::before {
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-
-/* ---------- ③ 高光轮廓 ---------- */
-.glass::after {
-  content: '';
+/* ---------- 边缘高光层 ---------- */
+.lg-ring {
   position: absolute;
   inset: 0;
   border-radius: inherit;
   pointer-events: none;
-  z-index: 1;
+  padding: 1.5px;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.55),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.06),
-    inset 0 0 0 0.5px rgba(255, 255, 255, 0.18);
+    0 0 0 .5px rgba(255, 255, 255, .5) inset,
+    0 1px 3px rgba(255, 255, 255, .25) inset,
+    0 1px 4px rgba(0, 0, 0, .35);
+  mix-blend-mode: screen;
+  opacity: .5;
+  transition: opacity .25s ease;
+  z-index: 2;
 }
-body.dark .glass::after {
+body.dark .lg-ring {
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.18),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.26),
-    inset 0 0 0 0.5px rgba(255, 255, 255, 0.06);
-}
-
-/* ---------- ④ 悬停增强 ---------- */
-.glass:hover {
-  background: rgba(255, 255, 255, 0.10);
-  box-shadow:
-    0 18px 44px rgba(38, 62, 100, 0.16),
-    0 2px 6px rgba(38, 62, 100, 0.07);
-}
-.glass:hover::after {
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.85),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.08),
-    inset 0 0 0 0.5px rgba(255, 255, 255, 0.28);
-}
-body.dark .glass:hover {
-  background: rgba(255, 255, 255, 0.09);
-}
-
-/* ---------- 二级界面：多一点点模糊 ---------- */
-.glass--soft {
-  --glass-blur: var(--glass-blur-soft);
-  --glass-tint: var(--glass-tint-soft);
-  background: var(--glass-tint-soft);
+    0 0 0 .5px rgba(255, 255, 255, .28) inset,
+    0 1px 3px rgba(255, 255, 255, .12) inset,
+    0 1px 4px rgba(0, 0, 0, .45);
+  opacity: .42;
 }
 
 /* ============================================================
-   主题变量：透明玻璃在浅/深色下的底色与描边
+   液态玻璃主视觉：浅色主题下把整个 App 的玻璃感往 Apple 的方向拧
    ============================================================ */
-body:not(.theme-550c) {
-  --glass-tint: rgba(255, 255, 255, 0.055);
-  --glass-tint-soft: rgba(255, 255, 255, 0.11);
+body.lg-liquid {
+  /* 更强的对比与饱和 —— 液态玻璃的通透感靠这个，不是靠更白。 */
+  --glass-bg: rgba(255, 255, 255, 0.46);
+  --glass-bg-strong: rgba(255, 255, 255, 0.62);
+  --glass-bg-soft: rgba(255, 255, 255, 0.30);
+  --glass-bg-frost: rgba(255, 255, 255, 0.16);
+  --glass-border: rgba(255, 255, 255, 0.62);
+  --glass-border-soft: rgba(255, 255, 255, 0.36);
+  --glass-blur: 40px;
+  --glass-blur-strong: 56px;
+  --glass-shadow: 0 12px 38px rgba(38, 62, 100, 0.13), 0 1px 2px rgba(38, 62, 100, 0.06);
+  --glass-shadow-lg: 0 26px 76px rgba(38, 62, 100, 0.20), 0 2px 6px rgba(38, 62, 100, 0.07);
+  --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.85), inset 0 -1px 0 rgba(0, 0, 0, 0.04);
 }
-body.dark:not(.theme-550c) {
-  --glass-tint: rgba(255, 255, 255, 0.045);
-  --glass-tint-soft: rgba(255, 255, 255, 0.085);
+body.lg-liquid.dark {
+  --glass-bg: rgba(28, 33, 44, 0.46);
+  --glass-bg-strong: rgba(32, 38, 50, 0.62);
+  --glass-bg-soft: rgba(255, 255, 255, 0.055);
+  --glass-bg-frost: rgba(255, 255, 255, 0.035);
+  --glass-border: rgba(255, 255, 255, 0.115);
+  --glass-border-soft: rgba(255, 255, 255, 0.06);
+  --glass-shadow: 0 12px 38px rgba(0, 0, 0, 0.46), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --glass-shadow-lg: 0 26px 76px rgba(0, 0, 0, 0.62), 0 2px 6px rgba(0, 0, 0, 0.34);
+  --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.13), inset 0 -1px 0 rgba(0, 0, 0, 0.20);
 }
 
-/* ============================================================
-   点击光晕 —— 在点击处晕开一团白光
-   （JS 在 .lg-ripple 上写 --x / --y，CSS 负责扩散动画）
-   ============================================================ */
-.lg-ripple {
-  position: fixed;
-  z-index: 9998;
-  width: 12px; height: 12px;
-  margin: -6px 0 0 -6px;
-  border-radius: 999px;
-  pointer-events: none;
-  background: radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.50) 34%, rgba(255,255,255,0) 68%);
-  transform: translate3d(var(--x, 0px), var(--y, 0px), 0) scale(0.15);
-  opacity: 0;
-  animation: lgRipple 680ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  /* No mix-blend-mode: soft-rendered environments flatten it, and a plain
-     white wash reads the same on both light and dark wallpapers. */
+/* ---------- 关键面板：更强的边缘处理 ---------- */
+/* 通透优先:不再糊。折射由 liquid-glass.js 的滤镜链负责（url(#…)），
+   这里只留饱和度与对比度，混在同一条 backdrop-filter 里会被 JS 的
+   内联样式整体覆盖，所以只作为 JS 加载前的兜底。 */
+body.lg-liquid .list-pane,
+body.lg-liquid .topbar,
+body.lg-liquid .side-nav,
+body.lg-liquid .mobile-tabbar {
+  backdrop-filter: saturate(190%) contrast(1.04);
+  -webkit-backdrop-filter: saturate(190%) contrast(1.04);
+  border-color: var(--glass-border);
 }
-/* 一颗更亮的核心，先炸开再散掉 —— 单靠一圈渐变不够"晕"。 */
-.lg-ripple::after {
+/* 顶部边缘的一道高光 —— 玻璃的「厚度」就靠这条线 */
+body.lg-liquid .list-pane,
+body.lg-liquid .topbar {
+  position: relative;
+}
+body.lg-liquid .list-pane::before,
+body.lg-liquid .topbar::before {
   content: '';
   position: absolute;
-  inset: -4px;
-  border-radius: 999px;
-  background: radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(255,255,255,0.5) 45%, rgba(255,255,255,0) 72%);
-  animation: lgRippleCore 300ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  left: 10%; right: 10%; top: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.75), transparent);
+  pointer-events: none;
+  z-index: 3;
 }
-@keyframes lgRipple {
-  0%   { transform: translate3d(var(--x), var(--y), 0) scale(0.15); opacity: 0; }
-  14%  { opacity: 1; }
-  100% { transform: translate3d(var(--x), var(--y), 0) scale(14); opacity: 0; }
-}
-@keyframes lgRippleCore {
-  0%   { transform: scale(0.1); opacity: 0; }
-  20%  { opacity: 1; }
-  100% { transform: scale(4.5); opacity: 0; }
-}
-/* 深色下光晕更亮更散 */
-body.dark .lg-ripple {
-  background: radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(210,232,255,0.55) 38%, rgba(255,255,255,0) 70%);
+body.lg-liquid.dark .list-pane::before,
+body.lg-liquid.dark .topbar::before {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.20), transparent);
 }
 
-/* ---------- 可点元素：按下有反馈 ---------- */
-.glass.btn, .glass.icon-btn, .glass.side-nav-item, .glass.msg-action-btn,
-.glass.emoji-pick, .glass.ai-tool-btn, .glass.plus-action,
-.glass.ai-chat-item, .glass.ai-new-chat {
+/* ---------- 按钮 / 可点元素：按下有反馈 ---------- */
+body.lg-liquid .btn,
+body.lg-liquid .icon-btn,
+body.lg-liquid .side-nav-item,
+body.lg-liquid .msg-action-btn,
+body.lg-liquid .emoji-pick,
+body.lg-liquid .ai-tool-btn {
   transition: transform .18s cubic-bezier(.22, 1, .36, 1),
               box-shadow .18s ease,
               background .18s ease,
               color .18s ease;
 }
-.glass.btn:active,
-.glass.icon-btn:active,
-.glass.side-nav-item:active,
-.glass.msg-action-btn:active,
-.glass.plus-action:active,
-.glass.ai-chat-item:active {
+body.lg-liquid .btn:active,
+body.lg-liquid .icon-btn:active,
+body.lg-liquid .side-nav-item:active,
+body.lg-liquid .msg-action-btn:active {
   transform: scale(.955);
 }
-/* 小圆角的东西：按压更明显 */
-.glass.icon-btn:active { transform: scale(.88); }
-body.theme-550c .glass.btn:active,
-body.theme-550c .glass.icon-btn:active,
-body.theme-550c .glass.side-nav-item:active,
-body.theme-550c .glass.msg-action-btn:active {
+
+/* ---------- 小圆角的东西：按压更明显 ---------- */
+body.lg-liquid .icon-btn:active,
+body.lg-liquid .cg-emoji-pick:active {
+  transform: scale(.88);
+}
+
+/* ============================================================
+   550C 终端主题 —— 硬边、等宽、不折射。
+   液态玻璃和终端风格是两种语言，混在一起会脏。
+   ============================================================ */
+body.theme-550c .lg-ring { display: none !important; }
+body.theme-550c .btn:active,
+body.theme-550c .icon-btn:active,
+body.theme-550c .side-nav-item:active,
+body.theme-550c .msg-action-btn:active {
   transform: none;
 }
 
 /* ---------- 无障碍：系统说不要动，就别动 ---------- */
 @media (prefers-reduced-motion: reduce) {
-  .glass.btn:active,
-  .glass.icon-btn:active,
-  .glass.side-nav-item:active,
-  .glass.msg-action-btn:active { transform: none; }
-  .lg-ripple { animation-duration: 1ms; }
+  .lg-ring { display: none !important; }
+  body.lg-liquid .btn:active,
+  body.lg-liquid .icon-btn:active,
+  body.lg-liquid .side-nav-item:active,
+  body.lg-liquid .msg-action-btn:active { transform: none; }
 }
