@@ -209,6 +209,7 @@
     if (sec.ok) {
       state.security = sec.d;
       renderSecurity(sec.d);
+      if (state.data) renderKpis(state.data);   // 封禁数要跟着安全数据一起更新
     } else if ($('#fw-stats')) {
       $('#fw-stats').innerHTML = '<div class="empty-note">安全数据读取失败：' + esc(sec.e) + '</div>';
     }
@@ -228,17 +229,17 @@
       const mb = d.db_size ? (d.db_size / 1048576).toFixed(2) + ' MB' : '—';
       const up = d.uptime_s ? Math.round(d.uptime_s / 60) + ' 分钟' : '—';
       box.innerHTML = `
-        <div class="event"><span class="k">网页地址</span>
+        <div class="kv-row"><span class="k">网页地址</span>
           <span class="d"><a href="${esc(d.frontend_url)}" target="_blank" rel="noopener">${esc(d.frontend_url)}</a></span></div>
-        <div class="event"><span class="k">接口地址</span>
+        <div class="kv-row"><span class="k">接口地址</span>
           <span class="d"><code>${esc(d.api_base)}</code></span></div>
-        <div class="event"><span class="k">数据库</span>
+        <div class="kv-row"><span class="k">数据库</span>
           <span class="d"><code>${esc(d.db_file)}</code> · ${mb}</span></div>
-        <div class="event"><span class="k">上传文件</span>
+        <div class="kv-row"><span class="k">上传文件</span>
           <span class="d"><code>${esc(d.upload_dir)}</code> · ${d.upload_count || 0} 个</span></div>
-        <div class="event"><span class="k">运行</span>
+        <div class="kv-row"><span class="k">运行</span>
           <span class="d">Node ${esc(d.node)} · 已运行 ${up}</span></div>
-        ${d.jwt_secret_is_default ? '<div class="event"><span class="k warn">注意</span><span class="d warn">还没设 JWT_SECRET 环境变量 —— 在 Render 里加一个随机值更安全。</span></div>' : ''}
+        ${d.jwt_secret_is_default ? '<div class="kv-row"><span class="k">注意</span><span class="d warn">还没设 JWT_SECRET 环境变量 —— 在 Render 里加一个随机值更安全。</span></div>' : ''}
       `;
     } catch (e) {
       box.innerHTML = '<div class="empty-note">读取失败：' + esc(e.message) + '</div>';
@@ -292,7 +293,8 @@
     const stt = $('#fw-state-text');
     if (st && stt) {
       const ok = s.enabled && agent.lastCheckOk !== false;
-      st.classList.toggle('bad', !ok);
+      st.classList.toggle('chip-ok', ok);
+      st.classList.toggle('chip-bad', !ok);
       stt.textContent = ok ? '防火墙运行中' : '防火墙异常';
     }
     const agentEl = $('#fw-agent');
@@ -475,7 +477,8 @@
       uw.appendChild(row);
     }
 
-    // 1:1 conversations
+    // 1:1 conversations —— 只显示「谁和谁、多少条」。
+    // 消息正文不再提供（隐私）：服务端已经不下发，这里也不留入口。
     const cw = $('#convos');
     cw.innerHTML = '';
     $('#convo-count').textContent = d.conversations.length;
@@ -485,54 +488,54 @@
     for (const c of d.conversations) {
       const box = el('div', { class: 'convo' });
       const head = el('div', { class: 'convo-head' });
-      head.innerHTML = `<span style="color:#8b5cf6">${esc(c.user_a.username)}</span><span class="arrow">↔</span><span style="color:#3b82f6">${esc(c.user_b.username)}</span><span style="color:var(--muted);font-weight:400;font-size:12px">（${c.message_count || 0} 条）</span>`;
+      head.innerHTML = `<span style="color:#a78bfa">${esc(c.user_a.username)}</span><span class="arrow">↔</span><span style="color:#60a5fa">${esc(c.user_b.username)}</span>`;
       box.appendChild(head);
-      const ms = el('div', { class: 'msgs' });
-      box.appendChild(ms);
-      // 消息按需拉 —— 全量拉是控制台打开慢的主因。
-      const more = el('button', { class: 'btn tiny' }, '查看消息');
-      more.addEventListener('click', async () => {
-        more.disabled = true;
-        more.textContent = '加载中…';
-        try {
-          const r = await api('/api/control/conversation/' + encodeURIComponent(c.conv_id));
-          ms.innerHTML = '';
-          if (!r.messages || !r.messages.length) {
-            ms.appendChild(el('div', { class: 'empty-note' }, '（无消息）'));
-          } else {
-            for (const m of r.messages) {
-              const line = el('div', { class: 'msg-line' + (m.type === 'image' ? ' image' : '') });
-              line.innerHTML = `<span class="who">${esc(m.sender)}</span>${m.type === 'image' ? '[图片]' : esc(m.content)}<span class="when">${fmtTime(m.created_at)}</span>`;
-              ms.appendChild(line);
-            }
-          }
-          more.remove();
-        } catch (e) {
-          more.disabled = false;
-          more.textContent = '查看消息';
-          toast('加载消息失败：' + e.message);
-        }
-      });
-      box.appendChild(more);
+      box.appendChild(el('span', { class: 'convo-count' }, (c.message_count || 0) + ' 条'));
       cw.appendChild(box);
     }
 
-    // official group messages
+    // 官方群：同样只有条数。
     const gw = $('#groups');
     gw.innerHTML = '';
-    $('#group-count').textContent = (d.group_messages || []).length;
-    if (!d.group_messages.length) {
-      gw.appendChild(el('div', { class: 'empty-note' }, '官方群暂无消息'));
-    } else {
+    const gCounts = d.group_message_counts || {};
+    const groupTotal = Object.values(gCounts).reduce((a, b) => a + (Number(b) || 0), 0);
+    $('#group-count').textContent = groupTotal;
+    const gNames = (d.groups || []).filter(g => g.is_official || Object.prototype.hasOwnProperty.call(gCounts, String(g.id)));
+    if (!gNames.length) {
+      gw.appendChild(el('div', { class: 'empty-note' }, '暂无群消息'));
+    }
+    for (const g of gNames) {
       const box = el('div', { class: 'convo' });
-      const ms = el('div', { class: 'msgs' });
-      for (const m of d.group_messages) {
-        const line = el('div', { class: 'msg-line' + (m.type === 'image' ? ' image' : '') });
-        line.innerHTML = `<span class="who">${esc(m.sender)}</span>${m.type === 'image' ? '[图片]' : esc(m.content)}<span class="when">${fmtTime(m.created_at)}</span>`;
-        ms.appendChild(line);
-      }
-      box.appendChild(ms);
+      const head = el('div', { class: 'convo-head' });
+      head.innerHTML = `<span>${esc(g.name)}</span>`;
+      box.appendChild(head);
+      box.appendChild(el('span', { class: 'convo-count' }, (gCounts[String(g.id)] || 0) + ' 条'));
       gw.appendChild(box);
+    }
+    gw.appendChild(el('div', { class: 'privacy-note' }, '消息正文不再下发，也不提供查看入口。'));
+
+    renderKpis(d);
+  }
+
+  // ---------- KPI 卡片 ----------
+  function renderKpis(d) {
+    const box = $('#kpis');
+    if (!box) return;
+    const convos = (d.conversations || []).length;
+    const groupTotal = Object.values(d.group_message_counts || {}).reduce((a, b) => a + (Number(b) || 0), 0);
+    const sec = state.security && state.security.stats ? state.security.stats : {};
+    const blocked = (sec.blockedIps || []).length;
+    const items = [
+      { k: '注册用户', v: (d.users || []).length, s: '含系统账号' },
+      { k: '好友会话', v: convos, s: '只统计，不看正文' },
+      { k: '群消息', v: groupTotal, s: '只统计，不看正文' },
+      { k: '当前封禁', v: blocked, s: '被防火墙挡下的 IP', cls: blocked ? 'bad' : '' },
+    ];
+    box.innerHTML = '';
+    for (const it of items) {
+      const n = el('div', { class: 'kpi' + (it.cls ? ' k-' + it.cls : '') });
+      n.innerHTML = '<div class="k">' + esc(it.k) + '</div><div class="v' + (it.cls ? ' ' + it.cls : '') + '">' + esc(String(it.v)) + '</div><div class="s">' + esc(it.s) + '</div>';
+      box.appendChild(n);
     }
   }
 

@@ -102,6 +102,15 @@
       moment_publish: '发表',
       moment_write: '写点什么',
       moment_add: '加图片',
+      moment_side_write: '边写文案',
+      draft_prefix: '【草稿】',
+      friend_tag_label: '标签（可选）',
+      friend_tag_ph: '给这个好友起个标签，比如「同事」',
+      cat_users: '用户',
+      cat_friends: '我的好友',
+      pref_version: '版本',
+      loading_retry: '加载中…（点这里重试）',
+      member_unit: '人',
       moment_like: '点赞',
       moment_comment: '评论',
       moment_delete: '删除',
@@ -260,7 +269,7 @@
       pref_lang: '语言',
       pref_lang_desc: '界面语言',
       pref_about: '关于',
-      pref_about_desc: 'VVeChat OS 1',
+      pref_about_desc: 'VVeChat OS 1（Beta）',
       pref_about_credit: '550C 主题移植自 yannicksong0106/dsh-550c-boot（MIT）',
       list_unread: '未读消息',
       list_no_unread: '没有未读消息',
@@ -538,6 +547,15 @@
       moment_publish: 'Post',
       moment_write: 'Write something',
       moment_add: 'Add photos',
+      moment_side_write: 'Write a Post',
+      draft_prefix: '[Draft]',
+      friend_tag_label: 'Tag (optional)',
+      friend_tag_ph: 'Give this friend a tag, e.g. "colleague"',
+      cat_users: 'Users',
+      cat_friends: 'My Friends',
+      pref_version: 'Version',
+      loading_retry: 'Loading… (tap to retry)',
+      member_unit: 'members',
       moment_like: 'Like',
       moment_comment: 'Comment',
       moment_delete: 'Delete',
@@ -696,7 +714,7 @@
       pref_lang: 'Language',
       pref_lang_desc: 'Interface language',
       pref_about: 'About',
-      pref_about_desc: 'VVeChat OS 1',
+      pref_about_desc: 'VVeChat OS 1（Beta）',
       pref_about_credit: 'The 550C theme is ported from yannicksong0106/dsh-550c-boot (MIT)',
       list_unread: 'Unread',
       list_no_unread: 'Nothing unread',
@@ -1234,6 +1252,12 @@
     if (!resp.ok) {
       const err = new Error((data && data.error) || `HTTP ${resp.status}`);
       err.code = data && data.code;      // 前端按界面语言翻译用
+      // 401 = 这个 token 已经不能用了（会话世代对不上 = 数据库重建过，
+      // 旧 uid 可能已经属于别人）。继续拿着它请求就是把别人的数据当自己的，
+      // 所以当场清掉身份回登录页。
+      if (resp.status === 401 && path !== '/login' && path !== '/register') {
+        handleUnauthorized();
+      }
       throw err;
     }
     return data;
@@ -1309,6 +1333,14 @@
 
   // ---------- view switching ----------
   function showAuth() { $('#auth-view').classList.remove('hidden'); $('#app-view').classList.add('hidden'); document.body.classList.remove('app-active'); }
+  // token 失效：身份、缓存全清，回登录页。
+  function handleUnauthorized() {
+    _sessionGen++;
+    clearStoredSession();
+    state.user = null; state.token = null;
+    try { if (state.socket) { state.socket.close(); state.socket = null; } } catch (_) {}
+    showAuth();
+  }
   function showApp()  { $('#auth-view').classList.add('hidden');  $('#app-view').classList.remove('hidden'); document.body.classList.add('app-active'); }
 
   // ----- Theme: auto / light / dark (driven by prefers-color-scheme + manual override) -----
@@ -1368,11 +1400,11 @@
     // 液态玻璃：终端主题(550C)是硬边风格，跟液态玻璃是两种语言，
     // 深色主题下也收敛一点，别把整页都糊成毛玻璃。
     try {
-      if (window.LiquidGlass) window.LiquidGlass.setTheme(c550 ? '550c' : 'light');
+      // 折射引擎已移除：550C 主题的玻璃处理交给 glass.css 的 CSS 规则。
     } catch (_) {}
     // Update checkmarks in the menu
     $$('.theme-menu-item').forEach(b => b.classList.toggle('active', b.dataset.theme === mode));
-    if (window.LiquidGlass) { try { window.LiquidGlass.markDirty(); } catch (_) {} }
+
   }
   // ----- 550C boot theme: local (instant) + server (per-account) -----
   // The switch is stored in localStorage so the boot animation can be
@@ -1489,7 +1521,7 @@
 
   // ---------- avatar rendering ----------
   // ---------- rendering ----------
-  function renderAll() { renderChats(); renderBell(); renderTopbarAvatar(); renderSideMe(); setListMode('chats'); applyLiquidGlass(); }
+  function renderAll() { renderChats(); renderBell(); renderTopbarAvatar(); renderSideMe(); setListMode('chats'); }
 
   // ============================================================
   // 液态玻璃
@@ -1499,37 +1531,6 @@
   // 折射（SVG 位移贴图）只给少数小卡片用 —— 逐像素算一次的成本不低，
   // 铺满整个界面会拖垮手机。
   // ============================================================
-  let _lgApplied = false;
-  function applyLiquidGlass() {
-    if (!window.LiquidGlass) return;
-    const LG = window.LiquidGlass;
-    // 主题可能比液态玻璃引擎先应用完(引擎是异步加载的)——
-    // 那样 setTheme 就没赶上,整页的玻璃模式会卡在错的状态。补一次。
-    try { LG.setTheme(boot550cOn() ? '550c' : 'light'); } catch (_) {}
-    // 会互相照亮的玻璃面板 —— 现在开真折射。
-    // 以前这些面板只有「受光 + 磨砂」,折射被那一层 backdrop blur 冲掉了,
-    // 看上去就是一块磨砂板;把模糊关掉之后,边缘的折射才看得出来。
-    // 玻璃球被拉伸成每个面板自己的宽高:宽的(输入条、弹窗)两端像透镜,
-    // 高的(聊天列)上下两端鼓出来 —— 折射环跟着这条弧度走。
-    const panels = [
-      '.topbar', '.list-pane', '.side-nav', '.mobile-tabbar', '.rail-pane',
-      '.right-pane', '.chat-composer', '.ai-composer',
-      '.modal-card', '.theme-menu', '.emoji-picker', '.mention-menu', '.plus-action'
-    ];
-    for (const sel of panels) {
-      document.querySelectorAll(sel).forEach(el => LG.register(el, { glow: true, refract: true }));
-    }
-    // 会果冻形变的可点元素
-    const pressables = '.side-nav-item, .topbar .icon-btn, .btn, .ai-tool-btn, .msg-action-btn, ' +
-                       '.emoji-pick, .cg-emoji-pick, .list-toggle, .settings-action, .plus-action';
-    document.querySelectorAll(pressables).forEach(el => LG.register(el, { press: true }));
-    _lgApplied = true;
-  }
-  // 弹窗类的小卡片可以上真折射 —— 面积小，成本可控。
-  function applyLiquidGlassToCard(el) {
-    if (!window.LiquidGlass || !el) return;
-    window.LiquidGlass.register(el, { glow: true, press: false, refract: true });
-  }
 
   // The identity card at the top of the sidebar.
   function renderSideMe() {
@@ -1616,6 +1617,7 @@
           ? (isOfficial ? t('official_sub') : t('group_sub'))
           : (c.is_new_friend ? (t('friend')) : t('new_msg')));
     const officialTag = isOfficial ? `<span class="tag-official">${escapeHtml(t('tag_official'))}</span>` : '';
+    const catTag = convTag(c) ? `<span class="tag-cat">${escapeHtml(tagLabel(convTag(c)))}</span>` : '';
     // avatarStyle() returns a bare CSS declaration list, so it has to be
     // wrapped in style="..." — dropping that produced broken markup like
     // <div class="avatar" background:linear-gradient(...)> and the
@@ -1638,7 +1640,7 @@
       // 「我」这一条:名字在英文界面显示 Me,但头像是我本人的。
       : (c.special === 'self' ? avatarInner(state.user) : avatarInner(c));
     li.innerHTML = `<div class="${avatarCls}"${avatarBg} data-user-avatar="${isGroup ? '' : c.id}">${inner}${dot}</div>
-      <div class="meta"><div class="name">${escapeHtml(c.type === 'user' ? displayName(c.username, c.special) : groupDisplayName(c.username, isOfficial))} ${officialTag}</div>
+      <div class="meta"><div class="name">${escapeHtml(c.type === 'user' ? displayName(c.username, c.special) : groupDisplayName(c.username, isOfficial))} ${officialTag}${catTag}</div>
       <div class="preview">${atMePrefix}${senderPrefix}${escapeHtml(preview)}</div></div>
       <div class="time">${fmtTime(c.last_at)}</div>${unreadHtml}`;
     li.addEventListener('click', () => {
@@ -1676,6 +1678,18 @@
   // The 会话 block: one list holding BOTH the group chats and the
   // private chats with friends. The separate 通讯录 pane is gone — this
   // is now the only place to reach your people.
+  // 好友归类：系统给的（Jack 的「用户」/共处的群）和用户自己写的标签。
+  function convTag(c) {
+    if (!c || c.type !== 'user' || c.special) return '';
+    const f = (state.friends || []).find(x => String(x.id) === String(c.id));
+    return (f && f.tag) ? String(f.tag) : '';
+  }
+  function tagLabel(tag) {
+    if (tag === '用户') return t('cat_users');
+    if (tag === '我的好友') return t('cat_friends');
+    if (tag === 'VVeChat 官方群') return t('official_group_name');
+    return tag;
+  }
   function renderChats() {
     const list = $('#chats-list'); const empty = $('#chats-empty');
     if (!list) return;
@@ -1691,7 +1705,21 @@
     const all = [...groups, ...privates, ...fresh]
       .sort((a, b) => (b.is_official || 0) - (a.is_official || 0) || (b.last_at || 0) - (a.last_at || 0));
     if (empty) empty.classList.toggle('hidden', all.length > 0);
-    for (const c of all) list.appendChild(buildConvRow(c));
+    let lastTag = null;
+    for (const c of all) {
+      const tag = convTag(c);
+      if (tag) {
+        if (tag !== lastTag) {
+          const h = document.createElement('li');
+          h.className = 'list-section';
+          h.textContent = tagLabel(tag);
+          list.appendChild(h);
+        }
+        lastTag = tag;
+      }
+      // 没归类的（群、系统账号）不重置 lastTag —— 否则同一个人会被拆成两个「用户」段。
+      list.appendChild(buildConvRow(c));
+    }
     renderUnread();
   }
 
@@ -1746,7 +1774,7 @@
         ? `<span style="color:var(--accent);font-weight:600;">${escapeHtml(userInfo(c.last_sender_id).username)}:</span> ` : '';
       const unreadHtml = c.unread > 0 ? `<span class="unread">${c.unread>99?'99+':c.unread}</span>` : '';
       li.innerHTML = `<div class="${avatarCls}"${avatarBg} data-user-avatar="${isGroup ? '' : c.id}">${isGroup ? groupAvatarInner({ name: c.username, is_official: isOfficial, icon_emoji: c.icon_emoji }) : avatarContent(c.username, c.avatar_emoji, 26)}${dot}</div>
-        <div class="meta"><div class="name">${escapeHtml(c.type === 'user' ? displayName(c.username, c.special) : groupDisplayName(c.username, isOfficial))} ${officialTag}</div>
+        <div class="meta"><div class="name">${escapeHtml(c.type === 'user' ? displayName(c.username, c.special) : groupDisplayName(c.username, isOfficial))} ${officialTag}${catTag}</div>
         <div class="preview">${senderPrefix}${escapeHtml(preview)}</div></div>
         <div class="time">${fmtTime(c.last_at)}</div>${unreadHtml}`;
       li.addEventListener('click', () => openChat(c.type, c.id, c.username, isOfficial));
@@ -2135,6 +2163,8 @@
     $('#chat-input')?.focus();
   }
   async function openChat(type, id, title, isOfficial) {
+    // 离开上一个会话 —— 先把它没写完的话存成草稿。
+    saveCurrentDraft();
     state.currentChat = {type, id, title, isOfficial};
     state.typingUsers.clear();
     renderTyping();
@@ -2158,6 +2188,7 @@
       $('#chat-back')?.classList.add('mobile-show');
       $('.right-pane')?.classList.add('mobile-show');
     }
+    applyDraftToInput();
     await loadMessages();
     renderMessages(); scrollBottom();
     const {type:t, id:i} = state.currentChat;
@@ -2257,14 +2288,24 @@
     const key = convKey(type, id);
     const wrap = $('#chat-messages');
     const existing = state.messagesByConv[key] || [];
-    if (existing.length === 0) wrap.innerHTML = `<div class="msg-system" style="opacity:0.7;">${t('loading')}…</div>`;
+    const showHint = (html) => { if (wrap) wrap.innerHTML = html; };
+    if (existing.length === 0) showHint(`<div class="msg-system" style="opacity:0.7;">${t('loading')}…</div>`);
+    // 8 秒还没回来就换成一个能点的重试 —— 别让人对着「加载中」一直等。
+    const slow = setTimeout(() => {
+      if (!state.currentChat || convKey(state.currentChat.type, state.currentChat.id) !== key) return;
+      if ((state.messagesByConv[key] || []).length) return;
+      showHint(`<div class="msg-system" style="cursor:pointer;" id="retry-load">${escapeHtml(t('loading_retry'))}</div>`);
+      $('#retry-load')?.addEventListener('click', () => loadMessages());
+    }, 8000);
     try {
       const data = await api(`/messages?conv_type=${type}&conv_id=${id}&limit=100`);
+      clearTimeout(slow);
       const fresh = data.messages || [];
       const maxFreshId = fresh.reduce((m, x) => Math.max(m, x.id || 0), 0);
       const newerFromCache = existing.filter(x => (x.id||0) > maxFreshId);
       state.messagesByConv[key] = [...fresh, ...newerFromCache];
     } catch (e) {
+      clearTimeout(slow);
       if (existing.length === 0) {
         state.messagesByConv[key] = [];
         wrap.innerHTML = `<div class="msg-system" style="background:rgba(255,59,48,0.10);color:#b91c1c;">${escapeHtml(e.message)}</div>
@@ -2460,10 +2501,8 @@
   // The @ button only makes sense in a group — dim it in a one-to-one
   // chat so nobody wonders why the list is empty.
   // ---------- personalisation ----------
-  // Three things the account can change about how the app looks and
-  // behaves: how dense it is, how big the text is, and whether the
-  // clock is 12 or 24 hour. All three are applied as body classes /
-  // CSS variables, so nothing has to be re-rendered.
+  // 账号能改的只有两件：界面密度和字号。时间一律 24 小时制
+  // （设置里的 12/24 开关已经删掉）。
   // ai_in_groups 恒为 true：助手在群里始终应答（设置里的开关已移除）。
   const prefs = { density: 'normal', font_scale: 1, clock24: true, ai_in_groups: true };
 
@@ -2480,7 +2519,7 @@
     if (!user) return;
     if (user.density) prefs.density = user.density;
     if (user.font_scale) prefs.font_scale = Number(user.font_scale) || 1;
-    if (user.clock24 !== undefined) prefs.clock24 = !!user.clock24;
+    prefs.clock24 = true;        // 统一 24 小时制
     prefs.ai_in_groups = true;   // 恒定开启，忽略服务器上的旧值
     applyPrefs();
   }
@@ -2500,8 +2539,13 @@
     };
     mark('#pref-density', prefs.density);
     mark('#pref-font', prefs.font_scale);
-    mark('#pref-clock', prefs.clock24 ? 24 : 12);
     mark('#pref-lang', lang);
+    // 版本号：顶栏那个 OS 1（Beta）胶囊现在指向这里。
+    const vd = $('#pref-version-desc');
+    if (vd) {
+      const v = (window.__VV_ASSET_V || '').replace(/^\D+/, '');
+      vd.textContent = v ? ('VVeChat OS 1（Beta）· ' + v) : 'VVeChat OS 1（Beta）';
+    }
   }
 
   function updateMentionButton() {
@@ -2735,7 +2779,6 @@
       </button>`;
     document.body.appendChild(bar);
     // 消息操作条也是一块玻璃 —— 球被拉成它这个扁扁的宽条。
-    applyLiquidGlassToCard(bar);
     const rect = rowEl.getBoundingClientRect();
     const barWidth = bar.offsetWidth || 320;
     const left = rect.left + rect.width / 2 - barWidth / 2;
@@ -2960,7 +3003,10 @@
       console.log('[VVeChat] sending', payload);
       const data = await api('/messages', { method: 'POST', body: payload });
       if (!data || !data.message) throw new Error(t('server_no_message'));
-      if (inputEl) inputEl.value = '';
+      if (inputEl) { inputEl.value = ''; inputEl.classList.remove('has-draft'); }
+      // 发出去了 —— 草稿作废。
+      const c = state.currentChat;
+      if (c) { delete DRAFTS[convKey(c.type, c.id)]; persistDrafts(); }
       acceptMessage(data.message);
       console.log('[VVeChat] sent ok');
     } catch (e) {
@@ -2987,8 +3033,42 @@
     lb.onclick = () => lb.classList.add('hidden');
   }
 
+  // ---------- 草稿 ----------
+  // 没写完的话按会话留着：离开这个会话不丢，回来还在（红字标着【草稿】）。
+  const DRAFT_KEY = 'vve:drafts';
+  let DRAFTS = {};
+  try { DRAFTS = JSON.parse(localStorage.getItem(DRAFT_KEY) || '{}') || {}; } catch (_) { DRAFTS = {}; }
+  function persistDrafts() { try { localStorage.setItem(DRAFT_KEY, JSON.stringify(DRAFTS)); } catch (_) {} }
+  function stripDraftPrefix(v) {
+    const p = t('draft_prefix');
+    const s = String(v || '');
+    return s.startsWith(p) ? s.slice(p.length) : s;
+  }
+  function saveCurrentDraft() {
+    const input = $('#chat-input');
+    const c = state.currentChat;
+    if (!input || !c) return;
+    const k = convKey(c.type, c.id);
+    const raw = stripDraftPrefix(input.value).trim();
+    if (raw) DRAFTS[k] = raw; else delete DRAFTS[k];
+    persistDrafts();
+  }
+  function applyDraftToInput() {
+    const input = $('#chat-input');
+    if (!input) return;
+    const c = state.currentChat;
+    const raw = (c && DRAFTS[convKey(c.type, c.id)]) || '';
+    if (raw) {
+      input.value = t('draft_prefix') + raw;
+      input.classList.add('has-draft');
+    } else {
+      input.value = '';
+      input.classList.remove('has-draft');
+    }
+  }
+
   // ---------- search ----------
-  let searchT = null, searchIndex = -1, searchResults = [];
+  let searchT = null, searchIndex = -1, searchResults = [], searchGroups = [];
   function initSearch() {
     const input = $('#search-input');
     if (!input) return;
@@ -3020,15 +3100,32 @@
     try {
       const r = await api(`/users/search?q=${encodeURIComponent(q)}`);
       searchResults = r.users || [];
-      showSuggestions(searchResults);
+      searchGroups = r.groups || [];
+      showSuggestions(searchResults, searchGroups);
     } catch(e) {
       dropdown.innerHTML = `<div class="suggestion-hint">${escapeHtml(e.message)}</div>`;
     }
   }
-  function showSuggestions(users) {
+  function showSuggestions(users, groups) {
     const dropdown = $('#search-suggestions');
-    if (!users.length) { dropdown.innerHTML = `<div class="suggestion-hint">${t('empty')}</div>`; return; }
+    groups = groups || [];
+    if (!users.length && !groups.length) { dropdown.innerHTML = `<div class="suggestion-hint">${t('empty')}</div>`; return; }
     dropdown.innerHTML = '';
+    // 群聊排前面 —— 搜「群聊」的时候第一个就该是它。
+    for (const g of groups) {
+      const item = document.createElement('div');
+      item.className = 'suggestion-item';
+      const emoji = g.icon_emoji || '💬';
+      item.innerHTML = `<div class="avatar sm group">${escapeHtml(emoji)}</div>
+        <div class="meta"><div class="name">${escapeHtml(g.name)}</div>
+        <div class="sub">${g.member_count || 0} ${t('member_unit')}</div></div>
+        <div class="action-tag friend">${t('btn_msg')}</div>`;
+      item.addEventListener('click', () => {
+        hideSuggestions(); $('#search-input').value = '';
+        openChat('group', g.id, g.name, g.is_official ? 1 : 0);
+      });
+      dropdown.appendChild(item);
+    }
     for (const u of users) {
       const isFriend = state.friends.some(f=>f.id===u.id);
       const bg = avatarBgOf(u);
@@ -3258,7 +3355,6 @@
     document.body.appendChild(menu);
     _userMenuEl = menu;
     positionUserMenu(menu, anchor);
-    applyLiquidGlassToCard(menu);
     menu.addEventListener('click', async (e) => {
       const btn = e.target.closest('[data-act]');
       if (!btn) return;
@@ -3740,9 +3836,6 @@
       openModal('modal-moment');
       setTimeout(() => $('#moment-text')?.focus(), 60);
     });
-    // 「加图片」按钮:选完图直接打开发布框,照片已经挂上了。
-    const pickImg = $('#btn-moment-pick-img');
-    if (pickImg) pickImg.addEventListener('click', () => { $('#moment-file')?.click(); });
     const addImg = $('#btn-moment-add-img');
     if (addImg) addImg.addEventListener('click', () => { $('#moment-file')?.click(); });
     const file = $('#moment-file');
@@ -4268,7 +4361,6 @@
     box.classList.remove('hidden');
     // 下一帧再加 show，才有进场动画
     requestAnimationFrame(() => box.classList.add('show'));
-    applyLiquidGlassToCard($('#msg-popup-card'));
 
     const t0 = Date.now();
     const countEl = $('#msg-popup-count');
@@ -5828,7 +5920,6 @@
     ensurePlusActionsBound();
     bindMessagePopup();
     bindMessageBanner();
-    applyLiquidGlass();
     ensureWipeBound();
     ensureBellBound();
     ensureMobileMenuBound();
@@ -6266,7 +6357,6 @@
     const segs = [
       ['#pref-density', (v) => savePrefs({ density: v })],
       ['#pref-font', (v) => savePrefs({ font_scale: Number(v) })],
-      ['#pref-clock', (v) => savePrefs({ clock24: v === '24' ? 1 : 0 })],
       ['#pref-lang', (v) => setLang(v)]
     ];
     for (const [sel, fn] of segs) {
@@ -6436,7 +6526,7 @@
         return;
       }
       const input = $('#chat-input');
-      const v = input.value.trim();
+      const v = stripDraftPrefix(input.value).trim();
       if (!v) return;
       // Keep the text in the box until the server confirms it, so a failed
       // send never loses the user's message.
@@ -6600,10 +6690,11 @@
     bindOnce($('#form-add-friend'), 'submit', async (e) => {
       e.preventDefault();
       const username = $('#add-friend-username').value.trim();
+      const tag = ($('#add-friend-tag')?.value || '').trim().slice(0, 24);
       const msg = $('#add-friend-msg'); msg.classList.remove('ok'); msg.textContent = '';
       if (!username) { msg.textContent = t('err_username_required'); return; }
       try {
-        const r = await api('/friend/request', { method: 'POST', body: { toUsername: username } });
+        const r = await api('/friend/request', { method: 'POST', body: { toUsername: username, tag } });
         msg.classList.add('ok');
         msg.textContent = r.autoAccepted ? t('ok_auto_friend') : t('ok_request_sent');
         if (r.autoAccepted) { await refreshFriends(); await refreshConversations(); renderAll(); setTimeout(() => closeModal('modal-add-friend'), 900); }

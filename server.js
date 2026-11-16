@@ -227,6 +227,9 @@ ensureColumn('users', 'ai_in_groups', 'INTEGER NOT NULL DEFAULT 1');
 ensureColumn('users', 'density', "TEXT NOT NULL DEFAULT 'normal'");
 ensureColumn('users', 'font_scale', 'REAL NOT NULL DEFAULT 1');
 ensureColumn('users', 'clock24', 'INTEGER NOT NULL DEFAULT 1');
+ensureColumn('users', 'lang', "TEXT NOT NULL DEFAULT 'zh'");
+ensureColumn('friends', 'tag', 'TEXT');
+ensureColumn('friend_requests', 'tag', 'TEXT');
 // title_mode: 'auto' = 还没命名(等 Qwen 起名) | 'named' = Qwen 起好了
 //             'manual' = 用户自己改过,谁也别动
 ensureColumn('ai_chats', 'title_mode', "TEXT NOT NULL DEFAULT 'auto'");
@@ -239,18 +242,23 @@ ensureColumn('messages', 'is_deleted', "INTEGER NOT NULL DEFAULT 0");
 // pepper = 服务端密钥(JWT_SECRET)⊕数据库里的随机盐。
 // 盐在库里、密钥不在 —— 整库被拖走也算不出 pepper,密码只剩不可逆的哈希。
 // 密码本身走 auth-crypto.js:普通用户 3 层,管理员 5 层。
-function serverSalt() {
+function dbSecret(name, bytes = 32) {
   db.exec('CREATE TABLE IF NOT EXISTS app_secrets (name TEXT PRIMARY KEY, value TEXT NOT NULL)');
-  let row = db.prepare('SELECT value FROM app_secrets WHERE name = ?').get('pepper_salt');
+  let row = db.prepare('SELECT value FROM app_secrets WHERE name = ?').get(name);
   if (!row) {
-    const v = crypto.randomBytes(32).toString('hex');
-    db.prepare('INSERT OR IGNORE INTO app_secrets (name, value) VALUES (?, ?)').run('pepper_salt', v);
+    const v = crypto.randomBytes(bytes).toString('hex');
+    db.prepare('INSERT OR IGNORE INTO app_secrets (name, value) VALUES (?, ?)').run(name, v);
     row = { value: v };
   }
   return row.value;
 }
+const PEPPER_SALT = dbSecret('pepper_salt');
+// 会话世代：数据库一旦重建（Render 还没挂持久盘），用户 id 会从头分配，
+// 旧 JWT 里的 uid 就会指向「现在」的另一个账号 —— 表现就是串号，
+// 而且大部分串到的是历任测试号。每个库一个随机 epoch，token 里带上，
+// 对不上就当过期处理，让前端重新登录。
+const DB_EPOCH = dbSecret('db_epoch', 16);
 const SERVER_STARTED_AT = now();
-const PEPPER_SALT = serverSalt();
 const PEPPER1 = crypto.createHmac('sha256', JWT_SECRET).update(PEPPER_SALT + ':1').digest();
 const PEPPER2 = crypto.createHmac('sha512', JWT_SECRET).update(PEPPER_SALT + ':2').digest();
 
@@ -310,6 +318,7 @@ function userPublic(u) {
     density: u.density || 'normal',
     font_scale: Number(u.font_scale) > 0 ? Number(u.font_scale) : 1,
     clock24: u.clock24 === undefined ? 1 : (u.clock24 ? 1 : 0),
+    lang: u.lang === 'en' ? 'en' : 'zh',
     is_admin: u.username === ADMIN_USERNAME,
     // 助手(Qwen)是个真实账号,但它在群里不是「人」。
     is_assistant: u.username === ASSISTANT_NAME ? 1 : 0,
@@ -460,12 +469,82 @@ try {
 // 注册/登录时给的默认联系人:Jack、Jacky Bot、文件传输助手。
 // 好友关系是双向的 —— 两边都得有对方,才能互相发消息。
 function seedDefaultContacts(userId) {
-  const ins = db.prepare('INSERT OR IGNORE INTO friends (user_id, friend_id, created_at) VALUES (?, ?, ?)');
   for (const name of [ADMIN_USERNAME, ASSISTANT_NAME, FILE_ASSISTANT_NAME]) {
     const u = db.prepare('SELECT id FROM users WHERE username = ?').get(name);
     if (!u || u.id === userId) continue;
-    ins.run(userId, u.id, now());
-    ins.run(u.id, userId, now());
+    // 走 linkFriends —— 建关系的同时归类（Jack 那边自动加的人归到「用户」组）。
+    linkFriends(u.id, userId, now(), null, null);
+    if (name === ADMIN_USERNAME) jackWelcome(userId);
+  }
+}
+
+// ---------- 好友归类 ----------
+// 加好友时用户可以自己写标签；没写就按「你们一起在哪个群」自动分。
+// Jack 那边的自动添加统一进「用户」组 —— 他那儿的好友基本都是注册用户。
+const CATEGORY_USERS = '用户';
+const CATEGORY_FRIENDS = '我的好友';
+function adminUserId() {
+  const row = db.prepare('SELECT id FROM users WHERE username = ?').get(ADMIN_USERNAME);
+  return row ? row.id : 0;
+}
+function friendCategory(ownerId, otherId, customTag) {
+  const custom = String(customTag || '').trim().slice(0, 24);
+  if (custom) return custom;
+  if (Number(ownerId) === Number(adminUserId())) return CATEGORY_USERS;
+  const g = db.prepare(`
+    SELECT g.name FROM group_members m1
+    JOIN group_members m2 ON m1.group_id = m2.group_id
+    JOIN groups g ON g.id = m1.group_id
+    WHERE m1.user_id = ? AND m2.user_id = ?
+    ORDER BY g.is_official DESC, g.id ASC LIMIT 1
+  `).get(ownerId, otherId);
+  return g ? g.name : CATEGORY_FRIENDS;
+}
+// 建立好友关系并归类（两个方向各归各的类）。
+// 已经有关系的不动标签 —— 否则每次登录都会把用户自己写的标签冲掉。
+function linkFriends(aId, bId, ts, tagFromA, tagFromB) {
+  const one = (owner, other, tag) => {
+    const row = db.prepare('SELECT tag FROM friends WHERE user_id = ? AND friend_id = ?').get(owner, other);
+    if (!row) {
+      db.prepare('INSERT INTO friends (user_id, friend_id, created_at, tag) VALUES (?, ?, ?, ?)')
+        .run(owner, other, ts, friendCategory(owner, other, tag));
+    } else if (!row.tag) {
+      // 还没归类的（老数据）补一次；已经有的标签不动 —— 用户自己写的不能被冲掉。
+      db.prepare('UPDATE friends SET tag = ? WHERE user_id = ? AND friend_id = ?')
+        .run(tag || friendCategory(owner, other, null), owner, other);
+    }
+  };
+  one(aId, bId, tagFromA);
+  one(bId, aId, tagFromB);
+}
+
+// Jack 给新人的欢迎信（只发一次）。
+const JACK_WELCOME = {
+  zh: 'hello🙋我是Jack，VVeChat开发者也是管理员。很高兴你能来这里，如果遇到问题随时跟我沟通，我随时奉陪！',
+  en: "Hello 🙋 I'm Jack, the VVeChat developer and also the admin. Glad you're here — if you run into any problem, feel free to talk to me, I'm always around!",
+};
+function jackWelcome(userId) {
+  const jack = db.prepare('SELECT id FROM users WHERE username = ?').get(ADMIN_USERNAME);
+  if (!jack || Number(jack.id) === Number(userId)) return;
+  const conv = userConvId(jack.id, userId);
+  const seen = db.prepare(
+    "SELECT 1 FROM messages WHERE conv_type='user' AND conv_id = ? AND sender_id = ? LIMIT 1"
+  ).get(conv, jack.id);
+  if (seen) return;
+  const u = db.prepare('SELECT lang FROM users WHERE id = ?').get(userId);
+  const text = (u && u.lang === 'en') ? JACK_WELCOME.en : JACK_WELCOME.zh;
+  try {
+    const info = db.prepare(
+      'INSERT INTO messages (conv_type, conv_id, sender_id, content, type, meta, reply_to, is_deleted, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)'
+    ).run('user', conv, jack.id, text, 'text', null, null, now());
+    const row = db.prepare(`
+      SELECT m.*, u.avatar AS sender_avatar, u.avatar_emoji AS sender_avatar_emoji
+      FROM messages m JOIN users u ON u.id = m.sender_id WHERE m.id = ?
+    `).get(info.lastInsertRowid);
+    const msg = buildMessage({ ...row, sender_username: ADMIN_USERNAME });
+    broadcastMessage(msg, 'user', conv, jack.id);
+  } catch (e) {
+    console.warn('[VVeChat] jack welcome failed:', e.message);
   }
 }
 
@@ -696,20 +775,28 @@ function authRequired(req, res, next) {
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
   if (!token) return res.status(401).json({ error: 'missing token' });
+  let payload;
   try {
-    const payload = jwt.verify(token, JWT_SECRET);
-    req.user = { id: payload.uid, username: payload.username };
-    // The group-assistant toggle lives on the account, so the message
-    // endpoint can honour it without a second lookup.
-    try {
-      // 助手在群里恒定应答 —— 设置里的开关已经移除，用户表里的
-      // ai_in_groups 字段保留只为兼容，不再影响行为。
-      req.user.aiInGroups = true;
-    } catch (_) { req.user.aiInGroups = true; }
-    next();
+    payload = jwt.verify(token, JWT_SECRET);
   } catch (e) {
     return res.status(401).json({ error: 'invalid token' });
   }
+  // 库换了（部署重建）→ 旧 token 里的 uid 可能已经属于别人，直接作废。
+  if (!payload.ep || payload.ep !== DB_EPOCH) {
+    return res.status(401).json({ error: 'session expired', code: 'SESSION_EXPIRED' });
+  }
+  // 用户名从库里取：token 里那份可能是旧的（改名、或者旧库留下的）。
+  const u = db.prepare('SELECT id, username FROM users WHERE id = ?').get(payload.uid);
+  if (!u) return res.status(401).json({ error: 'invalid token', code: 'ACCOUNT_GONE' });
+  req.user = { id: u.id, username: u.username };
+  // The group-assistant toggle lives on the account, so the message
+  // endpoint can honour it without a second lookup.
+  try {
+    // 助手在群里恒定应答 —— 设置里的开关已经移除，用户表里的
+    // ai_in_groups 字段保留只为兼容，不再影响行为。
+    req.user.aiInGroups = true;
+  } catch (_) { req.user.aiInGroups = true; }
+  next();
 }
 
 function getFriends(uid) {
@@ -1065,15 +1152,11 @@ app.get('/api/control/snapshot', authRequired, requireAdmin, (req, res) => {
     });
   }
 
-  // 群消息只带最近 300 条 —— 控制台打开慢的第二主因(全量拉)。
-  const groupMsgs = db.prepare(`
-    SELECT m.id, m.content, m.type, m.created_at, g.name AS group_name, u.username AS sender
-    FROM messages m
-    JOIN groups g ON CAST(g.id AS TEXT) = m.conv_id
-    JOIN users u ON u.id = m.sender_id
-    WHERE m.conv_type='group' AND m.is_deleted = 0
-    ORDER BY m.id DESC LIMIT 300
-  `).all().reverse();
+  // 群消息【正文不再进控制台】—— 管理员看得到条数，看不到内容。
+  const groupCounts = new Map(db.prepare(`
+    SELECT conv_id, COUNT(*) AS n FROM messages
+    WHERE conv_type='group' AND is_deleted = 0 GROUP BY conv_id
+  `).all().map(r => [String(r.conv_id), r.n]));
 
   // 群列表也带上 —— 否则没人认领的群（owner 被删了）在管理台里找不到，
   // 清理脚本没法收尾。
@@ -1083,19 +1166,16 @@ app.get('/api/control/snapshot', authRequired, requireAdmin, (req, res) => {
             WHERE m.group_id = g.id AND u.username <> ?) AS member_count
     FROM groups g ORDER BY g.id ASC
   `).all(ASSISTANT_NAME);
-  res.json({ ok: true, generated_at: now(), users, groups, conversations, group_messages: groupMsgs });
+  res.json({
+    ok: true, generated_at: now(), users, groups, conversations,
+    // 只有条数，没有正文 —— 隐私要求。
+    group_message_counts: Object.fromEntries(groupCounts),
+  });
 });
 
-// 控制台按需取某段会话的消息(快照里不再全量带消息,打开快很多)。
+// 取会话正文 —— 已下线：好友之间的聊天内容与官方群内容都不进控制台（隐私）。
 app.get('/api/control/conversation/:id', authRequired, requireAdmin, (req, res) => {
-  const convId = String(req.params.id || '');
-  const msgs = db.prepare(`
-    SELECT m.id, m.content, m.type, m.created_at, u.username AS sender
-    FROM messages m JOIN users u ON u.id = m.sender_id
-    WHERE m.conv_type='user' AND m.conv_id = ? AND m.is_deleted = 0
-    ORDER BY m.id ASC LIMIT 1000
-  `).all(convId);
-  res.json({ ok: true, conv_id: convId, messages: msgs });
+  res.status(410).json({ error: '消息正文不再提供（隐私保护）', code: 'CONTENT_WITHDRAWN' });
 });
 
 // Delete one account and every trace of it (messages, friendships, requests).
@@ -2368,7 +2448,7 @@ function fail(res, status, code, message) {
   return res.status(status).json({ error: message, code });
 }
 app.post('/api/register', rateLimit('auth'), (req, res) => {
-  const { username, password, avatar, avatar_emoji } = req.body || {};
+  const { username, password, avatar, avatar_emoji, lang } = req.body || {};
   if (!username || !password) return fail(res, 400, 'empty_credentials', '用户名和密码不能为空');
   if (username.length < 2 || username.length > 24) return fail(res, 400, 'invalid_username', '用户名长度需 2-24');
   if (password.length < 8) return fail(res, 400, 'short_password', '密码至少 8 位');
@@ -2402,19 +2482,20 @@ app.post('/api/register', rateLimit('auth'), (req, res) => {
     ? avatar : null;
   const regEmoji = typeof avatar_emoji === 'string' && [...avatar_emoji.trim()].length <= 4
     ? avatar_emoji.trim() : null;
+  const regLang = lang === 'en' ? 'en' : 'zh';
   const info = db.prepare(
-    'INSERT INTO users (username, password_hash, avatar, bio, avatar_color, avatar_emoji, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
-  ).run(username, hash, regAvatar, '', color, regEmoji, now());
+    'INSERT INTO users (username, password_hash, avatar, bio, avatar_color, avatar_emoji, created_at, lang) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(username, hash, regAvatar, '', color, regEmoji, now(), regLang);
   const userId = info.lastInsertRowid;
   // auto-join official group
   db.prepare('INSERT OR IGNORE INTO group_members (group_id, user_id, joined_at) VALUES (?, ?, ?)')
     .run(OFFICIAL_GROUP_ID, userId, now());
   // 默认联系人:Jack、Jacky Bot、文件传输助手。
   seedDefaultContacts(userId);
-  const token = jwt.sign({ uid: userId, username }, JWT_SECRET, { expiresIn: '30d' });
+  const token = jwt.sign({ uid: userId, username, ep: DB_EPOCH }, JWT_SECRET, { expiresIn: '30d' });
   res.json({ token, user: userPublic({
     id: userId, username, avatar: regAvatar, avatar_emoji: regEmoji,
-    bio: '', avatar_color: color,
+    bio: '', avatar_color: color, lang: regLang,
   }) });
 });
 
@@ -2453,7 +2534,7 @@ app.post('/api/login', rateLimit('auth'), (req, res) => {
     .run(OFFICIAL_GROUP_ID, u.id, now());
   // 老账号也补上默认联系人(第一次登录时种下)。
   seedDefaultContacts(u.id);
-  const token = jwt.sign({ uid: u.id, username: u.username }, JWT_SECRET, { expiresIn: '30d' });
+  const token = jwt.sign({ uid: u.id, username: u.username, ep: DB_EPOCH }, JWT_SECRET, { expiresIn: '30d' });
   // Successful login clears this IP's failure counter.
   try { const b = RATE_BUCKETS.get(clientIp(req)); if (b) b.authFail = 0; } catch (_) {}
   res.json({ token, user: userPublic(u) });
@@ -2468,7 +2549,7 @@ app.get('/api/me', authRequired, (req, res) => {
 
 app.put('/api/me', rateLimit('write'), authRequired, (req, res) => {
   const { bio, username, avatar_color, avatar, avatar_emoji, boot_550c,
-    ai_in_groups, density, font_scale, clock24 } = req.body || {};
+    ai_in_groups, density, font_scale, clock24, lang } = req.body || {};
   const u = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
   if (!u) return res.status(404).json({ error: 'user not found' });
   const updates = [];
@@ -2529,6 +2610,10 @@ app.put('/api/me', rateLimit('write'), authRequired, (req, res) => {
   if (clock24 !== undefined) {
     updates.push('clock24 = ?'); values.push(clock24 ? 1 : 0);
   }
+  // 语言跟着账号走 —— 新用户注册时 Jack 的欢迎信要按这个语言发。
+  if (lang !== undefined) {
+    updates.push('lang = ?'); values.push(lang === 'en' ? 'en' : 'zh');
+  }
   if (typeof username === 'string' && username.trim() && username !== u.username) {
     if (username.length < 2 || username.length > 24) return res.status(400).json({ error: '用户名长度需 2-24' });
     const existing = db.prepare('SELECT id FROM users WHERE username = ? AND id != ?').get(username, u.id);
@@ -2546,13 +2631,21 @@ app.put('/api/me', rateLimit('write'), authRequired, (req, res) => {
 });
 
 // search users (substring match — typing any part of a username finds it)
+// 搜索：好友 / 群聊 / 用户 —— 三个都搜，只搜用户的话「搜群聊」永远搜不到。
 app.get('/api/users/search', authRequired, (req, res) => {
   const q = (req.query.q || '').toString().trim();
-  if (!q) return res.json({ users: [] });
+  if (!q) return res.json({ users: [], groups: [] });
   const rows = db.prepare(
     'SELECT id, username, avatar, bio, avatar_color, avatar_emoji FROM users WHERE username LIKE ? AND id != ? ORDER BY username LIMIT 20'
   ).all(`%${q}%`, req.user.id);
-  res.json({ users: rows });
+  const groups = db.prepare(`
+    SELECT g.id, g.name, g.icon_emoji, g.is_official,
+           (SELECT COUNT(*) FROM group_members m WHERE m.group_id = g.id) AS member_count
+    FROM group_members gm JOIN groups g ON g.id = gm.group_id
+    WHERE gm.user_id = ? AND g.name LIKE ?
+    ORDER BY g.is_official DESC, g.id ASC LIMIT 10
+  `).all(req.user.id, `%${q}%`);
+  res.json({ users: rows, groups });
 });
 
 // search groups to join (substring match)
@@ -2679,7 +2772,7 @@ app.get('/api/users/status', authRequired, (req, res) => {
 // friends
 app.get('/api/friends', authRequired, (req, res) => {
   const rows = db.prepare(`
-    SELECT u.id, u.username, u.avatar, u.bio, u.avatar_color, u.avatar_emoji
+    SELECT u.id, u.username, u.avatar, u.bio, u.avatar_color, u.avatar_emoji, f.tag
     FROM friends f
     JOIN users u ON u.id = f.friend_id
     WHERE f.user_id = ?
@@ -3117,7 +3210,7 @@ app.post('/api/groups/:id/join', rateLimit('write'), authRequired, (req, res) =>
 // friend requests
 // Send (or auto-accept) a friend request from me to `target`.
 // Shared by the username-search flow and the "tap avatar in a group" flow.
-function sendFriendRequest(me, target) {
+function sendFriendRequest(me, target, tag) {
   if (!target) return { status: 404, body: { error: '该用户不存在' } };
   if (target.id === me.id) return { status: 400, body: { error: '不能加自己' } };
   const already = db.prepare('SELECT 1 FROM friends WHERE user_id = ? AND friend_id = ?').get(me.id, target.id);
@@ -3132,15 +3225,15 @@ function sendFriendRequest(me, target) {
   if (reverse) {
     db.prepare("UPDATE friend_requests SET status = 'accepted' WHERE id = ?").run(reverse.id);
     const ts = now();
-    db.prepare('INSERT OR IGNORE INTO friends (user_id, friend_id, created_at) VALUES (?, ?, ?)').run(me.id, target.id, ts);
-    db.prepare('INSERT OR IGNORE INTO friends (user_id, friend_id, created_at) VALUES (?, ?, ?)').run(target.id, me.id, ts);
+    linkFriends(me.id, target.id, ts, tag, null);
+    linkFriends(target.id, me.id, ts, null, null);
     io.to(`user:${me.id}`).emit('friend:added', { id: target.id, username: target.username, avatar: target.avatar, avatar_color: target.avatar_color });
     io.to(`user:${target.id}`).emit('friend:added', { id: me.id, username: me.username, avatar: me.avatar, avatar_color: me.avatar_color });
     return { status: 200, body: { ok: true, autoAccepted: true } };
   }
   const info = db.prepare(
-    'INSERT INTO friend_requests (from_user_id, to_user_id, status, created_at) VALUES (?, ?, ?, ?)'
-  ).run(me.id, target.id, 'pending', now());
+    'INSERT INTO friend_requests (from_user_id, to_user_id, status, created_at, tag) VALUES (?, ?, ?, ?, ?)'
+  ).run(me.id, target.id, 'pending', now(), String(tag || '').trim().slice(0, 24) || null);
   io.to(`user:${target.id}`).emit('friend:request', {
     id: info.lastInsertRowid,
     from: { id: me.id, username: me.username, avatar: me.avatar, avatar_color: me.avatar_color },
@@ -3179,17 +3272,17 @@ app.delete('/api/friends/:id', rateLimit('write'), authRequired, (req, res) => {
 });
 
 app.post('/api/friend/request', rateLimit('write'), authRequired, (req, res) => {
-  const { toUsername } = req.body || {};
+  const { toUsername, tag } = req.body || {};
   if (!toUsername) return res.status(400).json({ error: '请输入对方用户名' });
   const target = db.prepare('SELECT * FROM users WHERE username = ?').get(toUsername);
-  const r = sendFriendRequest(req.user, target);
+  const r = sendFriendRequest(req.user, target, tag);
   res.status(r.status).json(r.body);
 });
 
 // New flow: add a user you already met in a group, addressed by id.
 app.post('/api/friend/request/:id', rateLimit('write'), authRequired, (req, res) => {
   const target = db.prepare('SELECT * FROM users WHERE id = ?').get(Number(req.params.id));
-  const r = sendFriendRequest(req.user, target);
+  const r = sendFriendRequest(req.user, target, req.body && req.body.tag);
   res.status(r.status).json(r.body);
 });
 
@@ -3217,8 +3310,8 @@ app.post('/api/friend/respond', rateLimit('write'), authRequired, (req, res) => 
   db.prepare('UPDATE friend_requests SET status = ? WHERE id = ?').run(status, id);
   if (accept) {
     const ts = now();
-    db.prepare('INSERT OR IGNORE INTO friends (user_id, friend_id, created_at) VALUES (?, ?, ?)').run(fr.from_user_id, fr.to_user_id, ts);
-    db.prepare('INSERT OR IGNORE INTO friends (user_id, friend_id, created_at) VALUES (?, ?, ?)').run(fr.to_user_id, fr.from_user_id, ts);
+    linkFriends(fr.from_user_id, fr.to_user_id, ts, fr.tag, null);
+    linkFriends(fr.to_user_id, fr.from_user_id, ts, null, null);
     const me = db.prepare('SELECT id, username, avatar, avatar_color FROM users WHERE id = ?').get(req.user.id);
     const them = db.prepare('SELECT id, username, avatar, avatar_color FROM users WHERE id = ?').get(fr.from_user_id);
     io.to(`user:${fr.to_user_id}`).emit('friend:added', them);
@@ -3709,7 +3802,11 @@ io.use((socket, next) => {
   if (!token) return next(new Error('missing token'));
   try {
     const payload = jwt.verify(token, JWT_SECRET);
-    socket.user = { id: payload.uid, username: payload.username };
+    // 和 HTTP 一样：库换了就当 token 过期，别让旧 uid 串到别人身上。
+    if (!payload.ep || payload.ep !== DB_EPOCH) return next(new Error('session expired'));
+    const u = db.prepare('SELECT id, username FROM users WHERE id = ?').get(payload.uid);
+    if (!u) return next(new Error('invalid token'));
+    socket.user = { id: u.id, username: u.username };
     next();
   } catch (e) { next(new Error('invalid token')); }
 });

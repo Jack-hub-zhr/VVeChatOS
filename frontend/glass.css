@@ -1,0 +1,121 @@
+/* ============================================================
+   GLASS — 玻璃质感视觉层（普通毛玻璃，不做折射）
+   ------------------------------------------------------------
+   折射引擎（SVG 滤镜链）已整体移除：它在移动端每帧重算整块背景，
+   iPad 上直接把主线程压死，点会话都加载不出历史消息。
+   这一层只保留「看起来像玻璃」的表面处理：
+     · 面板的玻璃底色 / 描边 / 投影（App 的设计语言，别乱动）
+     · 顶栏与列表顶部的一道高光（玻璃的「厚度」）
+     · 按压反馈
+     · 550C 终端主题不做玻璃处理（硬边等宽字体跟玻璃混在一起会脏）
+   ============================================================ */
+
+/* ---------- 玻璃面板：更强的通透感 ---------- */
+body {
+  --glass-bg: rgba(255, 255, 255, 0.46);
+  --glass-bg-strong: rgba(255, 255, 255, 0.62);
+  --glass-bg-soft: rgba(255, 255, 255, 0.30);
+  --glass-bg-frost: rgba(255, 255, 255, 0.16);
+  --glass-border: rgba(255, 255, 255, 0.62);
+  --glass-border-soft: rgba(255, 255, 255, 0.36);
+  --glass-blur: 40px;
+  --glass-blur-strong: 56px;
+  --glass-shadow: 0 12px 38px rgba(38, 62, 100, 0.13), 0 1px 2px rgba(38, 62, 100, 0.06);
+  --glass-shadow-lg: 0 26px 76px rgba(38, 62, 100, 0.20), 0 2px 6px rgba(38, 62, 100, 0.07);
+  --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.85), inset 0 -1px 0 rgba(0, 0, 0, 0.04);
+}
+body.dark {
+  --glass-bg: rgba(28, 33, 44, 0.46);
+  --glass-bg-strong: rgba(32, 38, 50, 0.62);
+  --glass-bg-soft: rgba(255, 255, 255, 0.055);
+  --glass-bg-frost: rgba(255, 255, 255, 0.035);
+  --glass-border: rgba(255, 255, 255, 0.115);
+  --glass-border-soft: rgba(255, 255, 255, 0.06);
+  --glass-shadow: 0 12px 38px rgba(0, 0, 0, 0.46), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --glass-shadow-lg: 0 26px 76px rgba(0, 0, 0, 0.62), 0 2px 6px rgba(0, 0, 0, 0.34);
+  --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.13), inset 0 -1px 0 rgba(0, 0, 0, 0.20);
+}
+
+/* ---------- 关键面板：只加饱和度与对比度，不叠模糊 ---------- */
+body .list-pane,
+body .topbar,
+body .side-nav,
+body .mobile-tabbar {
+  backdrop-filter: saturate(190%) contrast(1.04);
+  -webkit-backdrop-filter: saturate(190%) contrast(1.04);
+  border-color: var(--glass-border);
+}
+/* 顶部边缘的一道高光 —— 玻璃的「厚度」就靠这条线 */
+body .list-pane,
+body .topbar {
+  position: relative;
+}
+body .list-pane::before,
+body .topbar::before {
+  content: '';
+  position: absolute;
+  left: 10%; right: 10%; top: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.75), transparent);
+  pointer-events: none;
+  z-index: 3;
+}
+body.dark .list-pane::before,
+body.dark .topbar::before {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.20), transparent);
+}
+
+/* ---------- 按钮 / 可点元素：按下有反馈 ---------- */
+body .btn,
+body .icon-btn,
+body .side-nav-item,
+body .msg-action-btn,
+body .emoji-pick,
+body .ai-tool-btn {
+  transition: transform .18s cubic-bezier(.22, 1, .36, 1),
+              box-shadow .18s ease,
+              background .18s ease,
+              color .18s ease;
+}
+body .btn:active,
+body .icon-btn:active,
+body .side-nav-item:active,
+body .msg-action-btn:active {
+  transform: scale(.955);
+}
+
+/* ---------- 小圆角的东西：按压更明显 ---------- */
+body .icon-btn:active,
+body .cg-emoji-pick:active {
+  transform: scale(.88);
+}
+
+/* ============================================================
+   550C 终端主题 —— 硬边、等宽、不做玻璃。
+   玻璃和终端风格是两种语言，混在一起会脏。
+   ============================================================ */
+body.theme-550c .list-pane,
+body.theme-550c .topbar,
+body.theme-550c .side-nav,
+body.theme-550c .mobile-tabbar {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+body.theme-550c .list-pane::before,
+body.theme-550c .topbar::before {
+  display: none;
+}
+body.theme-550c .btn:active,
+body.theme-550c .icon-btn:active,
+body.theme-550c .side-nav-item:active,
+body.theme-550c .msg-action-btn:active {
+  transform: none;
+}
+
+/* ---------- 无障碍：系统说不要动，就别动 ---------- */
+@media (prefers-reduced-motion: reduce) {
+  body .btn:active,
+  body .icon-btn:active,
+  body .side-nav-item:active,
+  body .msg-action-btn:active { transform: none; }
+}

@@ -8,9 +8,9 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="theme-color" content="#4C6FFF" />
   <title>VVeChat</title>
-  <link rel="stylesheet" href="style.css?v=20261107v" />
-  <!-- 液态玻璃视觉层（折射引擎移植自 rdev/liquid-glass-react, MIT） -->
-  <link rel="stylesheet" href="liquid-glass.css?v=20261107v" />
+  <link rel="stylesheet" href="style.css?v=20261107x" />
+  <!-- 玻璃质感视觉层（普通毛玻璃；折射引擎已移除） -->
+  <link rel="stylesheet" href="glass.css?v=20261107x" />
   <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><text x='32' y='44' font-family='system-ui' font-size='40' font-weight='800' text-anchor='middle' fill='%234C6FFF'>V</text></svg>" />
 </head>
 <body>
@@ -331,12 +331,8 @@
           <!-- 右边的动态流滚到哪条,这里就显示哪条的点赞和评论。 -->
           <div id="pane-moment" class="pane">
             <div class="moment-detail-head">
-              <button type="button" class="moment-compose icon-only" id="btn-moment-compose" title="写点什么" data-i18n-title="moment_write">
-                <span class="ic">✏️</span>
-              </button>
-              <button type="button" class="moment-compose icon-only" id="btn-moment-pick-img" title="加图片" data-i18n-title="moment_add">
-                <span class="ic">🖼️</span>
-              </button>
+              <!-- 原来这里是 ✏️ / 🖼️ 两个小图标，换成一条长胶囊 -->
+              <button type="button" class="moment-compose capsule" id="btn-moment-compose" data-i18n="moment_side_write">边写文案</button>
               <span class="moment-detail-title" data-i18n="moment_detail_title">这条动态</span>
             </div>
             <div class="moment-detail" id="moment-detail"></div>
@@ -431,33 +427,6 @@
                   <button type="button" data-v="1.15" data-i18n="pref_large">大</button>
                 </span>
               </div>
-              <div class="more-row static">
-                <span class="more-row-main">
-                  <span class="more-row-title" data-i18n="pref_clock">时间格式</span>
-                  <span class="more-row-desc" data-i18n="pref_clock_desc">消息旁边显示时间的样式</span>
-                </span>
-                <span class="seg" id="pref-clock">
-                  <button type="button" data-v="24" data-i18n="pref_24h">24 小时</button>
-                  <button type="button" data-v="12" data-i18n="pref_12h">12 小时</button>
-                </span>
-              </div>
-            </div>
-
-            <div class="side-section">
-              <span class="side-section-title" data-i18n="pref_assistant">Jacky Bot</span>
-            </div>
-            <!-- The assistant always answers in groups now — there used to
-                 be a switch for it, but turning it off only confused
-                 people ("why doesn't @Qwen work?").  The row is kept as a
-                 static label so the feature is still discoverable. -->
-            <div class="more-list">
-              <div class="more-row static">
-                <span class="more-row-main">
-                  <span class="more-row-title" data-i18n="pref_ai_groups">群里可以叫助手</span>
-                  <span class="more-row-desc" data-i18n="pref_ai_groups_desc">在群聊里 @Jacky Bot，它会读完上下文再回答</span>
-                </span>
-                <span class="more-row-badge" data-i18n="pref_ai_groups_always">始终开启</span>
-              </div>
             </div>
 
             <div class="side-section">
@@ -474,6 +443,18 @@
                 </span>
               </div>
             </div>
+            <div class="side-section">
+              <span class="side-section-title" data-i18n="pref_version">版本</span>
+            </div>
+            <div class="more-list">
+              <div class="more-row static">
+                <span class="more-row-main">
+                  <span class="more-row-title">VVeChat OS 1（Beta）</span>
+                  <span class="more-row-desc" id="pref-version-desc">—</span>
+                </span>
+              </div>
+            </div>
+
             <div class="side-section">
               <span class="side-section-title" data-i18n="pref_about">关于</span>
             </div>
@@ -770,6 +751,10 @@
           <span class="field-label" data-i18n="their_username">对方的用户名</span>
           <input id="add-friend-username" type="text" required maxlength="24" placeholder="输入任何部分即可" data-i18n-ph="any_part_ph" />
         </label>
+        <label class="field">
+          <span class="field-label" data-i18n="friend_tag_label">标签（可选）</span>
+          <input id="add-friend-tag" type="text" maxlength="24" placeholder="给这个好友起个标签，比如「同事」" data-i18n-ph="friend_tag_ph" />
+        </label>
         <div class="modal-msg" id="add-friend-msg"></div>
         <div class="modal-actions">
           <button type="button" class="btn btn-ghost" data-close="modal-add-friend" data-i18n="cancel">取消</button>
@@ -935,7 +920,7 @@
   <!-- Socket.io client is served by this same Express app at /socket.io/socket.io.js,
        so there is no third-party CDN to fail (or be blocked). -->
   <script src="/socket.io/socket.io.js"></script>
-  <script src="config.js?v=20261107v"></script>
+  <script src="config.js?v=20261107x"></script>
   <!-- The 550C theme is ~60 KB. Only fetch it when it is actually on:
        localStorage says so right now, and app.js re-checks after login
        for the case where the account has it on but this browser does
@@ -953,7 +938,7 @@
        time even though the theme was enabled. -->
   <script>
   (function () {
-    try { window.__VV_ASSET_V = '20261107v'; } catch (e) { }
+    try { window.__VV_ASSET_V = '20261107x'; } catch (e) { }
     var V = window.__VV_ASSET_V || '';
     var on = false;
     try { on = localStorage.getItem('vve:boot550c') === '1'; } catch (e) { }
@@ -975,8 +960,6 @@
   })();
   </script>
   <!-- 液态玻璃引擎：折射 + 果冻物理 + 体积光 + 光照互通 -->
-  <script src="liquid-glass-maps.js?v=20261107v"></script>
-  <script src="liquid-glass.js?v=20261107v"></script>
-  <script src="app.js?v=20261107v"></script>
+  <script src="app.js?v=20261107x"></script>
 </body>
 </html>
