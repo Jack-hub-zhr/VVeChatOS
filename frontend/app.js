@@ -107,7 +107,7 @@
       friend_tag_label: '标签（可选）',
       friend_tag_ph: '给这个好友起个标签，比如「同事」',
       cat_users: '用户',
-      cat_friends: '我的好友',
+      cat_system: '系统',
       pref_version: '版本',
       loading_retry: '加载中…（点这里重试）',
       member_unit: '人',
@@ -552,7 +552,7 @@
       friend_tag_label: 'Tag (optional)',
       friend_tag_ph: 'Give this friend a tag, e.g. "colleague"',
       cat_users: 'Users',
-      cat_friends: 'My Friends',
+      cat_system: 'System',
       pref_version: 'Version',
       loading_retry: 'Loading… (tap to retry)',
       member_unit: 'members',
@@ -1686,7 +1686,7 @@
   }
   function tagLabel(tag) {
     if (tag === '用户') return t('cat_users');
-    if (tag === '我的好友') return t('cat_friends');
+    if (tag === '系统') return t('cat_system');
     if (tag === 'VVeChat 官方群') return t('official_group_name');
     return tag;
   }

@@ -444,7 +444,7 @@
       row.innerHTML = `
         <div class="avatar${isJack ? ' jack' : ''}" style="${isJack ? '' : bg}">${face}</div>
         <div class="u-meta">
-          <div class="u-name">${esc(u.username)}${isJack ? ' <span class="jack-tag">管理员</span>' : ''}</div>
+          <div class="u-name">${esc(u.username)}${isJack ? ' <span class="jack-tag">管理员</span>' : ''}${(u.is_system || u.is_assistant) ? ' <span class="jack-tag sys">系统账号</span>' : ''}</div>
           <div class="u-sub">ID ${u.id} · 注册于 ${fmtTime(u.created_at)}${u.bio ? ' · ' + esc(u.bio) : ''}</div>
         </div>`;
       // 系统账号(Jacky Bot / 文件传输助手)不给注销按钮 ——
@@ -526,7 +526,7 @@
     const sec = state.security && state.security.stats ? state.security.stats : {};
     const blocked = (sec.blockedIps || []).length;
     const items = [
-      { k: '注册用户', v: (d.users || []).length, s: '含系统账号' },
+      { k: '账号总数', v: (d.users || []).length, s: '含系统账号' },
       { k: '好友会话', v: convos, s: '只统计，不看正文' },
       { k: '群消息', v: groupTotal, s: '只统计，不看正文' },
       { k: '当前封禁', v: blocked, s: '被防火墙挡下的 IP', cls: blocked ? 'bad' : '' },

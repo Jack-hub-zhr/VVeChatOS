@@ -482,36 +482,33 @@ function seedDefaultContacts(userId) {
 // 加好友时用户可以自己写标签；没写就按「你们一起在哪个群」自动分。
 // Jack 那边的自动添加统一进「用户」组 —— 他那儿的好友基本都是注册用户。
 const CATEGORY_USERS = '用户';
-const CATEGORY_FRIENDS = '我的好友';
-function adminUserId() {
-  const row = db.prepare('SELECT id FROM users WHERE username = ?').get(ADMIN_USERNAME);
-  return row ? row.id : 0;
+const CATEGORY_SYSTEM = '系统';
+// Jacky Bot / 文件传输助手 是系统账号，不是「用户」—— 它们单独一组。
+function isSystemUser(userId) {
+  const row = db.prepare('SELECT username FROM users WHERE id = ?').get(userId);
+  if (!row) return false;
+  return row.username === ASSISTANT_NAME || row.username === FILE_ASSISTANT_NAME;
 }
 function friendCategory(ownerId, otherId, customTag) {
   const custom = String(customTag || '').trim().slice(0, 24);
   if (custom) return custom;
-  if (Number(ownerId) === Number(adminUserId())) return CATEGORY_USERS;
-  const g = db.prepare(`
-    SELECT g.name FROM group_members m1
-    JOIN group_members m2 ON m1.group_id = m2.group_id
-    JOIN groups g ON g.id = m1.group_id
-    WHERE m1.user_id = ? AND m2.user_id = ?
-    ORDER BY g.is_official DESC, g.id ASC LIMIT 1
-  `).get(ownerId, otherId);
-  return g ? g.name : CATEGORY_FRIENDS;
+  if (isSystemUser(otherId)) return CATEGORY_SYSTEM;
+  return CATEGORY_USERS;
 }
 // 建立好友关系并归类（两个方向各归各的类）。
 // 已经有关系的不动标签 —— 否则每次登录都会把用户自己写的标签冲掉。
 function linkFriends(aId, bId, ts, tagFromA, tagFromB) {
   const one = (owner, other, tag) => {
     const row = db.prepare('SELECT tag FROM friends WHERE user_id = ? AND friend_id = ?').get(owner, other);
+    const cat = friendCategory(owner, other, tag);
     if (!row) {
       db.prepare('INSERT INTO friends (user_id, friend_id, created_at, tag) VALUES (?, ?, ?, ?)')
-        .run(owner, other, ts, friendCategory(owner, other, tag));
-    } else if (!row.tag) {
-      // 还没归类的（老数据）补一次；已经有的标签不动 —— 用户自己写的不能被冲掉。
+        .run(owner, other, ts, cat);
+    } else if (!row.tag || cat === CATEGORY_SYSTEM) {
+      // 还没归类的（老数据）补一次；系统账号每次都刷回来（它不是「用户」）。
+      // 用户自己写的标签不动 —— 除非对方是系统账号，那不是人写的分类。
       db.prepare('UPDATE friends SET tag = ? WHERE user_id = ? AND friend_id = ?')
-        .run(tag || friendCategory(owner, other, null), owner, other);
+        .run(cat, owner, other);
     }
   };
   one(aId, bId, tagFromA);

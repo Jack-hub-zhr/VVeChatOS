@@ -300,6 +300,8 @@ a { color: var(--green); }
 .kill:hover { background: var(--red); color: #1a0605; }
 .kill:disabled { opacity: .5; cursor: wait; }
 .jack-tag { font-size: 10px; padding: 1px 6px; border: 1px solid rgba(255, 196, 81, 0.5); color: var(--amber); border-radius: 5px; font-weight: 700; }
+/* 系统账号（Jacky Bot / 文件传输助手）—— 它们不是「用户」，标出来免得误会。 */
+.jack-tag.sys { border-color: rgba(56, 189, 248, 0.45); color: var(--cyan); }
 
 /* 会话（只留条数） */
 .convos { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; max-height: 260px; overflow-y: auto; }

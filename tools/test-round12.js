@@ -94,6 +94,23 @@ const register = async (username, password, lang) => {
     assert.ok(f, 'Jack 的好友列表里没有 ' + U1);
     assert.strictEqual(f.tag, '用户', '归类应该是「用户」,实际 ' + f.tag);
   });
+  await step('系统账号（Jacky Bot / 文件传输助手）归「系统」组，不是「用户」', async () => {
+    const r = await call('/friends', { token: admin.token });
+    for (const name of ['Jacky Bot', '文件传输助手']) {
+      const f = r.data.friends.find(x => x.username === name);
+      assert.ok(f, '好友列表里没有 ' + name);
+      assert.strictEqual(f.tag, '系统', name + ' 应该归「系统」组,实际 ' + f.tag);
+    }
+  });
+  await step('对方视角：Jack 归「用户」组,系统账号归「系统」组', async () => {
+    const r = await call('/friends', { token: user.token });
+    const jack = r.data.friends.find(f => f.username === 'Jack');
+    assert.ok(jack, '没有 Jack');
+    assert.strictEqual(jack.tag, '用户', 'Jack 应该归「用户」组,实际 ' + jack.tag);
+    const bot = r.data.friends.find(f => f.username === 'Jacky Bot');
+    assert.ok(bot, '没有 Jacky Bot');
+    assert.strictEqual(bot.tag, '系统', 'Jacky Bot 应该归「系统」组,实际 ' + bot.tag);
+  });
   await step('自定义标签能存下来,并且不被自动归类覆盖', async () => {
     const r = await call('/friends', { token: user.token });
     const jack = r.data.friends.find(f => f.username === 'Jack');
