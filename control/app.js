@@ -24,10 +24,18 @@
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   // Jacky Bot 的头像:跟聊天界面一样的发光圆环
   function assistantRing() {
+    // 两只长条发光竖眼 —— Grok 头像那味儿，跟前端同一个算法。
+    const r = 11, w = r * 0.19, h = r * 1.05, gap = r * 0.30, rx = w / 2, y = 16 - h / 2;
+    const x1 = (16 - gap - w / 2).toFixed(2), x2 = (16 + gap - w / 2).toFixed(2);
     return '<svg class="qwen-ring" viewBox="0 0 32 32" width="30" height="30" aria-hidden="true">'
       + '<circle class="qwen-halo" cx="16" cy="16" r="11" fill="none" stroke="#fff" stroke-width="5" opacity="0.9" filter="url(#qwenGlow)"/>'
       + '<circle cx="16" cy="16" r="11" fill="none" stroke="#fff" stroke-width="1.4" opacity="0.5"/>'
+      + '<circle cx="16" cy="16" r="11" fill="#0f172a"/>'
       + '<circle cx="16" cy="16" r="11" fill="none" stroke="#e2e8f0" stroke-width="3.2"/>'
+      + '<g class="qwen-eyes" fill="#fff" opacity="0.98" style="filter:drop-shadow(0 0 3px rgba(255,255,255,.85))">'
+      + '<rect x="' + x1 + '" y="' + y.toFixed(2) + '" width="' + w.toFixed(2) + '" height="' + h.toFixed(2) + '" rx="' + rx.toFixed(2) + '"/>'
+      + '<rect x="' + x2 + '" y="' + y.toFixed(2) + '" width="' + w.toFixed(2) + '" height="' + h.toFixed(2) + '" rx="' + rx.toFixed(2) + '"/>'
+      + '</g>'
       + '</svg>';
   }
 

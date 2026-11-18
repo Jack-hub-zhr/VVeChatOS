@@ -562,30 +562,27 @@ async function assistantAnswer(question, context, kind) {
   const useZh = /[\u4e00-\u9fa5]/.test(sample);
   const langLine = useZh ? '默认用简体中文。' : 'Reply in English.';
 
+  // 人味的来源：像个人，不像客服；先听懂再开口；不装、不套、不编。
+  const PERSONA = [
+    '你叫 Jacky Bot，是 VVeChat 里的一个真人账号 —— 不是客服机器人，也不是「AI 助手」。',
+    '你有自己的脾气和节奏：先听懂对方在说什么，再开口，别复述对方的话，别用「好的」「我明白了」开头。',
+    '像朋友一样说话：短句、口语、可以带一点情绪；最多三句话，别写成报告、别罗列要点、别加小标题。',
+    '可以自然地追问一句，也可以只说一句就停 —— 真人聊天不是每次都要说满。',
+    '不知道就说不知道（「这个我还真不知道」「我没看到相关信息」），绝对不要编。',
+    '永远不要说「作为一个 AI」「作为一个助手」「作为一个语言模型」。'
+  ];
   const system = kind === 'chime'
-    ? [
-      '你叫 AI，是这个群聊里的一位成员。',
+    ? PERSONA.concat([
       '此刻没有人问你话 —— 你只是坐在群里，听到大家聊得热闹，想接一两句。',
-      '接话要自然：一两句就够，绝不超过三句；不要提问、不要罗列要点、不要加小标题。',
-      '内容要对得上刚才大家在聊的事，别凭空另开一个话题。',
-      '不要出现「作为一个AI」「作为一个助手」这类说法。',
-      langLine
-    ].join('\n')
+      '所以别说「有人想问什么吗」这种话；顺着刚才大家在聊的内容接一句自己的看法就行。'
+    ]).concat([langLine]).join('\n')
     : kind === 'dm'
-    ? [
-      '你叫 Jacky Bot，是 VVeChat 里的助手。现在是你跟用户一对一聊天。',
-      '请像真人一样回话：口语、简短、直接，通常一两句话,别写成报告。',
-      '不要出现「作为一个AI」「作为一个助手」这类说法，也不要罗列要点或加小标题。',
-      '不知道的就直说没看到相关信息，别编。',
-      langLine
-    ].join('\n')
-    : [
-      '你叫 Jacky Bot，是这个群聊里的一位成员。大家聊天时会喊你一声，你就把话接过来。',
-      '请像真人一样回话：口语、简短、直接，最多两三句话。',
-      '不要出现「作为一个AI」「作为一个助手」这类说法，也不要罗列要点或加小标题。',
-      '如果上下文里找不到答案，就直接说没看到相关信息，别编。',
-      langLine
-    ].join('\n');
+    ? PERSONA.concat([
+      '现在是你跟用户一对一聊天 —— 对面只有他一个人，你可以更放松、更直接。'
+    ]).concat([langLine]).join('\n')
+    : PERSONA.concat([
+      '群里大家聊天时会喊你一声（@你），你把话接过来就行；别人没喊你时别抢话。'
+    ]).concat([langLine]).join('\n');
 
   const messages = [{ role: 'system', content: system }];
   for (const c of context) {
@@ -714,11 +711,11 @@ const pendingDm = new Map();
 // 设 AUTO_CHIME=off 可以整个关掉。
 // ============================================================
 const AUTO_CHIME_ON = String(process.env.AUTO_CHIME || '').toLowerCase() !== 'off';
-const AUTO_CHIME_INTERVAL = 2 * 60 * 1000;   // 2 分钟一圈
-const AUTO_CHIME_PROB = 0.35;               // 每轮参与的随机概率
-const AUTO_CHIME_ACTIVE = 10 * 60 * 1000;   // 10 分钟内有人说话才算「有热闹」
-const AUTO_CHIME_MIN_HUMAN = 3;             // 至少这么多条真人消息才接话
-const AUTO_CHIME_COOLDOWN = 20 * 60 * 1000; // 同一个群 20 分钟只接一次
+const AUTO_CHIME_INTERVAL = 60 * 1000;      // 一分钟巡一圈
+const AUTO_CHIME_PROB = 1;                  // 每圈都接话（用户要的是「实时」）
+const AUTO_CHIME_ACTIVE = 60 * 1000;       // 这一分钟内有人说话才算「有热闹」
+const AUTO_CHIME_MIN_HUMAN = 1;             // 一条真人消息就够
+const AUTO_CHIME_COOLDOWN = 55 * 1000;      // 同一个群一分钟最多接一次
 
 let _chimeBusy = false;
 async function assistantAutoChime() {
@@ -737,6 +734,13 @@ async function assistantAutoChime() {
       `).all(gid, since);
       const human = recent.filter((r) => r.sender_id !== assistantId);
       if (human.length < AUTO_CHIME_MIN_HUMAN) continue;      // 群里没人说话
+      // 这一分钟里有人 @ 它 → 刚刚已经答过了，这一轮不主动插话。
+      const askedByHuman = db.prepare(`
+        SELECT COUNT(*) AS n FROM messages
+        WHERE conv_type = 'group' AND conv_id = ? AND is_deleted = 0 AND type = 'text'
+          AND created_at >= ? AND sender_id != ? AND content LIKE '%@%'
+      `).get(gid, since, assistantId);
+      if (askedByHuman.n) continue;
       const mine = db.prepare(`
         SELECT created_at FROM messages
         WHERE conv_type = 'group' AND conv_id = ? AND sender_id = ? AND is_deleted = 0
@@ -1452,6 +1456,26 @@ const QWEN_PROVIDERS = {
     note: '约 2600 tok/s，免费额度 100 万 token/天',
     noteEn: 'About 2,600 tok/s — 1M free tokens per day'
   },
+  pollinations: {
+    label: 'Pollinations',
+    labelEn: 'Pollinations',
+    base: 'https://text.pollinations.ai/openai',
+    path: '',
+    needKey: false,
+    env: [],
+    note: '全免费、无需密钥；偶尔排队',
+    noteEn: 'Completely free, no key needed; occasional queueing'
+  },
+  gemini: {
+    label: 'Google AI Studio',
+    labelEn: 'Google AI Studio',
+    base: 'https://generativelanguage.googleapis.com/v1beta/openai',
+    path: '/chat/completions',
+    needKey: true,
+    env: ['GEMINI_API_KEY', 'GOOGLE_API_KEY', 'RELAY_GEMINI_KEY'],
+    note: 'Gemini 3.x Flash 免费档，无需绑卡；知识更新、答得最像人',
+    noteEn: 'Gemini 3.x Flash free tier, no card needed; freshest knowledge, most natural answers'
+  },
   dashscope: {
     label: '阿里百炼',
     labelEn: 'Alibaba Bailian',
@@ -1475,6 +1499,8 @@ const QWEN_PROVIDERS = {
 //            'provider'→ the provider searches (enable_search)
 const QWEN_MODELS = [
   // --- 免密钥，开箱即用 ---
+  { id: 'ovh-qwen3-8-27b', provider: 'ovh', model: 'Qwen3.8-27B', label: 'Qwen3.8 27B', tag: '免密钥', desc: '默认档，知识最新', thinking: 'always', search: 'client' },
+  { id: 'pl-openai-fast', provider: 'pollinations', model: 'openai-fast', label: 'Pollinations Fast', tag: '免密钥', desc: '全免费无密钥，答得快', thinking: 'none', search: 'client' },
   { id: 'ovh-qwen3-6-27b', provider: 'ovh', model: 'Qwen3.6-27B', label: 'Qwen3.6 27B', tag: '免密钥', desc: '开箱即用，27B 通用模型', thinking: 'always', search: 'client' },
   { id: 'ovh-qwen3-5-9b', provider: 'ovh', model: 'Qwen3.5-9B', label: 'Qwen3.5 9B', tag: '免密钥', desc: '最快的一档，延迟最低', thinking: 'always', search: 'client' },
   { id: 'ovh-qwen3-5-397b', provider: 'ovh', model: 'Qwen3.5-397B-A17B', label: 'Qwen3.5 397B-A17B', tag: '免密钥', desc: 'MoE 大模型，匿名即可触达', thinking: 'always', search: 'client' },
@@ -1484,7 +1510,11 @@ const QWEN_MODELS = [
   // --- 魔搭 ---
   { id: 'ms-qwen3-5-27b', provider: 'modelscope', model: 'Qwen/Qwen3.5-27B', label: 'Qwen3.5 27B', tag: '魔搭', desc: '魔搭社区免费推理', thinking: 'none', search: 'client' },
   { id: 'ms-qwen3-5-35b', provider: 'modelscope', model: 'Qwen/Qwen3.5-35B-A3B', label: 'Qwen3.5 35B-A3B', tag: '魔搭', desc: '魔搭社区免费推理', thinking: 'none', search: 'client' },
+  // --- Google AI Studio（免费档，免卡） ---
+  { id: 'gm-3-8-flash', provider: 'gemini', model: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash', tag: 'Gemini', desc: '免费档，知识最新、最会说话', thinking: 'none', search: 'client' },
+  { id: 'gm-3-6-flash', provider: 'gemini', model: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash', tag: 'Gemini', desc: '免费档，速度与质量均衡', thinking: 'none', search: 'client' },
   // --- Groq ---
+  { id: 'groq-qwen3-8-27b', provider: 'groq', model: 'qwen3-8-27b', label: 'Qwen3.8 27B', tag: 'Groq', desc: 'LPU 极速，免费额度高', thinking: 'none', search: 'client' },
   { id: 'groq-qwen3-32b', provider: 'groq', model: 'qwen3-32b', label: 'Qwen3 32B', tag: 'Groq', desc: 'LPU 极速输出', thinking: 'none', search: 'client' },
   // --- Cerebras ---
   { id: 'cb-qwen3-235b', provider: 'cerebras', model: 'qwen-3-235b-a22b-instruct-2507', label: 'Qwen3 235B', tag: 'Cerebras', desc: '约 2600 tok/s，免费额度高', thinking: 'none', search: 'client' },
@@ -2268,7 +2298,7 @@ app.get('/api/ai/status', authRequired, (req, res) => {
   const ready = models.filter((m) => m.ready);
   res.json({
     ok: ready.length > 0,
-    defaultModel: (models.find((m) => m.ready && m.id === 'ovh-qwen3-6-27b') || ready[0] || {}).id,
+    defaultModel: (models.find((m) => m.ready && m.id === 'ovh-qwen3-8-27b') || ready[0] || {}).id,
     models,
     providers: Object.keys(QWEN_PROVIDERS).map((pid) => ({
       id: pid,
@@ -3266,6 +3296,21 @@ app.delete('/api/friends/:id', rateLimit('write'), authRequired, (req, res) => {
   io.to(`user:${fid}`).emit('friend:removed', { id: req.user.id });
   io.to(`user:${req.user.id}`).emit('friend:removed', { id: fid });
   res.json({ ok: true });
+});
+
+// 给好友换一个词条（分类）—— 只改自己这一侧的方向。
+app.put('/api/friends/:id/tag', rateLimit('write'), authRequired, (req, res) => {
+  const fid = Number(req.params.id);
+  if (!Number.isFinite(fid)) return res.status(400).json({ error: '参数错误' });
+  if (fid === req.user.id) return res.status(400).json({ error: '不能对自己操作' });
+  const f = db.prepare('SELECT 1 FROM friends WHERE user_id = ? AND friend_id = ?').get(req.user.id, fid);
+  if (!f) return res.status(404).json({ error: '对方不是你的好友' });
+  const raw = String((req.body || {}).tag || '').trim().slice(0, 24);
+  // 空词条 = 用回自动分类（用户 / 系统）。
+  const tag = raw || friendCategory(req.user.id, fid, null);
+  db.prepare('UPDATE friends SET tag = ? WHERE user_id = ? AND friend_id = ?').run(tag, req.user.id, fid);
+  io.to(`user:${req.user.id}`).emit('friends:changed', { id: fid });
+  res.json({ ok: true, tag });
 });
 
 app.post('/api/friend/request', rateLimit('write'), authRequired, (req, res) => {

@@ -108,6 +108,10 @@
       friend_tag_ph: '给这个好友起个标签，比如「同事」',
       cat_users: '用户',
       cat_system: '系统',
+      tag_pick: '词条',
+      tag_auto: '自动',
+      tag_custom_ph: '自定义词条',
+      tag_saved: '词条已更新',
       pref_version: '版本',
       loading_retry: '加载中…（点这里重试）',
       member_unit: '人',
@@ -133,6 +137,7 @@
       moment_likes: '点赞',
       moment_comments: '评论',
       moment_no_likes: '还没有人点赞',
+      moment_comment_sent: '评论已发送',
       moment_no_comments: '还没有评论',
       btn_back: '返回',
       avatar_upload: '上传照片',
@@ -553,6 +558,10 @@
       friend_tag_ph: 'Give this friend a tag, e.g. "colleague"',
       cat_users: 'Users',
       cat_system: 'System',
+      tag_pick: 'Tag',
+      tag_auto: 'Auto',
+      tag_custom_ph: 'Custom tag',
+      tag_saved: 'Tag updated',
       pref_version: 'Version',
       loading_retry: 'Loading… (tap to retry)',
       member_unit: 'members',
@@ -578,6 +587,7 @@
       moment_likes: 'Likes',
       moment_comments: 'Comments',
       moment_no_likes: 'No likes yet',
+      moment_comment_sent: 'Comment sent',
       moment_no_comments: 'No comments yet',
       btn_back: 'Back',
       avatar_upload: 'Upload a photo',
@@ -1108,6 +1118,7 @@
       <circle class="qwen-halo" cx="16" cy="16" r="8" fill="none" stroke="#fff" stroke-width="4.5" opacity="0.9" filter="url(#qwenGlow)"/>
       <circle cx="16" cy="16" r="8" fill="none" stroke="#fff" stroke-width="1.4" opacity="0.5"/>
       <circle cx="16" cy="16" r="8" fill="none" stroke="var(--qwen-ring, #0f172a)" stroke-width="2.6"/>
+      ${qwenEyes(16)}
     </svg>`;
   }
   // 头像位上的版本:环更大(r=11),撑满一个 32px 的头像格子。
@@ -1116,8 +1127,26 @@
     return `<svg class="qwen-ring qwen-ring-avatar" viewBox="0 0 32 32" width="${s}" height="${s}" aria-hidden="true">
       <circle class="qwen-halo" cx="16" cy="16" r="11" fill="none" stroke="#fff" stroke-width="5" opacity="0.9" filter="url(#qwenGlow)"/>
       <circle cx="16" cy="16" r="11" fill="none" stroke="#fff" stroke-width="1.4" opacity="0.5"/>
+      <circle cx="16" cy="16" r="11" fill="var(--qwen-ring, #0f172a)"/>
       <circle cx="16" cy="16" r="11" fill="none" stroke="var(--qwen-ring, #0f172a)" stroke-width="3.2"/>
+      ${qwenEyes(11)}
     </svg>`;
+  }
+  // 两只长条发光竖眼 —— Grok 头像那味儿。
+  // r = 头像环半径,眼睛贴着环内侧摆,中间留一条缝。
+  function qwenEyes(r) {
+    const w = r * 0.19;          // 竖条粗细
+    const h = r * 1.05;          // 竖条高度
+    const gap = r * 0.30;        // 两眼间距
+    const x1 = 16 - gap - w / 2;
+    const x2 = 16 + gap - w / 2;
+    const y = 16 - h / 2;
+    const rx = w / 2;             // 圆角 = 半粗,顶头是胶囊
+    // 注意：#qwenGlow 只是高斯模糊，套上来眼睛会糊成一片灰 —— 用 CSS 投影做发光。
+    return `<g class="qwen-eyes" fill="#fff" opacity="0.98" style="filter:drop-shadow(0 0 3px rgba(255,255,255,.85))">
+      <rect x="${x1.toFixed(2)}" y="${y.toFixed(2)}" width="${w.toFixed(2)}" height="${h.toFixed(2)}" rx="${rx.toFixed(2)}"/>
+      <rect x="${x2.toFixed(2)}" y="${y.toFixed(2)}" width="${w.toFixed(2)}" height="${h.toFixed(2)}" rx="${rx.toFixed(2)}"/>
+    </g>`;
   }
   // 头像里的内容:助手 → 发光圆环;emoji 头像优先;否则首字母
   function avatarContent(username, emoji, size) {
@@ -2244,15 +2273,18 @@
       // 好友表和会话列表任一有数据就行 —— 头部头像要和列表里的长得一样。
       const f = state.friends.find(x => String(x.id) === String(id)) ||
                 state.conversations.find(c => c.type === 'user' && String(c.id) === String(id));
+      // 「我」这条会话的 username 是「我」两个字 —— 用它渲染头像会得到一个「我」字，
+      // 和列表里的本人头像对不上。这里换成真正的本人。
+      const who = (curConv && curConv.special === 'self') ? state.user : f;
       const online = isOnline(id);
       const bio = f && !isSystemAccount(f.username) ? f.bio : '';
       sub.innerHTML = online ? `<span style="color:var(--online);">● ${t('online')}</span>` : escapeHtml(bio || t('friend'));
-      const bg = avatarBgOf(f);
+      const bg = avatarBgOf(who);
       avatar.style.cssText = `cursor:pointer;${bg}`;
       avatar.className = `avatar sm ${online?'online':''}`;
       avatar.style.display = 'flex';
       // 助手用发光圆环、文件传输助手用 📁、照片直接铺满 —— 跟列表一模一样。
-      avatar.innerHTML = avatarInner(f);
+      avatar.innerHTML = avatarInner(who);
       // The header avatar opens the same action menu as every other
       // avatar in the app (查看资料 / 添加好友 / 发消息).
       avatar.setAttribute('data-user-avatar', String(id));
@@ -3144,6 +3176,14 @@
   }
 
   // ---------- profile ----------
+  // 好友列表里已经用过的词条 —— 给个人页当候选。
+  function allFriendTags() {
+    const out = [];
+    for (const f of state.friends || []) {
+      if (f.tag && out.indexOf(f.tag) < 0) out.push(f.tag);
+    }
+    return out;
+  }
   function openProfileModal(user, opts = {}) {
     const allowAdd = !!opts.allowAdd;
     const isMe = user.id === state.user.id;
@@ -3151,6 +3191,18 @@
     const isFriend = state.friends.some(f => Number(f.id) === Number(user.id));
     $('#profile-title').textContent = isMe ? t('profile_title') : user.username;
     const online = isOnline(user.id);
+    // 词条（分类）：好友之间可以自己定，选完之后同类的好友在列表里自动归到一块。
+    const curTag = isFriend ? (state.friends.find(f => Number(f.id) === Number(user.id)) || {}).tag : null;
+    const tagBlock = isFriend ? `
+      <div class="profile-tags">
+        <div class="profile-tags-label">${t('tag_pick')}</div>
+        <div class="profile-tags-row" id="profile-tag-row">
+          ${['用户', '系统'].concat(allFriendTags().filter(x => x !== '用户' && x !== '系统')).map(tg =>
+            `<button type="button" class="tag-pick${curTag === tg ? ' on' : ''}" data-tag="${escapeHtml(tg)}">${escapeHtml(tagLabel(tg))}</button>`).join('')}
+          <button type="button" class="tag-pick${!curTag ? ' on' : ''}" data-tag="">${t('tag_auto')}</button>
+          <input id="profile-tag-input" class="tag-input" type="text" maxlength="12" placeholder="${t('tag_custom_ph')}" />
+        </div>
+      </div>` : '';
     $('#profile-body').innerHTML = `<div class="profile-head">
       <div class="avatar lg" style="${avatarBgOf(user)}">${avatarInner(user, 64)}</div>
       <div class="name">${escapeHtml(user.username)} ${online ? `<span style="font-size:11px;color:#15803d;background:rgba(52,199,89,0.14);padding:2px 7px;border-radius:6px;border:1px solid rgba(52,199,89,0.30);font-weight:600;">${t('online')}</span>` : ''}</div>
@@ -3162,7 +3214,8 @@
                     ? `<button class="btn btn-primary btn-sm" id="btn-add-friend">+ ${t('add_friend')}</button>`
                     : `<button class="btn btn-primary btn-sm" id="btn-msg-friend">${t('btn_msg')}</button>`)}
         ${isFriend ? `<button class="btn btn-danger btn-sm" id="btn-remove-friend">${t('remove_friend')}</button>` : ''}
-      </div></div>`;
+      </div>
+      ${tagBlock}</div>`;
     if (isMe) {
       $('#btn-edit-profile')?.addEventListener('click', openProfileEdit);
       $('#btn-profile-logout')?.addEventListener('click', () => {
@@ -3179,6 +3232,35 @@
         addBtn.disabled = true;
         if (r.autoAccepted) setTimeout(() => closeModal('modal-profile'), 900);
       });
+      // 词条按钮：点一下就存，同类好友在列表里自动并到同一块。
+      const saveTag = async (tag) => {
+        try {
+          const r = await api('/friends/' + user.id + '/tag', { method: 'PUT', body: { tag } });
+          const f = state.friends.find(x => Number(x.id) === Number(user.id));
+          if (f) f.tag = r.tag || '';
+          else state.friends.push({ id: user.id, username: user.username, tag: r.tag || '' });
+          renderChats();
+          toast(t('tag_saved'));
+        } catch (e) {
+          toast(e.message || 'failed');
+        }
+      };
+      $('#profile-tag-row')?.addEventListener('click', (e) => {
+        const b = e.target.closest('.tag-pick');
+        if (!b) return;
+        saveTag(b.dataset.tag || '');
+      });
+      const tagInput = $('#profile-tag-input');
+      if (tagInput) {
+        tagInput.addEventListener('keydown', (e) => {
+          if (e.key !== 'Enter') return;
+          e.preventDefault();
+          const v = tagInput.value.trim();
+          if (!v) return;
+          tagInput.value = '';
+          saveTag(v);
+        });
+      }
       const rmBtn = $('#btn-remove-friend');
       if (rmBtn) rmBtn.addEventListener('click', async () => {
         const ok = await askConfirm({
@@ -3946,6 +4028,15 @@
         await loadMoments();
       } else if (act === 'comment') {
         // 评论框在中间那栏(当前这条的详情里),点一下就跳过去。
+        // 手机上那栏被收起来了 —— 直接问一句，别让人点了没反应。
+        if (window.innerWidth <= 820) {
+          const txt = (window.prompt(t('moment_comment') + ':') || '').trim();
+          if (!txt) return;
+          await api('/moments/' + id + '/comment', { method: 'POST', body: { text: txt } });
+          await loadMoments();
+          toast(t('moment_comment_sent'));
+          return;
+        }
         setActiveMoment(id);
         const input = $('#moment-detail-input');
         if (input) input.focus();

@@ -8,9 +8,9 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="theme-color" content="#4C6FFF" />
   <title>VVeChat</title>
-  <link rel="stylesheet" href="style.css?v=20261107y" />
+  <link rel="stylesheet" href="style.css?v=20261107z" />
   <!-- 玻璃质感视觉层（普通毛玻璃；折射引擎已移除） -->
-  <link rel="stylesheet" href="glass.css?v=20261107y" />
+  <link rel="stylesheet" href="glass.css?v=20261107z" />
   <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><text x='32' y='44' font-family='system-ui' font-size='40' font-weight='800' text-anchor='middle' fill='%234C6FFF'>V</text></svg>" />
 </head>
 <body>
@@ -112,7 +112,6 @@
             <span class="rail-me-name" id="side-name">—</span>
           </button>
           <span class="brand-name">VVeChat</span>
-          <span class="beta-tag">OS 1</span>
         </div>
         <div class="topbar-right">
           <!-- Mobile-only hamburger. Sits FIRST in .topbar-right so it can
@@ -231,7 +230,12 @@
                 <svg class="qwen-ring" viewBox="0 0 32 32" width="19" height="19" aria-hidden="true">
                   <circle class="qwen-halo" cx="16" cy="16" r="8" fill="none" stroke="#fff" stroke-width="4.5" opacity="0.9" filter="url(#qwenGlow)"/>
                   <circle cx="16" cy="16" r="8" fill="none" stroke="#fff" stroke-width="1.4" opacity="0.5"/>
+                  <circle cx="16" cy="16" r="8" fill="var(--qwen-ring, #0f172a)"/>
                   <circle cx="16" cy="16" r="8" fill="none" stroke="var(--qwen-ring, #0f172a)" stroke-width="2.6"/>
+                  <g class="qwen-eyes" fill="#fff" opacity="0.98" style="filter:drop-shadow(0 0 2.5px rgba(255,255,255,.85))">
+                    <rect x="11.2" y="11.6" width="1.52" height="8.8" rx="0.76"/>
+                    <rect x="19.28" y="11.6" width="1.52" height="8.8" rx="0.76"/>
+                  </g>
                 </svg>
               </span>
               <span class="side-nav-label" data-i18n="nav_assistant">AI</span>
@@ -449,7 +453,7 @@
             <div class="more-list">
               <div class="more-row static">
                 <span class="more-row-main">
-                  <span class="more-row-title">VVeChat OS 1（Beta）</span>
+                  <span class="more-row-title"><span class="beta-tag">OS 1</span> VVeChat OS 1（Beta）</span>
                   <span class="more-row-desc" id="pref-version-desc">—</span>
                 </span>
               </div>
@@ -920,7 +924,7 @@
   <!-- Socket.io client is served by this same Express app at /socket.io/socket.io.js,
        so there is no third-party CDN to fail (or be blocked). -->
   <script src="/socket.io/socket.io.js"></script>
-  <script src="config.js?v=20261107y"></script>
+  <script src="config.js?v=20261107z"></script>
   <!-- The 550C theme is ~60 KB. Only fetch it when it is actually on:
        localStorage says so right now, and app.js re-checks after login
        for the case where the account has it on but this browser does
@@ -938,7 +942,7 @@
        time even though the theme was enabled. -->
   <script>
   (function () {
-    try { window.__VV_ASSET_V = '20261107y'; } catch (e) { }
+    try { window.__VV_ASSET_V = '20261107z'; } catch (e) { }
     var V = window.__VV_ASSET_V || '';
     var on = false;
     try { on = localStorage.getItem('vve:boot550c') === '1'; } catch (e) { }
@@ -960,6 +964,6 @@
   })();
   </script>
   <!-- 液态玻璃引擎：折射 + 果冻物理 + 体积光 + 光照互通 -->
-  <script src="app.js?v=20261107y"></script>
+  <script src="app.js?v=20261107z"></script>
 </body>
 </html>

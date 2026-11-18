@@ -130,6 +130,21 @@ const register = async (username, password, lang) => {
     assert.strictEqual(f.tag, '同事', '自定义标签没生效:' + f.tag);
   });
 
+  await step('个人页可以改词条,清空回到自动分类', async () => {
+    const fr = await call('/friends', { token: user.token });
+    const target = fr.data.friends.find(f => f.username === ADMIN.username);
+    assert.ok(target, '没有 Jack 这个好友');
+    const r1 = await call('/friends/' + target.id + '/tag', { method: 'PUT', token: user.token, body: { tag: '球友' } });
+    assert.strictEqual(r1.status, 200, '改词条失败:' + JSON.stringify(r1.data));
+    assert.strictEqual(r1.data.tag, '球友');
+    const fr2 = await call('/friends', { token: user.token });
+    assert.strictEqual(fr2.data.friends.find(f => f.username === ADMIN.username).tag, '球友');
+    // 清空 = 回到自动分类（系统账号 → 系统，真人 → 用户）
+    const r2 = await call('/friends/' + target.id + '/tag', { method: 'PUT', token: user.token, body: { tag: '' } });
+    assert.strictEqual(r2.status, 200);
+    assert.strictEqual(r2.data.tag, '用户', '清空后应回到自动分类,实际 ' + r2.data.tag);
+  });
+
   console.log('\n[3] Jack 欢迎消息');
   await step('注册后收到 Jack 的中文欢迎消息', async () => {
     const r = await call('/conversations', { token: user.token });
@@ -157,13 +172,13 @@ const register = async (username, password, lang) => {
 
   console.log('\n[4] 搜索:用户 + 群聊');
   await step('/api/users/search 同时返回 users 和 groups', async () => {
-    const r = await call('/users/search?q=' + encodeURIComponent('VVe'), { token: user.token });
+    const r = await call('/users/search?q=' + encodeURIComponent('VVe'), { token: user.token, headers: cfHeaders() });
     assert.ok(Array.isArray(r.data.users), '没有 users');
     assert.ok(Array.isArray(r.data.groups), '没有 groups');
     assert.ok(r.data.groups.some(g => /VVeChat/.test(g.name)), '没搜到官方群:' + JSON.stringify(r.data.groups));
   });
   await step('搜索群名(中文)也能搜到', async () => {
-    const r = await call('/users/search?q=' + encodeURIComponent('官方'), { token: user.token });
+    const r = await call('/users/search?q=' + encodeURIComponent('官方'), { token: user.token, headers: cfHeaders() });
     assert.ok(r.data.groups.length > 0, '中文群名搜不到');
   });
 
