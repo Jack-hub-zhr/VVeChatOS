@@ -4151,9 +4151,10 @@ if (fs.existsSync(FRONTEND_DIR)) {
     '.json': 'application/json; charset=utf-8',
     '.png': 'image/png', '.jpg': 'image/jpeg', '.ico': 'image/x-icon',
     '.woff2': 'font/woff2', '.txt': 'text/plain; charset=utf-8',
+    '.html': 'text/html; charset=utf-8',
   };
   const staticCache = new Map();   // path -> { body, gz, etag, mtime }
-  const STATIC_RE = /^\/[A-Za-z0-9._\-\/]*(\.(js|css|svg|json|png|jpg|ico|woff2|txt)|index\.html)$/;
+  const STATIC_RE = /^\/[A-Za-z0-9._\-\/]*(\.(js|css|svg|json|png|jpg|ico|woff2|txt|html)|index\.html)$/;
   app.get(STATIC_RE, (req, res, next) => {
     const rel = decodeURIComponent(req.path).replace(/^\/+/, '');
     const file = path.join(FRONTEND_DIR, rel);
@@ -4177,7 +4178,7 @@ if (fs.existsSync(FRONTEND_DIR)) {
 
     // The shell points at the versioned assets, so it must always be
     // revalidated; everything else can live in the cache for a year.
-    const isShell = rel === 'index.html' || rel === 'config.js';
+    const isShell = rel === 'config.js' || rel.endsWith('.html');
     res.setHeader('ETag', entry.etag);
     res.setHeader('Vary', 'Accept-Encoding');
     res.setHeader('Cache-Control', isShell
