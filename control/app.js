@@ -25,10 +25,10 @@
   // Jacky Bot 的头像:跟聊天界面一样的发光圆环
   function assistantRing() {
     // 一张笑脸:两只长条发光竖眼 + 一条小弧嘴 —— 跟前端同一个算法。
-    const r = 11, w = r * 0.15, h = r * 0.78, gap = r * 0.32;
-    const cy = 16 - r * 0.18, y = cy - h / 2, rx = w / 2;
+    const r = 11, w = r * 0.21, h = r * 0.86, gap = r * 0.30;
+    const cy = 16 - r * 0.16, y = cy - h / 2, rx = w / 2;
     const x1 = (16 - gap - w / 2).toFixed(2), x2 = (16 + gap - w / 2).toFixed(2);
-    const mw = r * 0.84, mh = r * 0.38, my = y + h + r * 0.10;
+    const mw = r * 0.34, mh = r * 0.17, my = y + h + r * 0.14;
     return '<svg class="qwen-ring" viewBox="0 0 32 32" width="30" height="30" aria-hidden="true">'
       + '<circle class="qwen-halo" cx="16" cy="16" r="11" fill="none" stroke="#fff" stroke-width="5" opacity="0.9" filter="url(#qwenGlow)"/>'
       + '<circle cx="16" cy="16" r="11" fill="none" stroke="#fff" stroke-width="1.4" opacity="0.5"/>'
@@ -39,7 +39,7 @@
       + '<rect x="' + x1 + '" y="' + y.toFixed(2) + '" width="' + w.toFixed(2) + '" height="' + h.toFixed(2) + '" rx="' + rx.toFixed(2) + '"/>'
       + '<rect x="' + x2 + '" y="' + y.toFixed(2) + '" width="' + w.toFixed(2) + '" height="' + h.toFixed(2) + '" rx="' + rx.toFixed(2) + '"/>'
       + '</g>'
-      + '<path d="M ' + (16 - mw / 2).toFixed(2) + ' ' + my.toFixed(2) + ' Q 16 ' + (my + mh).toFixed(2) + ' ' + (16 + mw / 2).toFixed(2) + ' ' + my.toFixed(2) + '" fill="none" stroke="#fff" stroke-width="' + (r * 0.19).toFixed(2) + '" stroke-linecap="round" style="filter:drop-shadow(0 0 1.5px rgba(255,255,255,.7))"/>'
+      + '<path d="M ' + (16 - mw / 2).toFixed(2) + ' ' + my.toFixed(2) + ' Q 16 ' + (my + mh).toFixed(2) + ' ' + (16 + mw / 2).toFixed(2) + ' ' + my.toFixed(2) + '" fill="none" stroke="#fff" stroke-width="' + (r * 0.15).toFixed(2) + '" stroke-linecap="round" style="filter:drop-shadow(0 0 1.5px rgba(255,255,255,.7))"/>'
       + '</g>'
       + '</svg>';
   }
