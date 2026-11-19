@@ -1136,7 +1136,7 @@
     const x2 = 16 + gap - w / 2;
     // 嘴:二次贝塞尔,两端高中间低 = 微笑。只是一道很短的小弧线,别喧宾夺主。
     const mw = r * 0.34, mh = r * 0.17;
-    const my = y + h + r * 0.14;
+    const my = y + h + r * 0.30;
     return `<g class="qwen-eyes" fill="#fff" opacity="0.98">
       <g style="filter:drop-shadow(0 0 3px rgba(255,255,255,.85))">
         <rect x="${x1.toFixed(2)}" y="${y.toFixed(2)}" width="${w.toFixed(2)}" height="${h.toFixed(2)}" rx="${rx.toFixed(2)}"/>

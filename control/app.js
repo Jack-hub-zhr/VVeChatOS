@@ -28,7 +28,7 @@
     const r = 11, w = r * 0.21, h = r * 0.86, gap = r * 0.30;
     const cy = 16 - r * 0.16, y = cy - h / 2, rx = w / 2;
     const x1 = (16 - gap - w / 2).toFixed(2), x2 = (16 + gap - w / 2).toFixed(2);
-    const mw = r * 0.34, mh = r * 0.17, my = y + h + r * 0.14;
+    const mw = r * 0.34, mh = r * 0.17, my = y + h + r * 0.30;
     return '<svg class="qwen-ring" viewBox="0 0 32 32" width="30" height="30" aria-hidden="true">'
       + '<circle class="qwen-halo" cx="16" cy="16" r="11" fill="none" stroke="#fff" stroke-width="5" opacity="0.9" filter="url(#qwenGlow)"/>'
       + '<circle cx="16" cy="16" r="11" fill="none" stroke="#fff" stroke-width="1.4" opacity="0.5"/>'
