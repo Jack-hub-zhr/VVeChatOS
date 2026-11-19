@@ -3736,6 +3736,8 @@ body.dark .side-nav-ic-qwen { background: rgba(255, 255, 255, 0.07); }
    it is selected — but everywhere else (chat bubbles, the @ picker, the
    member roster) the ring is the whole point, so it always glows. */
 .qwen-halo { opacity: 0.9; }
+/* 深色模式下环本身就是浅色，白光晕跟它撞在一起，会把环和脸一起冲淡 —— 收一半。 */
+body.dark .qwen-halo { opacity: 0.3; }
 .side-nav-ic-qwen .qwen-halo { opacity: 0.10; }
 .side-nav-item.active .side-nav-ic-qwen .qwen-halo { opacity: 0.9; }
 .side-nav-item.active .side-nav-ic-qwen {
