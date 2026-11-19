@@ -1112,19 +1112,19 @@
   }
   // 头像位上的发光圆环:白晕 + 细白环 + 主色环 + 一张笑脸。
   // 滤镜 #qwenGlow 定义在 index.html 里那一处隐藏的 <svg>,所以随便内联多少次都不会撞 id。
+  // 脸盘是空的(不填充)—— 深色模式下环会变成浅色,再填一层实心就是白盘上画白脸,什么都看不见。
   function qwenAvatarRing(size) {
     const s = size || 26;
     return `<svg class="qwen-ring qwen-ring-avatar" viewBox="0 0 32 32" width="${s}" height="${s}" aria-hidden="true">
       <circle class="qwen-halo" cx="16" cy="16" r="11" fill="none" stroke="#fff" stroke-width="5" opacity="0.9" filter="url(#qwenGlow)"/>
       <circle cx="16" cy="16" r="11" fill="none" stroke="#fff" stroke-width="1.4" opacity="0.5"/>
-      <circle cx="16" cy="16" r="11" fill="var(--qwen-ring, #0f172a)"/>
       <circle cx="16" cy="16" r="11" fill="none" stroke="var(--qwen-ring, #0f172a)" stroke-width="3.2"/>
       ${qwenFace(11)}
     </svg>`;
   }
-  // 助手的脸:两只长条发光竖眼 + 一条小弧嘴 —— Grok 头像那味儿,是个笑脸。
+  // 助手的脸:两只长条竖眼 + 一条小弧嘴 —— Grok 头像那味儿,是个笑脸。
   // r = 头像环半径;整张脸往上抬一点,给嘴留出地方。
-  // 注意：#qwenGlow 只是高斯模糊，套上来眼睛会糊成一片灰 —— 用 CSS 投影做发光。
+  // 颜色跟着环走(--qwen-ring):深色模式下环变浅,脸跟着变浅,始终跟背景反着来。
   function qwenFace(r) {
     const w = r * 0.21;            // 竖条粗细 —— 大眼睛
     const h = r * 0.86;            // 竖条高度
@@ -1137,12 +1137,10 @@
     // 嘴:二次贝塞尔,两端高中间低 = 微笑。只是一道很短的小弧线,别喧宾夺主。
     const mw = r * 0.34, mh = r * 0.17;
     const my = y + h + r * 0.30;
-    return `<g class="qwen-eyes" fill="#fff" opacity="0.98">
-      <g style="filter:drop-shadow(0 0 3px rgba(255,255,255,.85))">
-        <rect x="${x1.toFixed(2)}" y="${y.toFixed(2)}" width="${w.toFixed(2)}" height="${h.toFixed(2)}" rx="${rx.toFixed(2)}"/>
-        <rect x="${x2.toFixed(2)}" y="${y.toFixed(2)}" width="${w.toFixed(2)}" height="${h.toFixed(2)}" rx="${rx.toFixed(2)}"/>
-      </g>
-      <path d="M ${(16 - mw / 2).toFixed(2)} ${my.toFixed(2)} Q 16 ${(my + mh).toFixed(2)} ${(16 + mw / 2).toFixed(2)} ${my.toFixed(2)}" fill="none" stroke="#fff" stroke-width="${(r * 0.15).toFixed(2)}" stroke-linecap="round" style="filter:drop-shadow(0 0 1.5px rgba(255,255,255,.7))"/>
+    return `<g class="qwen-eyes">
+      <rect x="${x1.toFixed(2)}" y="${y.toFixed(2)}" width="${w.toFixed(2)}" height="${h.toFixed(2)}" rx="${rx.toFixed(2)}" style="fill:var(--qwen-ring, #0f172a)"/>
+      <rect x="${x2.toFixed(2)}" y="${y.toFixed(2)}" width="${w.toFixed(2)}" height="${h.toFixed(2)}" rx="${rx.toFixed(2)}" style="fill:var(--qwen-ring, #0f172a)"/>
+      <path d="M ${(16 - mw / 2).toFixed(2)} ${my.toFixed(2)} Q 16 ${(my + mh).toFixed(2)} ${(16 + mw / 2).toFixed(2)} ${my.toFixed(2)}" fill="none" stroke-width="${(r * 0.15).toFixed(2)}" stroke-linecap="round" style="stroke:var(--qwen-ring, #0f172a)"/>
     </g>`;
   }
   // 头像里的内容:助手 → 发光圆环;emoji 头像优先;否则首字母
