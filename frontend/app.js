@@ -1110,18 +1110,8 @@
     const n = String(name || '').trim().toLowerCase();
     return n === ASSISTANT_NAME.toLowerCase() || ASSISTANT_ALIASES.indexOf(n) >= 0;
   }
-  // 发光圆环:白晕 + 细白环 + 主色环。滤镜 #qwenGlow 定义在 index.html
-  // 里那一处隐藏的 <svg>,所以随便内联多少次都不会撞 id。
-  function qwenRing(size) {
-    const s = size || 18;
-    return `<svg class="qwen-ring" viewBox="0 0 32 32" width="${s}" height="${s}" aria-hidden="true">
-      <circle class="qwen-halo" cx="16" cy="16" r="8" fill="none" stroke="#fff" stroke-width="4.5" opacity="0.9" filter="url(#qwenGlow)"/>
-      <circle cx="16" cy="16" r="8" fill="none" stroke="#fff" stroke-width="1.4" opacity="0.5"/>
-      <circle cx="16" cy="16" r="8" fill="none" stroke="var(--qwen-ring, #0f172a)" stroke-width="2.6"/>
-      ${qwenEyes(16)}
-    </svg>`;
-  }
-  // 头像位上的版本:环更大(r=11),撑满一个 32px 的头像格子。
+  // 头像位上的发光圆环:白晕 + 细白环 + 主色环 + 一张笑脸。
+  // 滤镜 #qwenGlow 定义在 index.html 里那一处隐藏的 <svg>,所以随便内联多少次都不会撞 id。
   function qwenAvatarRing(size) {
     const s = size || 26;
     return `<svg class="qwen-ring qwen-ring-avatar" viewBox="0 0 32 32" width="${s}" height="${s}" aria-hidden="true">
@@ -1129,23 +1119,30 @@
       <circle cx="16" cy="16" r="11" fill="none" stroke="#fff" stroke-width="1.4" opacity="0.5"/>
       <circle cx="16" cy="16" r="11" fill="var(--qwen-ring, #0f172a)"/>
       <circle cx="16" cy="16" r="11" fill="none" stroke="var(--qwen-ring, #0f172a)" stroke-width="3.2"/>
-      ${qwenEyes(11)}
+      ${qwenFace(11)}
     </svg>`;
   }
-  // 两只长条发光竖眼 —— Grok 头像那味儿。
-  // r = 头像环半径,眼睛贴着环内侧摆,中间留一条缝。
-  function qwenEyes(r) {
-    const w = r * 0.19;          // 竖条粗细
-    const h = r * 1.05;          // 竖条高度
-    const gap = r * 0.30;        // 两眼间距
+  // 助手的脸:两只长条发光竖眼 + 一条小弧嘴 —— Grok 头像那味儿,是个笑脸。
+  // r = 头像环半径;整张脸往上抬一点,给嘴留出地方。
+  // 注意：#qwenGlow 只是高斯模糊，套上来眼睛会糊成一片灰 —— 用 CSS 投影做发光。
+  function qwenFace(r) {
+    const w = r * 0.15;            // 竖条粗细
+    const h = r * 0.78;            // 竖条高度
+    const gap = r * 0.32;          // 两眼间距
+    const cy = 16 - r * 0.18;      // 眼睛中心(整体上移)
+    const y = cy - h / 2;
+    const rx = w / 2;              // 圆角 = 半粗,顶头是胶囊
     const x1 = 16 - gap - w / 2;
     const x2 = 16 + gap - w / 2;
-    const y = 16 - h / 2;
-    const rx = w / 2;             // 圆角 = 半粗,顶头是胶囊
-    // 注意：#qwenGlow 只是高斯模糊，套上来眼睛会糊成一片灰 —— 用 CSS 投影做发光。
-    return `<g class="qwen-eyes" fill="#fff" opacity="0.98" style="filter:drop-shadow(0 0 3px rgba(255,255,255,.85))">
-      <rect x="${x1.toFixed(2)}" y="${y.toFixed(2)}" width="${w.toFixed(2)}" height="${h.toFixed(2)}" rx="${rx.toFixed(2)}"/>
-      <rect x="${x2.toFixed(2)}" y="${y.toFixed(2)}" width="${w.toFixed(2)}" height="${h.toFixed(2)}" rx="${rx.toFixed(2)}"/>
+    // 嘴:二次贝塞尔,两端高中间低 = 微笑。描边比眼睛细,发光也更轻。
+    const mw = r * 0.84, mh = r * 0.38;
+    const my = y + h + r * 0.10;
+    return `<g class="qwen-eyes" fill="#fff" opacity="0.98">
+      <g style="filter:drop-shadow(0 0 3px rgba(255,255,255,.85))">
+        <rect x="${x1.toFixed(2)}" y="${y.toFixed(2)}" width="${w.toFixed(2)}" height="${h.toFixed(2)}" rx="${rx.toFixed(2)}"/>
+        <rect x="${x2.toFixed(2)}" y="${y.toFixed(2)}" width="${w.toFixed(2)}" height="${h.toFixed(2)}" rx="${rx.toFixed(2)}"/>
+      </g>
+      <path d="M ${(16 - mw / 2).toFixed(2)} ${my.toFixed(2)} Q 16 ${(my + mh).toFixed(2)} ${(16 + mw / 2).toFixed(2)} ${my.toFixed(2)}" fill="none" stroke="#fff" stroke-width="${(r * 0.19).toFixed(2)}" stroke-linecap="round" style="filter:drop-shadow(0 0 1.5px rgba(255,255,255,.7))"/>
     </g>`;
   }
   // 头像里的内容:助手 → 发光圆环;emoji 头像优先;否则首字母
