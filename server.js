@@ -480,33 +480,45 @@ function seedDefaultContacts(userId) {
 
 // ---------- 好友归类 ----------
 // 加好友时用户可以自己写标签；没写就按关系自动分。
-// 系统账号(Jacky Bot / 文件传输助手)在 Jack 的列表里归「用户」（他那儿不分离），
-// 在别人的列表里归「系统」。
+// 系统级账号（Jacky Bot / 文件传输助手；别人眼中的 Jack）归「系统」组，
+// 其余真人 —— 包括 Jack 那边自动加的好友 —— 归「用户」组。
 const CATEGORY_USERS = '用户';
 const CATEGORY_SYSTEM = '系统';
-// Jacky Bot / 文件传输助手 是系统账号 —— 在别人眼里单独一组。
-function isSystemUser(userId) {
+// 系统级账号：Jacky Bot、文件传输助手；管理员 Jack 对别人来说也是系统级（自己除外）。
+function isSystemUser(userId, ownerId) {
   const row = db.prepare('SELECT username FROM users WHERE id = ?').get(userId);
   if (!row) return false;
-  return row.username === ASSISTANT_NAME || row.username === FILE_ASSISTANT_NAME;
-}
-// 管理员(Jack)的 id —— 分类规则要按「谁在看」来分。
-let adminUserIdCache = null;
-function adminUserId() {
-  if (adminUserIdCache === null) {
-    const row = db.prepare('SELECT id FROM users WHERE username = ?').get(ADMIN_USERNAME);
-    adminUserIdCache = row ? Number(row.id) : -1;
-  }
-  return adminUserIdCache;
+  if (row.username === ASSISTANT_NAME || row.username === FILE_ASSISTANT_NAME) return true;
+  if (row.username === ADMIN_USERNAME) return Number(ownerId) !== Number(row.id);
+  return false;
 }
 function friendCategory(ownerId, otherId, customTag) {
   const custom = String(customTag || '').trim().slice(0, 24);
   if (custom) return custom;
-  // 系统账号(助手、文件传输助手)在 Jack 的列表里就是普通好友，统一归「用户」不分离；
-  // 在别人的列表里才是「系统」。
-  if (isSystemUser(otherId)) {
-    return Number(ownerId) === adminUserId() ? CATEGORY_USERS : CATEGORY_SYSTEM;
+  // 系统级账号（Jacky Bot / 文件传输助手 / 别人眼中的 Jack）归「系统」组；
+  // 其余真人 —— 包括 Jack 那边自动加的好友 —— 归「用户」组。
+  if (isSystemUser(otherId, ownerId)) return CATEGORY_SYSTEM;
+  return CATEGORY_USERS;
+}
+
+// 注册/登录时给的默认联系人:Jack、Jacky Bot、文件传输助手。
+// 好友关系是双向的 —— 两边都得有对方,才能互相发消息。
+function seedDefaultContacts(userId) {
+  for (const name of [ADMIN_USERNAME, ASSISTANT_NAME, FILE_ASSISTANT_NAME]) {
+    const u = db.prepare('SELECT id FROM users WHERE username = ?').get(name);
+    if (!u || u.id === userId) continue;
+    // 走 linkFriends —— 建关系的同时归类（Jack 那边自动加的人归到「用户」组）。
+    linkFriends(u.id, userId, now(), null, null);
+    if (name === ADMIN_USERNAME) jackWelcome(userId);
   }
+}
+
+function friendCategory(ownerId, otherId, customTag) {
+  const custom = String(customTag || '').trim().slice(0, 24);
+  if (custom) return custom;
+  // 系统级账号（Jacky Bot / 文件传输助手 / 别人眼中的 Jack）归「系统」组；
+  // 其余真人 —— 包括 Jack 那边自动加的好友 —— 归「用户」组。
+  if (isSystemUser(otherId, ownerId)) return CATEGORY_SYSTEM;
   return CATEGORY_USERS;
 }
 
@@ -2834,7 +2846,8 @@ app.get('/api/friends', authRequired, (req, res) => {
     WHERE f.user_id = ?
     ORDER BY u.username
   `).all(req.user.id);
-  res.json({ friends: rows });
+  // is_system：对这个查看者而言，这个账号是不是系统级的（不可删除）。
+  res.json({ friends: rows.map(r => Object.assign(r, { is_system: isSystemUser(r.id, req.user.id) ? 1 : 0 })) });
 });
 
 // groups (joined)
@@ -3315,6 +3328,8 @@ app.delete('/api/friends/:id', rateLimit('write'), authRequired, (req, res) => {
   if (fid === req.user.id) return res.status(400).json({ error: '不能对自己操作' });
   const f = db.prepare('SELECT 1 FROM friends WHERE user_id = ? AND friend_id = ?').get(req.user.id, fid);
   if (!f) return res.status(404).json({ error: '对方不是你的好友' });
+  // 系统级账号（Jacky Bot / 文件传输助手 / 别人眼中的 Jack）不能被删。
+  if (isSystemUser(fid, req.user.id)) return res.status(403).json({ error: '系统级账号不能删除' });
   const tx = db.transaction(() => {
     db.prepare('DELETE FROM friends WHERE user_id = ? AND friend_id = ?').run(req.user.id, fid);
     db.prepare('DELETE FROM friends WHERE user_id = ? AND friend_id = ?').run(fid, req.user.id);
@@ -3334,6 +3349,8 @@ app.put('/api/friends/:id/tag', rateLimit('write'), authRequired, (req, res) => 
   if (fid === req.user.id) return res.status(400).json({ error: '不能对自己操作' });
   const f = db.prepare('SELECT 1 FROM friends WHERE user_id = ? AND friend_id = ?').get(req.user.id, fid);
   if (!f) return res.status(404).json({ error: '对方不是你的好友' });
+  // 系统级账号（Jacky Bot / 文件传输助手 / 别人眼中的 Jack）不能被删。
+  if (isSystemUser(fid, req.user.id)) return res.status(403).json({ error: '系统级账号不能删除' });
   const raw = String((req.body || {}).tag || '').trim().slice(0, 24);
   // 空词条 = 用回自动分类（用户 / 系统）。
   const tag = raw || friendCategory(req.user.id, fid, null);

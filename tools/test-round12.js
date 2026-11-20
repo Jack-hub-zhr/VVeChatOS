@@ -94,22 +94,36 @@ const register = async (username, password, lang) => {
     assert.ok(f, 'Jack 的好友列表里没有 ' + U1);
     assert.strictEqual(f.tag, '用户', '归类应该是「用户」,实际 ' + f.tag);
   });
-  await step('Jack 那边不分离：系统账号也归「用户」组', async () => {
+  await step('Jack 那边：系统账号归「系统」组，自动加的好友归「用户」组', async () => {
     const r = await call('/friends', { token: admin.token });
     for (const name of ['Jacky Bot', '文件传输助手']) {
       const f = r.data.friends.find(x => x.username === name);
       assert.ok(f, '好友列表里没有 ' + name);
-      assert.strictEqual(f.tag, '用户', name + ' 在 Jack 这边应该归「用户」组,实际 ' + f.tag);
+      assert.strictEqual(f.tag, '系统', name + ' 在 Jack 这边应该归「系统」组,实际 ' + f.tag);
+      assert.strictEqual(f.is_system, 1, name + ' 应该标记为系统级');
     }
+    const mine = r.data.friends.find(x => x.username === U1);
+    assert.strictEqual(mine.tag, '用户', '自动加的好友应该归「用户」组,实际 ' + mine.tag);
+    assert.strictEqual(mine.is_system, 0, '真人不该是系统级');
   });
-  await step('对方视角：Jack 归「用户」组,系统账号归「系统」组', async () => {
+  await step('对方视角：Jack 也归「系统」组（Jack 本人除外）', async () => {
     const r = await call('/friends', { token: user.token });
     const jack = r.data.friends.find(f => f.username === 'Jack');
     assert.ok(jack, '没有 Jack');
-    assert.strictEqual(jack.tag, '用户', 'Jack 应该归「用户」组,实际 ' + jack.tag);
+    assert.strictEqual(jack.tag, '系统', 'Jack 在别人眼里应该归「系统」组,实际 ' + jack.tag);
+    assert.strictEqual(jack.is_system, 1, 'Jack 对别人来说应该是系统级');
     const bot = r.data.friends.find(f => f.username === 'Jacky Bot');
     assert.ok(bot, '没有 Jacky Bot');
     assert.strictEqual(bot.tag, '系统', 'Jacky Bot 应该归「系统」组,实际 ' + bot.tag);
+  });
+
+  await step('系统级好友删不掉', async () => {
+    const r = await call('/friends', { token: user.token });
+    const bot = r.data.friends.find(f => f.username === 'Jacky Bot');
+    const del = await call('/friends/' + bot.id, { method: 'DELETE', token: user.token });
+    assert.strictEqual(del.status, 403, '删系统级好友应该被拒,实际 ' + del.status + ' ' + JSON.stringify(del.data));
+    const after = await call('/friends', { token: user.token });
+    assert.ok(after.data.friends.some(f => f.username === 'Jacky Bot'), 'Jacky Bot 还在好友列表里');
   });
   await step('自定义标签能存下来,并且不被自动归类覆盖', async () => {
     const r = await call('/friends', { token: user.token });
@@ -131,18 +145,32 @@ const register = async (username, password, lang) => {
   });
 
   await step('个人页可以改词条,清空回到自动分类', async () => {
+    // 用一个真人好友来试 —— 系统级账号（Jack / Jacky Bot / 文件传输助手）固定在「系统」组，不给改。
+    const pal = await register(U2 + '_p', 'Test1234pass', 'zh');
+    const reqPal = await call('/friend/request', { method: 'POST', token: user.token, body: { toUsername: U2 + '_p' } });
+    const reqId = (reqPal.data.request && reqPal.data.request.id) || reqPal.data.requestId || reqPal.data.id;
+    await call('/friend/respond', { method: 'POST', token: pal.token, body: { requestId: reqId, accept: true } });
     const fr = await call('/friends', { token: user.token });
-    const target = fr.data.friends.find(f => f.username === ADMIN.username);
-    assert.ok(target, '没有 Jack 这个好友');
+    const target = fr.data.friends.find(f => f.username === U2 + '_p');
+    assert.ok(target, '没有这个真人好友');
     const r1 = await call('/friends/' + target.id + '/tag', { method: 'PUT', token: user.token, body: { tag: '球友' } });
     assert.strictEqual(r1.status, 200, '改词条失败:' + JSON.stringify(r1.data));
     assert.strictEqual(r1.data.tag, '球友');
     const fr2 = await call('/friends', { token: user.token });
-    assert.strictEqual(fr2.data.friends.find(f => f.username === ADMIN.username).tag, '球友');
-    // 清空 = 回到自动分类（系统账号 → 系统，真人 → 用户）
+    assert.strictEqual(fr2.data.friends.find(f => f.username === U2 + '_p').tag, '球友');
+    // 清空 = 回到自动分类（真人 → 用户）
     const r2 = await call('/friends/' + target.id + '/tag', { method: 'PUT', token: user.token, body: { tag: '' } });
     assert.strictEqual(r2.status, 200);
     assert.strictEqual(r2.data.tag, '用户', '清空后应回到自动分类,实际 ' + r2.data.tag);
+  });
+
+  await step('系统级账号的词条改不动（固定在系统组）', async () => {
+    const fr = await call('/friends', { token: user.token });
+    const jack = fr.data.friends.find(f => f.username === ADMIN.username);
+    const r = await call('/friends/' + jack.id + '/tag', { method: 'PUT', token: user.token, body: { tag: 'bro' } });
+    assert.strictEqual(r.status, 403, '系统级账号应该拒绝改词条,实际 ' + r.status);
+    const after = await call('/friends', { token: user.token });
+    assert.strictEqual(after.data.friends.find(f => f.username === ADMIN.username).tag, '系统');
   });
 
   console.log('\n[3] Jack 欢迎消息');
