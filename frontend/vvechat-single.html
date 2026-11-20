@@ -11558,7 +11558,7 @@ window.VVECHAT_API = '';
        time even though the theme was enabled. -->
   <script>
   (function () {
-    try { window.__VV_ASSET_V = '20261107af'; } catch (e) { }
+    try { window.__VV_ASSET_V = '20261107ag'; } catch (e) { }
     var V = window.__VV_ASSET_V || '';
     var on = false;
     try { on = localStorage.getItem('vve:boot550c') === '1'; } catch (e) { }
@@ -13287,7 +13287,10 @@ window.VVECHAT_API = '';
   // is now the only place to reach your people.
   // 好友归类：系统给的（Jack 的「用户」/共处的群）和用户自己写的标签。
   function convTag(c) {
-    if (!c || c.type !== 'user' || c.special) return '';
+    if (!c) return '';
+    // 官方群跟系统账号一样，落在「系统」组里。
+    if (c.type === 'group') return c.is_official ? '系统' : '';
+    if (c.special) return '';
     const f = (state.friends || []).find(x => String(x.id) === String(c.id));
     return (f && f.tag) ? String(f.tag) : '';
   }
@@ -13309,8 +13312,16 @@ window.VVECHAT_API = '';
     const fresh = state.friends
       .filter(f => !seen.has(String(f.id)))
       .map(f => Object.assign({ type: 'user', unread: 0, last_at: 0, last_message: '', is_new_friend: true }, f));
+    // 同组的人要挨在一起 —— 排序乱了，列表里会出现「系统 / 用户 / 系统」三段标题。
+    const groupOrder = (c) => {
+      if (c.special) return 1;            // 「我」跟着会话走，不另开一组
+      const tag = convTag(c);
+      return tag === '系统' ? 0 : tag ? 1 : 2;
+    };
     const all = [...groups, ...privates, ...fresh]
-      .sort((a, b) => (b.is_official || 0) - (a.is_official || 0) || (b.last_at || 0) - (a.last_at || 0));
+      .sort((a, b) => groupOrder(a) - groupOrder(b)
+        || (b.is_official || 0) - (a.is_official || 0)
+        || (b.last_at || 0) - (a.last_at || 0));
     if (empty) empty.classList.toggle('hidden', all.length > 0);
     let lastTag = null;
     for (const c of all) {
@@ -14780,12 +14791,16 @@ window.VVECHAT_API = '';
     const allowAdd = !!opts.allowAdd;
     const isMe = user.id === state.user.id;
     // Already a friend? then the primary action is "message", not "add".
-    const isFriend = state.friends.some(f => Number(f.id) === Number(user.id));
+    const friendRow = state.friends.find(f => Number(f.id) === Number(user.id)) || null;
+    const isFriend = !!friendRow;
+    // 系统级账号（Jacky Bot / 文件传输助手 / 别人眼中的 Jack）是只读名片：
+    // 不给私聊、不给删除、不给改词条 —— 它们固定待在「系统」组里。
+    const isSystemContact = !!(friendRow && friendRow.is_system);
     $('#profile-title').textContent = isMe ? t('profile_title') : user.username;
     const online = isOnline(user.id);
     // 词条（分类）：好友之间可以自己定，选完之后同类的好友在列表里自动归到一块。
-    const curTag = isFriend ? (state.friends.find(f => Number(f.id) === Number(user.id)) || {}).tag : null;
-    const tagBlock = isFriend ? `
+    const curTag = friendRow ? friendRow.tag : null;
+    const tagBlock = (isFriend && !isSystemContact) ? `
       <div class="profile-tags">
         <div class="profile-tags-label">${t('tag_pick')}</div>
         <div class="profile-tags-row" id="profile-tag-row">
@@ -14804,8 +14819,8 @@ window.VVECHAT_API = '';
                  <button class="btn btn-danger btn-sm" id="btn-profile-logout">${t('btn_logout')}</button>`
                 : (allowAdd && !isFriend
                     ? `<button class="btn btn-primary btn-sm" id="btn-add-friend">+ ${t('add_friend')}</button>`
-                    : `<button class="btn btn-primary btn-sm" id="btn-msg-friend">${t('btn_msg')}</button>`)}
-        ${isFriend ? `<button class="btn btn-danger btn-sm" id="btn-remove-friend">${t('remove_friend')}</button>` : ''}
+                    : (isSystemContact ? '' : `<button class="btn btn-primary btn-sm" id="btn-msg-friend">${t('btn_msg')}</button>`))}
+        ${(isFriend && !isSystemContact) ? `<button class="btn btn-danger btn-sm" id="btn-remove-friend">${t('remove_friend')}</button>` : ''}
       </div>
       ${tagBlock}</div>`;
     if (isMe) {
