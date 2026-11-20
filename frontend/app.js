@@ -3172,11 +3172,25 @@
 
   // ---------- profile ----------
   // 好友列表里已经用过的词条 —— 给个人页当候选。
+  // 个人名片里的词条候选：15 个预设（跟着界面语言走）＋ 已经用过的自定义词。
+  const TAG_PRESETS = {
+    zh: ['好友', '兄弟', '搭子', '闺蜜', '家人', '哥们', '伙伴', '队友', '同学', '同事', '老板', '搭档', '对手', '邻居', '球友'],
+    en: ['friend', 'bro', 'buddy', 'bestie', 'fam', 'homie', 'pal', 'teammate', 'classmate', 'colleague', 'boss', 'partner', 'rival', 'neighbor', 'crew']
+  };
   function allFriendTags() {
     const out = [];
     for (const f of state.friends || []) {
       if (f.tag && out.indexOf(f.tag) < 0) out.push(f.tag);
     }
+    return out;
+  }
+  // 15 个预设词 + 已经用过的词 + 「用户/系统」这两个自动分类值（去重）。
+  function friendTagChoices() {
+    const out = [];
+    const push = (x) => { if (x && out.indexOf(x) < 0) out.push(x); };
+    for (const x of (TAG_PRESETS[lang] || TAG_PRESETS.zh)) push(x);
+    for (const x of allFriendTags()) push(x);
+    push('用户'); push('系统');
     return out;
   }
   function openProfileModal(user, opts = {}) {
@@ -3192,7 +3206,7 @@
       <div class="profile-tags">
         <div class="profile-tags-label">${t('tag_pick')}</div>
         <div class="profile-tags-row" id="profile-tag-row">
-          ${['用户', '系统'].concat(allFriendTags().filter(x => x !== '用户' && x !== '系统')).map(tg =>
+          ${friendTagChoices().map(tg =>
             `<button type="button" class="tag-pick${curTag === tg ? ' on' : ''}" data-tag="${escapeHtml(tg)}">${escapeHtml(tagLabel(tg))}</button>`).join('')}
           <button type="button" class="tag-pick${!curTag ? ' on' : ''}" data-tag="">${t('tag_auto')}</button>
           <input id="profile-tag-input" class="tag-input" type="text" maxlength="12" placeholder="${t('tag_custom_ph')}" />

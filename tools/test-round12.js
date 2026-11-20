@@ -94,12 +94,12 @@ const register = async (username, password, lang) => {
     assert.ok(f, 'Jack 的好友列表里没有 ' + U1);
     assert.strictEqual(f.tag, '用户', '归类应该是「用户」,实际 ' + f.tag);
   });
-  await step('系统账号（Jacky Bot / 文件传输助手）归「系统」组，不是「用户」', async () => {
+  await step('Jack 那边不分离：系统账号也归「用户」组', async () => {
     const r = await call('/friends', { token: admin.token });
     for (const name of ['Jacky Bot', '文件传输助手']) {
       const f = r.data.friends.find(x => x.username === name);
       assert.ok(f, '好友列表里没有 ' + name);
-      assert.strictEqual(f.tag, '系统', name + ' 应该归「系统」组,实际 ' + f.tag);
+      assert.strictEqual(f.tag, '用户', name + ' 在 Jack 这边应该归「用户」组,实际 ' + f.tag);
     }
   });
   await step('对方视角：Jack 归「用户」组,系统账号归「系统」组', async () => {

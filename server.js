@@ -479,21 +479,50 @@ function seedDefaultContacts(userId) {
 }
 
 // ---------- 好友归类 ----------
-// 加好友时用户可以自己写标签；没写就按「你们一起在哪个群」自动分。
-// Jack 那边的自动添加统一进「用户」组 —— 他那儿的好友基本都是注册用户。
+// 加好友时用户可以自己写标签；没写就按关系自动分。
+// 系统账号(Jacky Bot / 文件传输助手)在 Jack 的列表里归「用户」（他那儿不分离），
+// 在别人的列表里归「系统」。
 const CATEGORY_USERS = '用户';
 const CATEGORY_SYSTEM = '系统';
-// Jacky Bot / 文件传输助手 是系统账号，不是「用户」—— 它们单独一组。
+// Jacky Bot / 文件传输助手 是系统账号 —— 在别人眼里单独一组。
 function isSystemUser(userId) {
   const row = db.prepare('SELECT username FROM users WHERE id = ?').get(userId);
   if (!row) return false;
   return row.username === ASSISTANT_NAME || row.username === FILE_ASSISTANT_NAME;
 }
+// 管理员(Jack)的 id —— 分类规则要按「谁在看」来分。
+let adminUserIdCache = null;
+function adminUserId() {
+  if (adminUserIdCache === null) {
+    const row = db.prepare('SELECT id FROM users WHERE username = ?').get(ADMIN_USERNAME);
+    adminUserIdCache = row ? Number(row.id) : -1;
+  }
+  return adminUserIdCache;
+}
 function friendCategory(ownerId, otherId, customTag) {
   const custom = String(customTag || '').trim().slice(0, 24);
   if (custom) return custom;
-  if (isSystemUser(otherId)) return CATEGORY_SYSTEM;
+  // 系统账号(助手、文件传输助手)在 Jack 的列表里就是普通好友，统一归「用户」不分离；
+  // 在别人的列表里才是「系统」。
+  if (isSystemUser(otherId)) {
+    return Number(ownerId) === adminUserId() ? CATEGORY_USERS : CATEGORY_SYSTEM;
+  }
   return CATEGORY_USERS;
+}
+
+// 老数据刷一次：Jack 的列表里系统账号改归「用户」组（不分离）。
+// 只动标签正好是「系统」的行 —— 那是系统自动打的，不是用户自己写的。
+try {
+  const aid = adminUserId();
+  if (aid > 0) {
+    const n = db.prepare(
+      `UPDATE friends SET tag = ? WHERE tag = ? AND user_id = ?
+         AND friend_id IN (SELECT id FROM users WHERE username IN (?, ?))`
+    ).run(CATEGORY_USERS, CATEGORY_SYSTEM, aid, ASSISTANT_NAME, FILE_ASSISTANT_NAME);
+    if (n.changes) console.log('[VVeChat] recategorised', n.changes, 'system contacts for admin');
+  }
+} catch (e) {
+  console.error('[VVeChat] category migration failed:', e.message);
 }
 // 建立好友关系并归类（两个方向各归各的类）。
 // 已经有关系的不动标签 —— 否则每次登录都会把用户自己写的标签冲掉。

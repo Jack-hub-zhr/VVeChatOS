@@ -1240,9 +1240,10 @@ body.dark .chat-header { background: rgba(20, 24, 32, 0.30); border-bottom-color
 
 /* ============================================================
 /* ---- Task 3: "对方正在输入中…" indicator ---- */
+/* 「正在输入」提示：放在消息流末尾、输入框正上方。
+   原来是 position:absolute; bottom:76px —— 正好压在输入框上，遮住 placeholder。 */
 .typing-indicator {
-  position: absolute;
-  left: 18px; bottom: 76px;
+  position: static;
   padding: 6px 14px;
   font-size: 12px; color: var(--muted);
   background: var(--glass-bg-strong);
@@ -1250,7 +1251,6 @@ body.dark .chat-header { background: rgba(20, 24, 32, 0.30); border-bottom-color
   border-radius: 999px;
   box-shadow: var(--highlight);
 
-  z-index: 5;
   pointer-events: none;
   animation: typingFade .2s ease;
 }
