@@ -40,21 +40,21 @@ getSocketIo((socketIo) => {
     process.exit(1);
   }
 
-  // 替换 index.html 里的外部引用
-  const swap = (needle, replacement) => {
-    if (html.indexOf(needle) === -1) {
-      console.error('index.html 里找不到：' + needle);
+  // 替换 index.html 里的外部引用。用正则匹配，版本号怎么 bump 都不会把它搞挂。
+  const swap = (re, replacement, label) => {
+    if (!re.test(html)) {
+      console.error('index.html 里找不到：' + label);
       process.exit(1);
     }
     // 必须用函数形式：socket.io 里有 `` $` `` 这类替换模式，
     // 直接传字符串会被当成「匹配位置之前的全部内容」插进来。
-    html = html.replace(needle, () => replacement);
+    html = html.replace(re, () => replacement);
   };
-  swap('<link rel="stylesheet" href="style.css?v=20261107ae" />', '<style>\n' + css + '\n  </style>');
-  swap('<link rel="stylesheet" href="glass.css?v=20261107ae" />', '');
-  swap('<script src="/socket.io/socket.io.js"></script>', '<script>' + socketIo + '</script>');
-  swap('<script src="config.js?v=20261107ae"></script>', '<script>' + read('config.js') + '</script>');
-  swap('<script src="app.js?v=20261107ae"></script>', '<script>\n' + read('app.js') + '\n  </script>');
+  swap(/<link rel="stylesheet" href="style\.css\?v=[^"]*"\s*\/>/, '<style>\n' + css + '\n  </style>', 'style.css');
+  swap(/<link rel="stylesheet" href="glass\.css\?v=[^"]*"\s*\/>/, '', 'glass.css');
+  swap(/<script src="\/socket\.io\/socket\.io\.js"><\/script>/, '<script>' + socketIo + '</script>', 'socket.io');
+  swap(/<script src="config\.js\?v=[^"]*"><\/script>/, '<script>' + read('config.js') + '</script>', 'config.js');
+  swap(/<script src="app\.js\?v=[^"]*"><\/script>/, '<script>\n' + read('app.js') + '\n  </script>', 'app.js');
 
   fs.writeFileSync(OUT, html);
   const kb = (n) => (n / 1024).toFixed(0) + ' KB';
