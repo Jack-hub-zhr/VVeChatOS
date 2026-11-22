@@ -175,6 +175,12 @@ db.exec(`
     comments TEXT NOT NULL DEFAULT '[]',
     created_at INTEGER NOT NULL
   );
+  -- 朋友圈封面照片(用户自己上传的)。一行一人,换图就覆盖。
+  CREATE TABLE IF NOT EXISTS moment_covers (
+    user_id INTEGER PRIMARY KEY,
+    data TEXT NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
   CREATE TABLE IF NOT EXISTS message_reactions (
     message_id INTEGER NOT NULL,
     user_id    INTEGER NOT NULL,
@@ -219,6 +225,9 @@ ensureColumn('users', 'bio', 'TEXT');
 // 朋友圈草稿:删除时存草稿 / 发布前的内容。草稿只有作者自己看得到。
 ensureColumn('moments', 'status', "TEXT NOT NULL DEFAULT 'published'");
 ensureColumn('users', 'avatar_color', 'TEXT');
+// 朋友圈封面:官方配色图的编号(cov-01…cov-06)或空串=用默认渐变。
+// 用户自己上传的照片走 moments_cover 表(见下),不放这里 —— 太大。
+ensureColumn('users', 'cover_id', "TEXT NOT NULL DEFAULT ''");
 // 550C boot theme — per-account preference for the startup animation
 ensureColumn('users', 'boot_550c', 'INTEGER NOT NULL DEFAULT 0');
 // Personalisation preferences: the assistant answering in groups, a
@@ -525,7 +534,7 @@ function friendCategory(ownerId, otherId, customTag) {
 // 老数据刷一次：Jack 的列表里系统账号改归「用户」组（不分离）。
 // 只动标签正好是「系统」的行 —— 那是系统自动打的，不是用户自己写的。
 try {
-  const aid = adminUserId();
+  const aid = Number((db.prepare('SELECT id FROM users WHERE username = ?').get(ADMIN_USERNAME) || {}).id || 0);
   if (aid > 0) {
     const n = db.prepare(
       `UPDATE friends SET tag = ? WHERE tag = ? AND user_id = ?
@@ -1208,8 +1217,29 @@ app.get('/api/control/snapshot', authRequired, requireAdmin, (req, res) => {
             WHERE m.group_id = g.id AND u.username <> ?) AS member_count
     FROM groups g ORDER BY g.id ASC
   `).all(ASSISTANT_NAME);
+  // Jacky Bot 跟每个人的对话 —— 只给「谁 ↔ 谁、多少条」。
+  // 助手自己产生的对话也要能看见,不然出问题时无从查起。
+  const assistantId = (db.prepare('SELECT id FROM users WHERE username = ?').get(ASSISTANT_NAME) || {}).id;
+  const jackyConvs = [];
+  if (assistantId) {
+    // 直接看会话 id 里的两个数字 —— LIKE 里的 '_' 是单字符通配符,
+    // 会匹配到别人的会话去。
+    for (const [convId, n] of counts) {
+      const m = /^u_(\d+)_(\d+)$/.exec(convId);
+      if (!m) continue;
+      const a = Number(m[1]), b = Number(m[2]);
+      if (a !== Number(assistantId) && b !== Number(assistantId)) continue;
+      const other = a === Number(assistantId) ? b : a;
+      const u = db.prepare('SELECT id, username, avatar_color FROM users WHERE id = ?').get(other);
+      if (!u) continue;
+      jackyConvs.push({ peer: u, message_count: n || 0 });
+    }
+    jackyConvs.sort((a, b) => b.message_count - a.message_count);
+  }
+
   res.json({
     ok: true, generated_at: now(), users, groups, conversations,
+    jacky_conversations: jackyConvs,
     // 只有条数，没有正文 —— 隐私要求。
     group_message_counts: Object.fromEntries(groupCounts),
   });
@@ -1310,6 +1340,7 @@ app.get('/api/security/overview', authRequired, requireAdmin, (req, res) => {
   res.json({
     ok: true,
     stats: firewall.snapshot(),
+    // 全量事件 —— 排查问题要看全部。控制台展示层再过滤掉本机/agent 自己。
     events: firewall.listEvents(limit),
     rules: firewall.listRules().slice(0, 100)
   });
@@ -1336,6 +1367,10 @@ app.post('/api/security/block', rateLimit('write'), authRequired, requireAdmin, 
   const b = req.body || {};
   const ip = String(b.ip || '').trim();
   if (!ip) return res.status(400).json({ error: '缺少 ip' });
+  // 回环/内网地址封了没用(攻击者不在那儿),还可能把管理员自己关在门外。
+  if (/^(127\.|::1$|::ffff:127\.)/.test(ip) || /^10\.|^192\.168\.|^172\.(1[6-9]|2\d|3[01])\./.test(ip)) {
+    return res.status(400).json({ error: '内网地址不封禁' });
+  }
   const minutes = Math.min(Math.max(Number(b.minutes) || 60, 1), 60 * 24 * 7);
   const reason = String(b.reason || '管理员手动封禁').slice(0, 120);
   const rule = String(b.rule || '').slice(0, 120);
@@ -1577,6 +1612,9 @@ const REASON_LIMIT = 12000;
 
 // 思考档位 → thinking_budget（token 数）
 const THINK_BUDGETS = { low: 1024, medium: 4096, high: 16384 };
+
+// 对外唯一的模型入口。用户不再选 Qwen 型号,统一由 Jacky Bot 接管。
+const JACKY_MODEL_ID = 'jacky';
 
 // The key for a provider: env var first, then the database.
 function aiProviderKey(pid) {
@@ -2040,7 +2078,14 @@ app.post('/api/ai/chat', rateLimit('write'), authRequired, aiChatGuard, async (r
   // whose provider is ready. If the picked model has no key yet (or its
   // endpoint is down) the request still gets an answer, and the client
   // is told which model actually replied.
-  const catalog = aiModelCatalog();
+  const catalog = aiModelCatalog().sort((a, b) => {
+    // thinking:'none' 的源不会思考 —— 排后面,优先用能深度思考的。
+    const an = a.thinking === 'none' ? 1 : 0;
+    const bn = b.thinking === 'none' ? 1 : 0;
+    return an - bn;
+  });
+  // 用户只选「Jacky Bot」—— 底下按可用性排一条引擎链,
+  // 谁先答上算谁的。挑具体 Qwen 型号是服务端的事。
   const wanted = catalog.find((m) => m.id === String(model || ''));
   const chain = [];
   if (wanted && wanted.ready) chain.push(wanted);
@@ -2050,7 +2095,7 @@ app.post('/api/ai/chat', rateLimit('write'), authRequired, aiChatGuard, async (r
     chain.push(m);
   }
   if (!chain.length) {
-    return res.status(503).json({ error: '没有可用的 Qwen 源，请在设置里接入一个免费密钥' });
+    return res.status(503).json({ error: '没有可用的模型源，请在设置里接入一个免费密钥' });
   }
 
   res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
@@ -2072,8 +2117,14 @@ app.post('/api/ai/chat', rateLimit('write'), authRequired, aiChatGuard, async (r
   // it so the model can actually ground its answer.
   // 用户用什么语言提问,就用什么语言回答 —— 别再一律中文了。
   const BASE_SYSTEM = msgIsZh
-    ? '你是 VVeChat 内置的通义千问（Qwen）助手。请用简体中文回答，简洁、直接、有条理；不确定的地方要明说。'
-    : 'You are the Qwen assistant built into VVeChat. Answer in English — concise, direct and organized; say so when you are unsure.';
+    ? '你是 Jacky Bot，VVeChat 里的 AI 助手。请用简体中文回答。' +
+      '面对复杂任务，先在内部把思路推演清楚（深度思考），再给出结论；' +
+      '步骤多时按点列清楚，别把推理过程原样倒给用户。' +
+      '回答要简洁、直接、有条理；不确定的地方要明说。'
+    : 'You are Jacky Bot, the AI assistant in VVeChat. Answer in English. ' +
+      'For complex tasks, work the problem out thoroughly first (deep thinking), then give the conclusion. ' +
+      'Lay out multi-step answers as clear points — do not dump your raw reasoning on the user. ' +
+      'Be concise, direct and organized; say so when you are unsure.';
   // 第一轮对话:顺带起个名字。模型被要求把标题放在第一行,
   // 下面那道「门」会把它从正文里摘走,用户看不到。
   const TITLE_HINT = msgIsZh
@@ -2246,7 +2297,8 @@ app.post('/api/ai/chat', rateLimit('write'), authRequired, aiChatGuard, async (r
               provider: entry.providerLabel,
               providerEn: entry.providerLabelEn || entry.providerLabel,
               model: entry.model,
-              label: entry.label,
+              // 对外只有 Jacky Bot —— 底下用的哪个引擎型号是内部细节。
+              label: 'Jacky Bot',
               free: true,
               fallback: !!wanted && entry.id !== wanted.id
             }) + '\n');
@@ -2337,10 +2389,24 @@ app.post('/api/ai/chat', rateLimit('write'), authRequired, aiChatGuard, async (r
 app.get('/api/ai/status', authRequired, (req, res) => {
   const models = aiModelCatalog();
   const ready = models.filter((m) => m.ready);
+  // 用户只看到一个「Jacky Bot」—— 底下用哪个引擎是服务端的事,
+  // 不该摆一排 Qwen 型号让用户挑。thinking:'budget' = 可选思考档位。
   res.json({
     ok: ready.length > 0,
-    defaultModel: (models.find((m) => m.ready && m.id === 'ovh-qwen3-8-27b') || ready[0] || {}).id,
-    models,
+    defaultModel: JACKY_MODEL_ID,
+    models: [{
+      id: JACKY_MODEL_ID,
+      label: 'Jacky Bot',
+      model: 'jacky',
+      tag: '',
+      desc: '',
+      provider: 'jacky',
+      providerLabel: 'Jacky Bot',
+      providerLabelEn: 'Jacky Bot',
+      thinking: 'budget',
+      search: 'client',
+      ready: ready.length > 0
+    }],
     providers: Object.keys(QWEN_PROVIDERS).map((pid) => ({
       id: pid,
       label: QWEN_PROVIDERS[pid].label,
@@ -2746,6 +2812,49 @@ app.get('/api/moments', authRequired, (req, res) => {
     ORDER BY m.id DESC LIMIT 100
   `).all(req.user.id);
   res.json({ moments: rows.map(packMoment) });
+});
+
+// ------------------------------------------------------------
+// 朋友圈封面
+// ------------------------------------------------------------
+// 两种来源,同一个字段存:
+//   cover_id = 'cov-01'…'cov-06'  → 官方配色图(前端 assets/covers/ 里的静态图)
+//   cover_id = ''                  → 用 moment_covers 里用户自己上传的照片
+//                                没有就落到默认渐变。
+// ------------------------------------------------------------
+const COVER_PRESETS = ['cov-01', 'cov-02', 'cov-03', 'cov-04', 'cov-05', 'cov-06'];
+app.get('/api/me/cover', authRequired, (req, res) => {
+  const u = db.prepare('SELECT cover_id FROM users WHERE id = ?').get(req.user.id);
+  const photo = db.prepare('SELECT data FROM moment_covers WHERE user_id = ?').get(req.user.id);
+  res.json({
+    cover_id: (u && u.cover_id) || '',
+    photo: (photo && photo.data) || '',
+  });
+});
+app.put('/api/me/cover', rateLimit('write'), authRequired, (req, res) => {
+  const { cover_id = '', photo = '' } = req.body || {};
+  const cid = String(cover_id || '').trim();
+  if (cid && !COVER_PRESETS.includes(cid)) {
+    return res.status(400).json({ error: '封面配色图不存在' });
+  }
+  // 上传照片:data URL,跟头像同一条路。base64 上限 ~2.5MB。
+  if (photo) {
+    if (!/^data:image\/(png|jpe?g|webp|gif);base64,/i.test(photo)) {
+      return res.status(400).json({ error: '封面图片格式不支持（仅 PNG/JPG/WebP/GIF）' });
+    }
+    if ((photo.split(',')[1] || '').length > 3.5 * 1024 * 1024) {
+      return res.status(413).json({ error: '封面图片过大（>2.5MB）' });
+    }
+    db.prepare(
+      'INSERT INTO moment_covers (user_id, data, updated_at) VALUES (?, ?, ?) ' +
+      'ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at'
+    ).run(req.user.id, photo, now());
+  } else {
+    // 没传照片 = 清掉自己上传的那张,回到官方配色/默认渐变。
+    db.prepare('DELETE FROM moment_covers WHERE user_id = ?').run(req.user.id);
+  }
+  db.prepare('UPDATE users SET cover_id = ? WHERE id = ?').run(cid, req.user.id);
+  res.json({ ok: true, cover_id: cid, photo });
 });
 app.post('/api/moments', rateLimit('write'), authRequired, validateContent, (req, res) => {
   const { content = '', images = [], status = 'published' } = req.body || {};
@@ -3404,6 +3513,12 @@ app.post('/api/friend/respond', rateLimit('write'), authRequired, (req, res) => 
     const them = db.prepare('SELECT id, username, avatar, avatar_color FROM users WHERE id = ?').get(fr.from_user_id);
     io.to(`user:${fr.to_user_id}`).emit('friend:added', them);
     io.to(`user:${fr.from_user_id}`).emit('friend:added', me);
+    // 对方同意了申请 → 申请发起方(被添加的那个人)弹一条消息提醒,
+    // 跟群聊里来了新消息一个样。
+    io.to(`user:${fr.from_user_id}`).emit('friend:accepted', {
+      id: fr.from_user_id,
+      by: { id: me.id, username: me.username, avatar: me.avatar, avatar_color: me.avatar_color },
+    });
   }
   io.to(`user:${fr.from_user_id}`).emit('friend:request:resolved', { id, accept: !!accept });
   res.json({ ok: true });

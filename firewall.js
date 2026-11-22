@@ -148,6 +148,17 @@ function createFirewall(opts) {
 
   function now() { return Date.now(); }
 
+  // 内部来源:防火墙自己的 agent 和本机回环。
+  // 它们不是「攻击」—— 混进事件流只会淹没真正的入侵记录,
+  // 管理员还可能误点「封禁」把自己封了。
+  function isInternalSource(ip) {
+    const s = String(ip || '');
+    if (s === 'self-check' || s === 'agent') return true;
+    if (s === '::1' || s === '::ffff:127.0.0.1') return true;
+    const m = s.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+    return !!m && Number(m[1]) === 127;
+  }
+
   function record(ev) {
     const row = {
       ts: ev.ts || now(),
@@ -400,6 +411,8 @@ function createFirewall(opts) {
   function listEvents(limit) {
     if (!db) return [];
     try {
+      // 全量返回 —— 审计和排查要看到全部,包括本机和 agent 的记录。
+      // 「只显示外部攻击者」是控制台展示层的过滤,不是这里。
       return db.prepare('SELECT * FROM security_events ORDER BY id DESC LIMIT ?')
         .all(Math.min(Number(limit) || 50, 300));
     } catch (_) { return []; }
@@ -414,9 +427,14 @@ function createFirewall(opts) {
     let today = 0;
     if (db) {
       try {
-        events = db.prepare('SELECT COUNT(*) AS n FROM security_events').get().n;
+        // 统计「对外攻击事件」—— 本机和 agent 自己的记录不算。
         const dayAgo = now() - 24 * 3600 * 1000;
-        today = db.prepare('SELECT COUNT(*) AS n FROM security_events WHERE ts >= ?').get(dayAgo).n;
+        const rows = db.prepare('SELECT ip, ts FROM security_events').all();
+        for (const r of rows) {
+          if (isInternalSource(r.ip)) continue;
+          events++;
+          if (r.ts >= dayAgo) today++;
+        }
       } catch (_) {}
     }
     return {
@@ -589,6 +607,7 @@ function createFirewall(opts) {
 
   return {
     middleware,
+    isInternalSource,
     noteAuthFailure,
     noteRejected,
     record,

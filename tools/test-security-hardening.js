@@ -51,12 +51,12 @@ const cfIp = () => '203.0.113.' + (100 + (fakeSeq++));
   console.log('\n[1] 来源 IP 不可伪造');
   const FORGED = '203.0.113.66';
   await step('带伪造 X-Forwarded-For / X-Real-IP 的请求,记的是真实 IP', async () => {
-    const before = await call('/security/overview?limit=1', { token });
-    const n0 = before.data.stats.events;
+    // 注意:stats.events 现在只统计「对外攻击事件」(本机和 agent 的不算),
+    // 所以这里直接看事件列表 —— 列表是全量的,本机事件也在里面。
     await call('/../.env', { headers: { 'X-Forwarded-For': FORGED, 'X-Real-IP': FORGED } });
     await new Promise(r => setTimeout(r, 300));
     const after = await call('/security/overview?limit=10', { token });
-    assert.ok(after.data.stats.events > n0, '没有留下事件');
+    assert.ok(after.data.events.length > 0, '没有留下事件');
     const ev = after.data.events[0];
     assert.notEqual(ev.ip, FORGED, '事件里的 IP 是伪造的那个:' + ev.ip);
     assert.ok(/^(127\.|::1|::ffff:127)/.test(ev.ip), '真实 IP 不对:' + ev.ip);

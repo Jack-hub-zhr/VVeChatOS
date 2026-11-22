@@ -334,7 +334,7 @@
       const wrap = el('div', { class: 'events' });
       wrap.appendChild(el('h3', { class: 'sub-title' }, '当前封禁的 IP'));
       for (const b of ips) {
-        const row = el('div', { class: 'event' });
+        const row = el('div', { class: 'event event-ban' });
         row.innerHTML =
           '<span class="t">' + (b.until ? fmtTime(b.until) : '—') + '</span>' +
           '<span class="ip">' + esc(b.ip) + '</span>' +
@@ -357,14 +357,20 @@
         row.appendChild(btn);
         wrap.appendChild(row);
       }
-      box.appendChild(wrap);
+      // 放进 #fw-bans（独立容器），不是 #fw-stats —— 后者是 grid，
+      // 塞进去会被压成一列窄条，IP 每个字符换一行。
+      const banBox = $('#fw-bans');
+      if (banBox) banBox.appendChild(wrap);
     }
 
     // 最近事件
     const ev = $('#fw-events');
     if (!ev) return;
     ev.innerHTML = '';
-    const events = d.events || [];
+    // 本机(127.0.0.1)和 agent 自检不是攻击 —— 展示层滤掉,
+    // 免得淹没真正的入侵记录,管理员还可能误点「封禁」把自己封了。
+    // 数据库里仍然全量留着,CSV 导出和事后排查看得到。
+    const events = (d.events || []).filter((e) => !isInternalSource(e.ip));
     if (!events.length) {
       ev.appendChild(el('div', { class: 'empty-note' }, '暂无安全事件 —— 一切正常'));
       return;
@@ -384,7 +390,11 @@
 
       // 一键封禁 / 解封
       const isBanned = bannedNow.has(e.ip);
+      // 本机/内网地址封了没用 —— 按钮置灰,别让管理员把自己关在门外。
+      const isLocal = /^(127\.|::1$|::ffff:127\.)/.test(e.ip) ||
+        /^10\.|^192\.168\.|^172\.(1[6-9]|2\d|3[01])\./.test(e.ip);
       const banBtn = el('button', { class: 'unblock' }, isBanned ? '解封' : '封禁');
+      if (isLocal && !isBanned) { banBtn.disabled = true; banBtn.title = '内网地址不封禁'; }
       banBtn.addEventListener('click', async () => {
         banBtn.disabled = true;
         try {
@@ -505,12 +515,38 @@
       cw.appendChild(box);
     }
 
+    // Jacky Bot 的对话记录:默认折叠,展开后能再收起。
+    const jf = $('#jacky-fold');
+    const jc = $('#jacky-convos');
+    const jcc = $('#jacky-convo-count');
+    if (jf && jc) {
+      const jlist = d.jacky_conversations || [];
+      if (jcc) jcc.textContent = jlist.length;
+      jc.innerHTML = '';
+      if (!jlist.length) {
+        jc.appendChild(el('div', { class: 'empty-note' }, '暂无 Jacky Bot 的对话'));
+      }
+      for (const c of jlist) {
+        const box = el('div', { class: 'convo' });
+        const head = el('div', { class: 'convo-head' });
+        head.innerHTML = `<span style="color:#a78bfa">Jacky Bot</span><span class="arrow">↔</span><span style="color:#60a5fa">${esc(c.peer.username)}</span>`;
+        box.appendChild(head);
+        box.appendChild(el('span', { class: 'convo-count' }, (c.message_count || 0) + ' 条'));
+        jc.appendChild(box);
+      }
+      // 展开/收起时换提示文字
+      const hint = jf.querySelector('.fold-hint');
+      const syncHint = () => { if (hint) hint.textContent = jf.open ? '收起' : '展开'; };
+      jf.addEventListener('toggle', syncHint);
+      syncHint();
+    }
+
     // 官方群：同样只有条数。
     const gw = $('#groups');
     gw.innerHTML = '';
     const gCounts = d.group_message_counts || {};
-    const groupTotal = Object.values(gCounts).reduce((a, b) => a + (Number(b) || 0), 0);
-    $('#group-count').textContent = groupTotal;
+    // 这里报的是「群聊数量」= 群个数,不是消息条数。
+    $('#group-count').textContent = (d.groups || []).length;
     const gNames = (d.groups || []).filter(g => g.is_official || Object.prototype.hasOwnProperty.call(gCounts, String(g.id)));
     if (!gNames.length) {
       gw.appendChild(el('div', { class: 'empty-note' }, '暂无群消息'));
@@ -532,14 +568,15 @@
   function renderKpis(d) {
     const box = $('#kpis');
     if (!box) return;
+    // 「好友会话」= 1 对 1 的会话数;「群聊数量」= 1 对多的群个数。
     const convos = (d.conversations || []).length;
-    const groupTotal = Object.values(d.group_message_counts || {}).reduce((a, b) => a + (Number(b) || 0), 0);
+    const groupCount = (d.groups || []).length;
     const sec = state.security && state.security.stats ? state.security.stats : {};
     const blocked = (sec.blockedIps || []).length;
     const items = [
       { k: '账号总数', v: (d.users || []).length, s: '含系统账号' },
-      { k: '好友会话', v: convos, s: '只统计，不看正文' },
-      { k: '群消息', v: groupTotal, s: '只统计，不看正文' },
+      { k: '好友会话', v: convos, s: '1 对 1 的私聊', },
+      { k: '群聊数量', v: groupCount, s: '1 对多的群聊个数' },
       { k: '当前封禁', v: blocked, s: '被防火墙挡下的 IP', cls: blocked ? 'bad' : '' },
     ];
     box.innerHTML = '';
@@ -548,6 +585,15 @@
       n.innerHTML = '<div class="k">' + esc(it.k) + '</div><div class="v' + (it.cls ? ' ' + it.cls : '') + '">' + esc(String(it.v)) + '</div><div class="s">' + esc(it.s) + '</div>';
       box.appendChild(n);
     }
+  }
+
+  // 本机 / agent 自己 —— 不是攻击者。跟 firewall.js 里的判断一致。
+  function isInternalSource(ip) {
+    const s = String(ip || '');
+    if (s === 'self-check' || s === 'agent') return true;
+    if (s === '::1' || s === '::ffff:127.0.0.1') return true;
+    const m = s.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+    return !!m && Number(m[1]) === 127;
   }
 
   function shade(hex, percent) {

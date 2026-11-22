@@ -51,8 +51,8 @@
   /* 分层玻璃:UI 层级越高,身后的背景越模糊。
      第一层(主面板/壁纸)完全不糊 —— 折射要看得见;
      卡片与控件第二层,弹窗与菜单第三层。 */
-  --blur-l2: 8px;
-  --blur-l3: 18px;
+  --blur-l2: 10.4px;
+  --blur-l3: 23.4px;
 
   /* Accent */
   --accent: #4C6FFF;
@@ -773,8 +773,8 @@ body.dark .list-me .avatar.md { color: #e6ecf5; }
   /* 聊天区只留一点点模糊:消息文字直接压在壁纸上,完全不清会花,
      但也不能多 —— 背景要看得清(第一层最透)。
      4px 把壁纸上那些亮丝带化成柔光,结构还在。 */
-  backdrop-filter: blur(4px) saturate(180%);
-  -webkit-backdrop-filter: blur(4px) saturate(180%);
+  backdrop-filter: blur(5.2px) saturate(180%);
+  -webkit-backdrop-filter: blur(5.2px) saturate(180%);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.20),
     0 8px 24px rgba(30, 80, 150, 0.08);
@@ -1652,7 +1652,61 @@ body.dark .mention-hint-bar { background: rgba(255, 255, 255, 0.05); }
 .moment-cover {
   position: relative; height: 240px; flex: 0 0 auto;
   background: linear-gradient(135deg, #4a5f7d 0%, #2b3648 55%, #1d2532 100%);
+  overflow: hidden;
 }
+/* 用户自己上传的封面照片 —— 铺满,盖住默认渐变 */
+.moment-cover-img {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.moment-cover-img.hidden { display: none; }
+/* 「换个封面」按钮:平时藏起来,鼠标划过封面才露出来 */
+.moment-cover-pick {
+  position: absolute; top: 12px; right: 14px; z-index: 3;
+  padding: 6px 12px;
+  border: none; border-radius: 999px;
+  background: rgba(0, 0, 0, 0.42);
+  color: #fff;
+  font-family: inherit; font-size: 12px; font-weight: 600;
+  cursor: pointer;
+  opacity: 0; transform: translateY(-4px);
+  transition: opacity 0.2s, transform 0.2s;
+  backdrop-filter: blur(var(--blur-l2)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--blur-l2)) saturate(180%);
+}
+.moment-cover:hover .moment-cover-pick,
+.moment-cover-pick:focus-visible { opacity: 1; transform: none; }
+@media (hover: none) { .moment-cover-pick { opacity: 1; transform: none; } }
+
+/* 封面选择器:官方配色图 + 上传 */
+.cover-sec-title {
+  font-size: 12px; font-weight: 700; color: var(--muted);
+  margin: 0 0 8px;
+}
+.cover-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+  margin-bottom: 14px;
+}
+.cover-item {
+  position: relative; aspect-ratio: 16 / 9;
+  border-radius: 12px; overflow: hidden;
+  border: 2px solid transparent;
+  cursor: pointer; padding: 0;
+  background: rgba(255, 255, 255, 0.3);
+  transition: border-color 0.18s, transform 0.18s;
+}
+.cover-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cover-item:hover { transform: translateY(-2px); }
+.cover-item.on { border-color: var(--accent); }
+.cover-item .cover-item-tag {
+  position: absolute; left: 6px; bottom: 5px;
+  padding: 2px 7px; border-radius: 999px;
+  background: rgba(0, 0, 0, 0.5); color: #fff;
+  font-size: 10px; font-weight: 600;
+}
+.cover-upload { width: 100%; justify-content: center; }
 .moment-cover-name {
   /* 名字在头像左边,别跟头像叠在一起 */
   position: absolute; right: 96px; bottom: 34px;
@@ -1675,6 +1729,13 @@ body.dark .mention-hint-bar { background: rgba(255, 255, 255, 0.05); }
   padding: 16px 18px; border-bottom: 1px solid var(--glass-border);
 }
 .moment-post:last-child { border-bottom: 0; }
+/* 划到哪条,哪条就框出来 —— 一眼知道中间详情说的是哪条 */
+.moment-post.is-active {
+  background: rgba(76, 111, 255, 0.07);
+  box-shadow: inset 3px 0 0 var(--accent);
+  border-radius: 14px;
+}
+body.dark .moment-post.is-active { background: rgba(76, 111, 255, 0.13); }
 .moment-post .meta { flex: 1; min-width: 0; }
 /* 点赞 / 评论:就在这条动态下面,像微信那样 */
 .moment-acts { display: flex; gap: 14px; margin-top: 8px; }
@@ -2422,7 +2483,10 @@ body.dark .theme-menu { background: rgba(20, 24, 32, 0.92); border-color: rgba(2
   /* Tablet landscape / small desktop */
   .app-shell { border-radius: 0; }
   .list-pane { width: 280px; }
-  .rail-pane { width: 72px; }
+  /* 英文标签比中文长("Moments" 7 个字母) —— 72px 装不下会被截成
+     "Mome..."。给 rail 留够宽度,标签宁可换行也不截字。 */
+  .rail-pane { width: 84px; }
+  .side-nav-label { white-space: normal; overflow: visible; word-break: break-word; }
   .topbar { height: 60px; padding: 0 16px 0 20px; }
   .messages { padding: 16px 24px 10px; }
   .icon-btn { width: 36px; height: 36px; }
@@ -2441,8 +2505,8 @@ body.dark .theme-menu { background: rgba(20, 24, 32, 0.92); border-color: rgba(2
     overflow: hidden;
     z-index: 10;
     background: rgba(255, 255, 255, 0.40);
-    backdrop-filter: blur(4px) saturate(180%);
-    -webkit-backdrop-filter: blur(4px) saturate(180%);
+    backdrop-filter: blur(5.2px) saturate(180%);
+    -webkit-backdrop-filter: blur(5.2px) saturate(180%);
     border: 1px solid var(--glass-border);
   }
   body.dark .right-pane { background: rgba(20, 24, 32, 0.50); }
@@ -3652,6 +3716,9 @@ body.dark .tag-official { color: #fcd34d; background: rgba(245, 158, 11, 0.16); 
 }
 .tag-pick:hover { background: var(--glass-bg-strong); }
 .tag-pick.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+/* 「不分类」不是分类,是清除词条 —— 虚线边框区分开,免得看着像第 16 个分类 */
+.tag-pick.tag-clear { border-style: dashed; color: var(--ink-3); }
+.tag-pick.tag-clear.on { border-style: dashed; background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 .tag-input {
   width: 120px; padding: 5px 11px; border-radius: 999px; font-size: 12px;
   border: 1px solid var(--glass-border-soft); background: var(--glass-bg-soft); color: var(--ink);

@@ -8,9 +8,9 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="theme-color" content="#4C6FFF" />
   <title>VVeChat</title>
-  <link rel="stylesheet" href="style.css?v=20261107ag" />
+  <link rel="stylesheet" href="style.css?v=20261107ah" />
   <!-- 玻璃质感视觉层（普通毛玻璃；折射引擎已移除） -->
-  <link rel="stylesheet" href="glass.css?v=20261107ag" />
+  <link rel="stylesheet" href="glass.css?v=20261107ah" />
   <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><text x='32' y='44' font-family='system-ui' font-size='40' font-weight='800' text-anchor='middle' fill='%234C6FFF'>V</text></svg>" />
 </head>
 <body>
@@ -333,7 +333,7 @@
           <div id="pane-moment" class="pane">
             <div class="moment-detail-head">
               <!-- 原来这里是 ✏️ / 🖼️ 两个小图标，换成一条长胶囊 -->
-              <button type="button" class="moment-compose capsule" id="btn-moment-compose" data-i18n="moment_side_write">边写文案</button>
+              <button type="button" class="moment-compose capsule" id="btn-moment-compose" data-i18n="moment_side_write">编写文案</button>
               <span class="moment-detail-title" data-i18n="moment_detail_title">这条动态</span>
             </div>
             <div class="moment-detail" id="moment-detail"></div>
@@ -478,7 +478,9 @@
               <button class="icon-btn" id="btn-moment-back" aria-label="back" data-i18n-aria="btn_back">‹</button>
               <div class="moment-top-title" data-i18n="moment_title">日常</div>
             </header>
-            <div class="moment-cover">
+            <div class="moment-cover" id="moment-cover">
+              <img class="moment-cover-img hidden" id="moment-cover-img" alt="" />
+              <button type="button" class="moment-cover-pick" id="btn-cover-pick" data-i18n="cover_pick">换个封面</button>
               <div class="moment-cover-name" id="moment-cover-name"></div>
               <div class="avatar lg moment-cover-avatar" id="moment-cover-avatar"></div>
             </div>
@@ -539,12 +541,13 @@
               <textarea id="ai-input" rows="1" placeholder="给 Jacky Bot 发消息…（Enter 发送，Shift+Enter 换行）" data-i18n-ph="ai_input_ph" autocomplete="off"></textarea>
               <div class="ai-tools">
                 <div class="ai-tools-group">
-                  <!-- 模型：每一项都是一个具体的 Qwen 模型，选哪个就回哪个 -->
+                  <!-- 模型：只有一个 Jacky Bot —— 底下用哪个引擎由服务端决定，
+                       用户不挑 Qwen 型号，只挑思考深度。 -->
                   <div class="ai-select-wrap">
                     <select id="ai-model" class="ai-select" title="选择模型" data-i18n-title="ai_model_title"></select>
                   </div>
-                  <!-- 思考档位：只有支持分档思考的模型才会显示 -->
-                  <div class="ai-select-wrap hidden" id="ai-level-wrap">
+                  <!-- 思考档位：Jacky Bot 的深度思考强度（低/中/高） -->
+                  <div class="ai-select-wrap" id="ai-level-wrap">
                     <select id="ai-level" class="ai-select" title="思考档位" data-i18n-title="ai_level_title">
                       <option value="low" data-i18n="think_low">思考 · 低</option>
                       <option value="medium" selected data-i18n="think_medium">思考 · 中</option>
@@ -826,6 +829,28 @@
     </div>
   </div>
 
+  <!-- MODAL: 朋友圈封面 —— 官方配色图 或 自己上传一张 -->
+  <div class="modal hidden" id="modal-cover-picker" role="dialog">
+    <div class="modal-mask"></div>
+    <div class="modal-card modal-card-sm">
+      <div class="modal-head">
+        <h3 data-i18n="cover_pick_title">朋友圈封面</h3>
+        <button class="icon-btn icon-btn-sm modal-close" data-close="modal-cover-picker">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="cover-sec-title" data-i18n="cover_official">官方配色</div>
+        <div class="cover-grid" id="cover-grid"></div>
+        <label class="btn btn-ghost btn-sm cover-upload">
+          <span data-i18n="cover_upload">上传照片</span>
+          <input type="file" id="cover-file" accept="image/*" hidden />
+        </label>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close="modal-cover-picker" data-i18n="cancel">取消</button>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL: confirm -->
   <!-- Create a group. The discover switch lives here, and the owner can
        flip it later from the group's own settings. -->
@@ -921,7 +946,7 @@
   <!-- Socket.io client is served by this same Express app at /socket.io/socket.io.js,
        so there is no third-party CDN to fail (or be blocked). -->
   <script src="/socket.io/socket.io.js"></script>
-  <script src="config.js?v=20261107ag"></script>
+  <script src="config.js?v=20261107ah"></script>
   <!-- The 550C theme is ~60 KB. Only fetch it when it is actually on:
        localStorage says so right now, and app.js re-checks after login
        for the case where the account has it on but this browser does
@@ -939,7 +964,7 @@
        time even though the theme was enabled. -->
   <script>
   (function () {
-    try { window.__VV_ASSET_V = '20261107ag'; } catch (e) { }
+    try { window.__VV_ASSET_V = '20261107ah'; } catch (e) { }
     var V = window.__VV_ASSET_V || '';
     var on = false;
     try { on = localStorage.getItem('vve:boot550c') === '1'; } catch (e) { }
@@ -961,6 +986,6 @@
   })();
   </script>
   <!-- 液态玻璃引擎：折射 + 果冻物理 + 体积光 + 光照互通 -->
-  <script src="app.js?v=20261107ag"></script>
+  <script src="app.js?v=20261107ah"></script>
 </body>
 </html>

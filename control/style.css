@@ -223,6 +223,23 @@ a { color: var(--green); }
 }
 
 /* 事件流 */
+/* 可折叠区块:默认收起,点标题展开,再点收起 */
+.fold {
+  margin-top: 12px; border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: rgba(255, 255, 255, 0.015);
+}
+.fold > summary {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 11px; cursor: pointer; list-style: none;
+  font-size: 12px; font-weight: 600; color: var(--ink-2);
+  border-radius: var(--r-sm);
+}
+.fold > summary::-webkit-details-marker { display: none; }
+.fold > summary:hover { background: rgba(255, 255, 255, 0.04); color: var(--ink); }
+.fold > summary .badge { margin-left: auto; }
+.fold-hint { font-size: 11px; color: var(--ink-3); font-weight: 500; }
+.fold > .convos { padding: 0 11px 11px; max-height: 320px; overflow-y: auto; }
+
 .events { display: flex; flex-direction: column; gap: 7px; max-height: 420px; overflow-y: auto; }
 .event {
   display: grid;
@@ -248,6 +265,9 @@ a { color: var(--green); }
   font-size: 11px; padding: 3px 9px; border-radius: 6px; white-space: nowrap;
 }
 .event .unblock:hover { background: rgba(255, 255, 255, 0.1); color: var(--ink); }
+/* 封禁行:IP 列给宽一点,免得 IPv6 被 break-all 拆成一列字符 */
+.event.event-ban { grid-template-columns: minmax(0, 92px) minmax(0, 180px) minmax(0, 1fr) minmax(0, 74px) auto; }
+.event.event-ban .ip { word-break: normal; }
 .event.event-row { display: block; padding: 0; }
 .event-row .event-top {
   display: grid;

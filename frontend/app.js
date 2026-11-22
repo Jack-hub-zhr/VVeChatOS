@@ -102,14 +102,14 @@
       moment_publish: '发表',
       moment_write: '写点什么',
       moment_add: '加图片',
-      moment_side_write: '边写文案',
+      moment_side_write: '编写文案',
       draft_prefix: '【草稿】',
       friend_tag_label: '标签（可选）',
       friend_tag_ph: '给这个好友起个标签，比如「同事」',
       cat_users: '用户',
       cat_system: '系统',
       tag_pick: '词条',
-      tag_auto: '自动',
+      tag_auto: '不分类',
       tag_custom_ph: '自定义词条',
       tag_saved: '词条已更新',
       pref_version: '版本',
@@ -150,6 +150,7 @@
       profile_bio_empty: '这个人很懒，什么都没写',
       profile_saved: '已保存',
       bio_sub: '好友',
+      ai_assistant_role: 'AI 助手',
       bio_online: '在线',
       me: '我',
       member: '成员',
@@ -174,6 +175,20 @@
       toast_req_accepted: '对方接受了你的好友申请',
       toast_req_rejected: '对方拒绝了你的好友申请',
       toast_new_friend: '{0} 成为你的好友啦',
+      // 好友申请被同意 → 弹出的消息提醒(跟群聊新消息一样)
+      friend_accepted_msg: '{0} 同意添加你为好友，现在可以开始聊天了',
+      friend_accepted_sub: '新好友',
+      // 朋友圈封面
+      cover_pick: '换个封面',
+      cover_pick_title: '朋友圈封面',
+      cover_official: '官方配色',
+      cover_upload: '上传照片',
+      cover_use: '使用',
+      cover_current: '当前封面',
+      cover_remove_photo: '用回官方配色',
+      cover_upload_ph: '选择一张照片当封面',
+      cover_saved: '封面已更新',
+      cover_uploaded: '照片已上传',
       toast_new_group: '你被拉入群：{0}',
       req_want: '想加你为好友 · ',
       loading: '加载中',
@@ -419,8 +434,8 @@
       ai_new_chat_failed: '新建对话失败',
       no_key_suffix: '（未配置密钥）',
       models_available: '{0} 个模型可用',
-      no_qwen_source: '没有可用的 Qwen 源',
-      ai_setup_key: '接入免费 Qwen 密钥',
+      no_qwen_source: '没有可用的模型源',
+      ai_setup_key: '接入免费模型密钥',
       ai_setup_ask_admin: '尚未接入密钥（请联系管理员）',
       ai_setup_hint: '粘贴一个免费中转的密钥，立即生效',
       ai_setup_admin_only: '只有管理员可以配置',
@@ -559,7 +574,7 @@
       cat_users: 'Users',
       cat_system: 'System',
       tag_pick: 'Tag',
-      tag_auto: 'Auto',
+      tag_auto: 'No tag',
       tag_custom_ph: 'Custom tag',
       tag_saved: 'Tag updated',
       pref_version: 'Version',
@@ -600,6 +615,7 @@
       profile_bio_empty: 'This user is too lazy to write a bio',
       profile_saved: 'Saved',
       bio_sub: 'Friend',
+      ai_assistant_role: 'AI Assistant',
       bio_online: 'Online',
       me: 'Me',
       member: 'Member',
@@ -624,6 +640,18 @@
       toast_req_accepted: 'They accepted your friend request',
       toast_req_rejected: 'They declined your friend request',
       toast_new_friend: '{0} is now your friend',
+      friend_accepted_msg: '{0} accepted your friend request — you can start chatting now',
+      friend_accepted_sub: 'New friend',
+      cover_pick: 'Change cover',
+      cover_pick_title: 'Moments cover',
+      cover_official: 'Official colors',
+      cover_upload: 'Upload a photo',
+      cover_use: 'Use',
+      cover_current: 'Current cover',
+      cover_remove_photo: 'Back to official colors',
+      cover_upload_ph: 'Pick a photo for the cover',
+      cover_saved: 'Cover updated',
+      cover_uploaded: 'Photo uploaded',
       toast_new_group: 'Added to group: {0}',
       req_want: 'wants to be your friend · ',
       loading: 'Loading',
@@ -869,8 +897,8 @@
       ai_new_chat_failed: 'Failed to create the chat',
       no_key_suffix: ' (no key configured)',
       models_available: '{0} models available',
-      no_qwen_source: 'No available Qwen source',
-      ai_setup_key: 'Add a free Qwen key',
+      no_qwen_source: 'No model source available',
+      ai_setup_key: 'Add a free model key',
       ai_setup_ask_admin: 'No key yet (ask the admin)',
       ai_setup_hint: 'Paste a free relay key — it takes effect immediately',
       ai_setup_admin_only: 'Only the admin can configure this',
@@ -1197,6 +1225,105 @@
     };
     reader.readAsDataURL(file);
   }
+  // 服务端错误文案 → 英文。后端只发中文，英文界面里就会弹中文。
+  // 表在 tools/err-en.json，check-i18n-en.js 会盯着它跟后端对齐。
+  const SRV_ERR_EN = {
+    "请求太频繁，请稍等几秒再试": "Too many requests — try again in a few seconds",
+    "登录失败次数过多，请 1 分钟后再试": "Too many failed sign-in attempts — try again in 1 minute",
+    "操作过于频繁，请稍后再试": "Too many actions too quickly — try again later",
+    "需要 Jack 账号": "Jack account required",
+    "需要密码": "Password required",
+    "密码错误": "Wrong password",
+    "需要二次验证": "Two-step verification required",
+    "二次验证已过期,请重新验证": "Two-step verification expired — please verify again",
+    "消息正文不再提供（隐私保护）": "Message body is no longer available (privacy protection)",
+    "用户不存在": "User does not exist",
+    "不能注销管理员 Jack": "The Jack admin account cannot be deleted",
+    "不能注销系统账号": "System accounts cannot be deleted",
+    "缺少 ip": "Missing IP address",
+    "消息不能为空": "Message cannot be empty",
+    "没有可用的模型源，请在设置里接入一个免费密钥": "No model source available — add a free API key in Settings",
+    "内网地址不封禁": "Private/internal addresses cannot be blocked",
+    "对话不存在": "Conversation does not exist",
+    "标题不能为空": "Title cannot be empty",
+    "未知的源": "Unknown source",
+    "密钥格式不正确": "Invalid key format",
+    "简介不超过 200 字": "Bio must be 200 characters or fewer",
+    "颜色格式无效": "Invalid colour format",
+    "头像图片格式不支持（仅 PNG/JPG/WebP/GIF）": "Unsupported avatar format (PNG/JPG/WebP/GIF only)",
+    "头像图片过大（>2.5MB）": "Avatar image too large (over 2.5MB)",
+    "请选择单个 emoji": "Pick a single emoji",
+    "用户名长度需 2-24": "Username must be 2–24 characters",
+    "该用户名已被使用": "That username is already taken",
+    "封面配色图不存在": "That cover preset does not exist",
+    "封面图片格式不支持（仅 PNG/JPG/WebP/GIF）": "Unsupported cover format (PNG/JPG/WebP/GIF only)",
+    "封面图片过大（>2.5MB）": "Cover image too large (over 2.5MB)",
+    "内容不能为空": "Content cannot be empty",
+    "动态不存在": "Post does not exist",
+    "只能改自己的动态": "You can only edit your own posts",
+    "评论不能为空": "Comment cannot be empty",
+    "只能删自己的动态": "You can only delete your own posts",
+    "群名称不能为空": "Group name cannot be empty",
+    "群名称太长了": "Group name is too long",
+    "群不存在": "Group does not exist",
+    "你不是这个群的成员": "You are not a member of this group",
+    "只有群主或管理员可以解散群聊": "Only the group owner or an admin can dissolve the group",
+    "官方群不能解散": "Official groups cannot be dissolved",
+    "你已经在群里了": "You are already in the group",
+    "已发送过申请，等待群主处理": "Request already sent — waiting for the group owner",
+    "只有群主或管理员可以查看申请": "Only the group owner or an admin can view requests",
+    "只有群主或管理员可以处理申请": "Only the group owner or an admin can handle requests",
+    "申请不存在": "Request does not exist",
+    "该申请已处理": "That request has already been handled",
+    "只有群主或管理员可以添加成员": "Only the group owner or an admin can add members",
+    "成员无效": "Invalid member",
+    "只有群主或管理员可以移除成员": "Only the group owner or an admin can remove members",
+    "只有群主或管理员可以修改群聊": "Only the group owner or an admin can edit the group",
+    "群名称不超过 40 字": "Group name must be 40 characters or fewer",
+    "只有群主或管理员可以设置公告": "Only the group owner or an admin can set the announcement",
+    "公告不超过 500 字": "Announcement must be 500 characters or fewer",
+    "该用户不存在": "That user does not exist",
+    "不能加自己": "You cannot add yourself",
+    "已经是好友了": "You are already friends",
+    "已发送过申请，等待对方处理": "Request already sent — waiting for the other person",
+    "参数错误": "Invalid parameters",
+    "不能对自己操作": "You cannot do that to yourself",
+    "对方不是你的好友": "That person is not your friend",
+    "系统级账号不能删除": "System accounts cannot be deleted",
+    "请输入对方用户名": "Enter the other person's username",
+    "无权操作": "You do not have permission",
+    "申请已处理": "Request already handled",
+    "文件是空的": "The file is empty",
+    "文件过大(>50MB)": "File too large (over 50MB)",
+    "保存文件失败": "Failed to save the file",
+    "文件不存在": "File does not exist",
+    "无权下载该文件": "You do not have permission to download that file",
+    "文件已丢失": "The file has been lost",
+    "图片过大（>5MB）": "Image too large (over 5MB)",
+    "内容过长": "Content is too long",
+    "回复的消息不存在": "The message being replied to does not exist",
+    "消息不存在": "Message does not exist",
+    "只能删除自己的消息": "You can only delete your own messages",
+    "只能撤回 2 分钟内的消息": "You can only recall messages sent within 2 minutes",
+    "内容太大": "Content too large",
+    "请求格式不对": "Malformed request",
+    "服务器内部错误": "Internal server error",
+    "用户名和密码不能为空": "Username and password are required",
+    "密码至少 8 位": "Password must be at least 8 characters",
+    "注册失败": "Sign-up failed",
+    "密码太弱:至少 8 位,别用 123456 / password 这类": "Password too weak — at least 8 characters, and not 123456 / password",
+    "用户名和密码都已被注册(请至少修改一项)": "That username + password is already registered — change one of them",
+    "用户名或密码错误": "Wrong username or password",
+  };
+  // 把服务端返回的文案翻成当前界面语言。中文界面原样显示；英文界面查表，
+  // 查不到就退成一句通用英文 —— 宁可信息少，也不能让中文漏出去。
+  function srvErrText(msg) {
+    const text = String(msg || '');
+    if (lang !== 'en' || !text) return text;
+    if (!/[\u4e00-\u9fa5]/.test(text)) return text;
+    return SRV_ERR_EN[text] || 'Request failed — please try again';
+  }
+
   // 服务端的错误码 → 中英文文案。英文界面里不能夹一句中文。
   const AUTH_ERR = {
     empty_credentials: { zh: '用户名和密码不能为空', en: 'Username and password are required' },
@@ -1274,7 +1401,7 @@
     let data = null;
     try { data = await resp.json(); } catch {}
     if (!resp.ok) {
-      const err = new Error((data && data.error) || `HTTP ${resp.status}`);
+      const err = new Error(srvErrText((data && data.error) || `HTTP ${resp.status}`));
       err.code = data && data.code;      // 前端按界面语言翻译用
       // 401 = 这个 token 已经不能用了（会话世代对不上 = 数据库重建过，
       // 旧 uid 可能已经属于别人）。继续拿着它请求就是把别人的数据当自己的，
@@ -1304,7 +1431,7 @@
         try { data = JSON.parse(xhr.responseText); } catch {}
         if (xhr.status >= 200 && xhr.status < 300) { if (onProgress) onProgress(100); resolve(data); }
         else {
-          const err = new Error((data && data.error) || `HTTP ${xhr.status}`);
+          const err = new Error(srvErrText((data && data.error) || `HTTP ${xhr.status}`));
           err.code = data && data.code;
           reject(err);
         }
@@ -2284,7 +2411,9 @@
       const who = (curConv && curConv.special === 'self') ? state.user : f;
       const online = isOnline(id);
       const bio = f && !isSystemAccount(f.username) ? f.bio : '';
-      sub.innerHTML = online ? `<span style="color:var(--online);">● ${t('online')}</span>` : escapeHtml(bio || t('friend'));
+      // 助手不是「好友」—— 它是 AI 助手。写错了会让人以为能加它为好友。
+      const role = (who && isAssistant(who.username)) ? t('ai_assistant_role') : t('friend');
+      sub.innerHTML = online ? `<span style="color:var(--online);">● ${t('online')}</span>` : escapeHtml(bio || role);
       const bg = avatarBgOf(who);
       avatar.style.cssText = `cursor:pointer;${bg}`;
       avatar.className = `avatar sm ${online?'online':''}`;
@@ -3223,7 +3352,7 @@
         <div class="profile-tags-row" id="profile-tag-row">
           ${friendTagChoices().map(tg =>
             `<button type="button" class="tag-pick${curTag === tg ? ' on' : ''}" data-tag="${escapeHtml(tg)}">${escapeHtml(tagLabel(tg))}</button>`).join('')}
-          <button type="button" class="tag-pick${!curTag ? ' on' : ''}" data-tag="">${t('tag_auto')}</button>
+          <button type="button" class="tag-pick tag-clear${!curTag ? ' on' : ''}" data-tag="">${t('tag_auto')}</button>
           <input id="profile-tag-input" class="tag-input" type="text" maxlength="12" placeholder="${t('tag_custom_ph')}" />
         </div>
       </div>` : '';
@@ -3700,6 +3829,122 @@
   // ============================================================
   const MOMENT = { items: [], imgs: [], editingId: null, skipDraftAsk: false };
 
+  // ------------------------------------------------------------
+  // 朋友圈封面
+  // ------------------------------------------------------------
+  // 两种来源:官方配色图(assets/covers/cov-0X.jpg) 或 用户自己上传的照片。
+  // 官方图是静态资源,直接给 URL;照片存在服务端,给的是 data URL。
+  const COVER_PRESETS = [
+    { id: 'cov-01', url: '/assets/covers/cover-01-midnight.jpg' },
+    { id: 'cov-02', url: '/assets/covers/cover-02-sunset.jpg' },
+    { id: 'cov-03', url: '/assets/covers/cover-03-mint.jpg' },
+    { id: 'cov-04', url: '/assets/covers/cover-04-graphite.jpg' },
+    { id: 'cov-05', url: '/assets/covers/cover-05-aurora.jpg' },
+    { id: 'cov-06', url: '/assets/covers/cover-06-sky.jpg' },
+  ];
+  const COVER = { cover_id: '', photo: '', picked: '' };
+
+  function applyCover() {
+    const img = $('#moment-cover-img');
+    if (!img) return;
+    if (COVER.photo) {
+      img.src = COVER.photo;
+      img.classList.remove('hidden');
+    } else if (COVER.cover_id) {
+      const p = COVER_PRESETS.find(x => x.id === COVER.cover_id);
+      if (p) { img.src = p.url; img.classList.remove('hidden'); }
+      else img.classList.add('hidden');
+    } else {
+      img.classList.add('hidden');
+    }
+  }
+
+  async function loadCover() {
+    try {
+      const r = await api('/me/cover');
+      COVER.cover_id = r.cover_id || '';
+      COVER.photo = r.photo || '';
+    } catch (_) { /* 没封面就用默认渐变 */ }
+    applyCover();
+  }
+
+  function renderCoverGrid() {
+    const grid = $('#cover-grid');
+    if (!grid) return;
+    grid.innerHTML = COVER_PRESETS.map(p => `
+      <button type="button" class="cover-item${(COVER.picked || COVER.cover_id) === p.id ? ' on' : ''}" data-id="${p.id}">
+        <img src="${escapeHtml(p.url)}" alt="" loading="lazy" />
+        <span class="cover-item-tag">${escapeHtml(p.id.replace('cov-', '#'))}</span>
+      </button>`).join('');
+  }
+
+  function openCoverPicker() {
+    COVER.picked = COVER.cover_id;
+    renderCoverGrid();
+    openModal('modal-cover-picker');
+  }
+
+  async function saveCover(coverId, photo) {
+    try {
+      await api('/me/cover', { method: 'PUT', body: { cover_id: coverId || '', photo: photo || '' } });
+      COVER.cover_id = coverId || '';
+      COVER.photo = photo || '';
+      applyCover();
+      closeModal('modal-cover-picker');
+      toast(t('cover_saved'));
+    } catch (e) {
+      toast(e.message || t('op_failed'));
+    }
+  }
+
+  function bindCover() {
+    const btn = $('#btn-cover-pick');
+    if (btn) btn.addEventListener('click', openCoverPicker);
+    const grid = $('#cover-grid');
+    if (grid) grid.addEventListener('click', (e) => {
+      const item = e.target.closest('.cover-item');
+      if (!item) return;
+      COVER.picked = item.dataset.id;
+      // 选了官方图 —— 立刻存,顺手把上传的那张照片清掉。
+      renderCoverGrid();
+      saveCover(COVER.picked, '');
+    });
+    const file = $('#cover-file');
+    if (file) file.addEventListener('change', () => {
+      const f = file.files && file.files[0];
+      file.value = '';
+      if (!f) return;
+      // 封面是横的,压成 1600 宽的横图,免得 base64 太大。
+      shrinkToCover(f, (url) => {
+        if (!url) return;
+        saveCover('', url);
+      });
+    });
+  }
+
+  // 封面照片:按 16:9 裁一下,再压到 1600 宽。
+  function shrinkToCover(file, cb) {
+    if (!file.type.startsWith('image/')) { toast(t('toast_img_only')); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const W = 1600, H = 900;
+        const c = document.createElement('canvas');
+        c.width = W; c.height = H;
+        const ctx = c.getContext('2d');
+        // cover 裁法:铺满,超出的部分切掉。
+        const scale = Math.max(W / img.width, H / img.height);
+        const dw = img.width * scale, dh = img.height * scale;
+        ctx.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh);
+        try { cb(c.toDataURL('image/jpeg', 0.82)); } catch (_) { cb(reader.result); }
+      };
+      img.onerror = () => cb(reader.result);
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
   // 发布进度条
   function momentProgress(on) {
     const box = $('#moment-progress');
@@ -3783,6 +4028,7 @@
       if (av) { av.innerHTML = avatarInner(state.user, 64); av.style.background = avatarBgOf(state.user); }
     }
     loadMoments();
+    loadCover();
   }
   function closeMoments() {
     const mv = $('#moment-view');
@@ -3855,6 +4101,10 @@
     }
     renderMomentDetail();
     observeMoments();
+    // 首屏:第一条就是当前这条,把它框出来。
+    document.querySelectorAll('#moment-feed .moment-post').forEach(p => {
+      p.classList.toggle('is-active', Number(p.dataset.id) === Number(MOMENT.activeId));
+    });
   }
   // 中间那栏:当前这条动态的详情 —— 谁点赞、谁评论、评论了什么。
   function renderMomentDetail() {
@@ -3922,6 +4172,10 @@
     if (Number(MOMENT.activeId) === Number(id)) return;
     MOMENT.activeId = id;
     renderMomentDetail();
+    // 划到哪条,哪条就框出来 —— 用户一眼知道中间那块详情说的是哪条。
+    document.querySelectorAll('#moment-feed .moment-post').forEach(p => {
+      p.classList.toggle('is-active', Number(p.dataset.id) === Number(id));
+    });
   }
 
   function momentImagesChanged() {
@@ -4189,6 +4443,7 @@
     s.on('friend:request', onFriendRequest);
     s.on('friend:request:resolved', onRequestResolved);
     s.on('friend:added', onFriendAdded);
+    s.on('friend:accepted', onFriendAccepted);
     s.on('group:added', onGroupAdded);
     s.on('group:join-request', onGroupJoinRequest);
     s.on('group:request-resolved', onGroupRequestResolved);
@@ -4405,7 +4660,7 @@
     const d = describeIncoming(msg, peerId);
     _msgBannerMsg = { msg, peerId };
     const av = $('#msg-banner-avatar');
-    if (av) { av.textContent = d.avatarText; av.style.cssText = d.avatarBg; }
+    if (av) { av.innerHTML = d.avatarHtml; av.style.cssText = d.avatarBg; }
     const ti = $('#msg-banner-title');
     if (ti) ti.textContent = d.title;
     const bo = $('#msg-banner-body');
@@ -4439,7 +4694,7 @@
     const box = $('#msg-popup');
     if (!box) return;
     const d = describeIncoming(msg, peerId);
-    const { convType, convId, title, avatarText, avatarBg, isGroup } = d;
+    const { convType, convId, title, avatarHtml, avatarBg, isGroup } = d;
 
     const from = $('#msg-popup-from'); if (from) from.textContent = title;
     const sub = $('#msg-popup-sub');
@@ -4447,7 +4702,7 @@
       ? (lang === 'en' ? 'Group chat' : '群聊')
       : (lang === 'en' ? 'Private chat' : '私聊');
     const av = $('#msg-popup-avatar');
-    if (av) { av.textContent = avatarText; av.style.cssText = avatarBg; }
+    if (av) { av.innerHTML = avatarHtml; av.style.cssText = avatarBg; }
     const badge = $('#msg-popup-badge');
     if (badge) badge.textContent = lang === 'en' ? 'New message' : '新消息';
     const hint = $('#msg-popup-hint');
@@ -4629,6 +4884,23 @@
       state.friends.push({id:u.id, username:u.username, avatar:u.avatar, bio:u.bio, avatar_color:u.avatar_color});
       renderChats(); refreshConversations(); toast(t('toast_new_friend', u.username));
     }
+  }
+  // 对方同意了好友申请 —— 弹一条跟群聊新消息一样的提醒,
+  // 里面能直接回消息(他们已经是好友了,会话随时能开)。
+  function onFriendAccepted(payload) {
+    const by = payload.by || {};
+    if (!by.id) return;
+    const name = by.username || '';
+    const fake = {
+      conv_type: 'user',
+      conv_id: `u_${Math.min(state.user.id, by.id)}_${Math.max(state.user.id, by.id)}`,
+      sender_id: by.id,
+      sender_username: name,
+      content: t('friend_accepted_msg', name),
+      type: 'text',
+    };
+    showMessagePopup(fake, by.id);
+    refreshFriends().then(refreshConversations);
   }
   function onGroupAdded(g) {
     if (!state.groups.some(x => x.id===g.groupId)) {
@@ -5122,48 +5394,27 @@
     return (p[field] || '');
   }
 
-  // Fill the model dropdown. Every entry is one concrete Qwen model, so
-  // the name the user picks is exactly the model that answers.
+  // Fill the model dropdown. There is exactly ONE entry — Jacky Bot.
+  // The Qwen 型号全部下沉到服务端：用户看到的是「谁在答」，
+  // 不是「底下用的哪个引擎」。真正能调的是思考档位。
   function aiFillModels(models, defaultId) {
     const sel = $('#ai-model');
     if (!sel) return;
-    // The picker only offers the OVH public endpoint: it needs no key, so
-    // every user gets a working model without any setup.
-    const pool = models.filter((m) => m.provider === 'ovh');
-    const list = pool.length ? pool : models;
+    const list = models && models.length ? models : [{ id: 'jacky', label: 'Jacky Bot', ready: true }];
     const prefs = aiPrefs();
-    const wanted = prefs.model && list.some((m) => m.id === prefs.model)
+    const wanted = list.some((m) => m.id === prefs.model)
       ? prefs.model
-      : (defaultId && list.some((m) => m.id === defaultId)
-          ? defaultId
-          : (list.find((m) => m.ready) || list[0] || {}).id || '');
+      : (list.some((m) => m.id === defaultId) ? defaultId : list[0].id);
     sel.innerHTML = '';
-    // Group by provider so the dropdown reads like a menu, not a dump.
-    const groups = [];
     for (const m of list) {
-      let g = groups.find((x) => x.label === aiProviderLabel(m));
-      if (!g) { g = { label: aiProviderLabel(m), items: [] }; groups.push(g); }
-      g.items.push(m);
+      const o = document.createElement('option');
+      o.value = m.id;
+      o.textContent = m.label + (m.ready ? '' : t('need_key_suffix'));
+      sel.appendChild(o);
     }
-    for (const g of groups) {
-      const og = document.createElement('optgroup');
-      og.label = g.label;
-      for (const m of g.items) {
-        const o = document.createElement('option');
-        o.value = m.id;
-        o.textContent = m.label + (m.ready ? '' : t('need_key_suffix'));
-        og.appendChild(o);
-      }
-      sel.appendChild(og);
-    }
-    if (wanted) sel.value = wanted;
-    // A stale preference (the model was removed) must not leave the
-    // dropdown empty — fall back to the first usable entry.
-    if (!sel.value) {
-      const firstReady = list.find((m) => m.ready) || list[0];
-      if (firstReady) sel.value = firstReady.id;
-    }
-    if (sel.value) aiSetPrefs({ model: sel.value });
+    sel.value = wanted;
+    if (!sel.value) sel.value = list[0].id;
+    aiSetPrefs({ model: sel.value });
   }
 
   // Match the toolbar to what the selected model can actually do:
@@ -5179,6 +5430,9 @@
     const prefs = aiPrefs();
     const sel = $('#ai-model');
     if (sel && cur && sel.value !== cur.id) sel.value = cur.id;
+    // 思考档位:用户选的低/中/高要反映到下拉框上。
+    const lvl = $('#ai-level');
+    if (lvl && lvl.value !== prefs.level) lvl.value = prefs.level;
     // Keep the stored preferences consistent with the new behaviour so a
     // stale "thinking: off" from an earlier session cannot silence the
     // reasoning trace.
@@ -5406,7 +5660,7 @@
       const readyCount = models.filter((m) => m.ready).length;
       if (cur) {
         aiSetStatus(
-          `${cur.label} · ${aiProviderLabel(cur)}${cur.ready ? '' : t('no_key_suffix')}`,
+          `${cur.label}${cur.ready ? '' : t('no_key_suffix')}`,
           cur.ready ? 'ok' : 'warn'
         );
       } else if (readyCount) {
@@ -5564,7 +5818,7 @@
       if (!resp.ok) {
         let detail = '';
         try { detail = (await resp.json()).error || ''; } catch (_) {}
-        throw new Error(detail || `HTTP ${resp.status}`);
+        throw new Error(srvErrText(detail || `HTTP ${resp.status}`));
       }
       const reader = resp.body.getReader();
       const dec = new TextDecoder();
@@ -5583,7 +5837,8 @@
           if (j.type === 'source') {
             // The server tells us which model really answered — it may be
             // a different one than the one that was picked.
-            answeredBy = `${j.label || j.model} · ${(lang === 'en' ? (j.providerEn || j.provider) : j.provider) || j.source}`;
+            // 对外只报 Jacky Bot —— 底下是哪个引擎是内部细节。
+            answeredBy = j.label || 'Jacky Bot';
             if (j.fallback) answeredBy += t('switched_suffix');
             aiSetStatus(answeredBy, 'ok');
           } else if (j.type === 'reset') {
@@ -5942,14 +6197,24 @@
         aiSetPrefs({ model: modelSel.value });
         aiSyncTools();
         const cur = aiCurrentModel();
-        if (cur) aiSetStatus(`${cur.label} · ${aiProviderLabel(cur)}${cur.ready ? '' : t('no_key_suffix')}`, cur.ready ? 'ok' : 'warn');
+        if (cur) aiSetStatus(`${cur.label}${cur.ready ? '' : t('no_key_suffix')}`, cur.ready ? 'ok' : 'warn');
       });
     }
 
-    // NOTE: the 思考档位 / 深度思考 / 搜索 controls were removed from the
-    // toolbar, so their listeners went with them. The models that support
-    // reasoning now always reason (the server side decides), and the panel
-    // shows the trace when one arrives.
+    // 思考档位:低/中/高 = Jacky Bot 深度思考的强度。
+    // 只剩这一个可调项 —— 模型不用挑,深度可以挑。
+    const levelSel = $('#ai-level');
+    if (levelSel && !levelSel.__bound) {
+      levelSel.__bound = true;
+      levelSel.addEventListener('change', () => {
+        aiSetPrefs({ level: levelSel.value });
+        aiSyncTools();
+      });
+    }
+
+    // NOTE: the 深度思考 / 搜索 controls were removed from the toolbar, so
+    // their listeners went with them. The model always reasons (the server
+    // side decides), and the panel shows the trace when one arrives.
 
     const setupBtn = $('#ai-setup-btn');
     if (setupBtn && !setupBtn.__bound) {
@@ -6859,6 +7124,7 @@
       switchAuthTab('login');
       ensureAvatarBound();   // every avatar opens the add-friend menu
       bindMoments();         // 朋友圈(日常)
+      bindCover();           // 朋友圈封面(官方配色 / 上传)
       updateUiScale();
       window.addEventListener('resize', updateUiScale);
       initSplash();         // show full-screen Hello before auth (skipped if logged in)

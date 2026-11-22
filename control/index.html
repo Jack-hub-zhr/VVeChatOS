@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#05080c" />
   <title>VVeChat 控制台</title>
-  <link rel="stylesheet" href="style.css?v=20261107ag" />
+  <link rel="stylesheet" href="style.css?v=20261107ah" />
   <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' fill='%2305080c'/><text x='32' y='44' font-family='monospace' font-size='36' font-weight='800' text-anchor='middle' fill='%2322e37f'>V</text></svg>" />
 </head>
 <body>
@@ -66,6 +66,8 @@
       </div>
       <p class="hint">防火墙常驻运行：路径穿越、敏感文件探测、注入载荷、扫描器、登录爆破都会留痕。安全 agent 每 5 分钟自检一次。</p>
       <div class="stats" id="fw-stats"></div>
+      <!-- 封禁名单单独一层 —— 塞进 stats 的 grid 里会被挤成一列,IP 竖着排 -->
+      <div id="fw-bans"></div>
       <div class="fw-agent" id="fw-agent">agent —</div>
       <h3 class="sub-title">最近事件</h3>
       <div id="fw-events" class="events"></div>
@@ -92,13 +94,22 @@
       <div class="card-head"><h2>会话与群</h2></div>
       <p class="hint">好友之间的聊天内容和官方群里的聊天内容<b>不再提供</b>：控制台只统计条数，不显示任何正文。</p>
       <div class="kv">
-        <div class="kv-row"><span class="k">好友会话</span><span class="d"><span id="convo-count">0</span> 段</span></div>
-        <div class="kv-row"><span class="k">官方群消息</span><span class="d"><span id="group-count">0</span> 条</span></div>
+        <div class="kv-row"><span class="k">好友会话（1 对 1）</span><span class="d"><span id="convo-count">0</span> 段</span></div>
+        <div class="kv-row"><span class="k">群聊数量（1 对多）</span><span class="d"><span id="group-count">0</span> 个</span></div>
       </div>
       <div class="two-col">
         <div id="convos" class="convos"></div>
         <div id="groups" class="convos"></div>
       </div>
+      <!-- Jacky Bot 跟每个人的对话:默认折叠,点标题展开,再点收起 -->
+      <details id="jacky-fold" class="fold">
+        <summary>
+          <span>Jacky Bot 的对话记录</span>
+          <span class="fold-hint">展开</span>
+          <span class="badge" id="jacky-convo-count">0</span>
+        </summary>
+        <div id="jacky-convos" class="convos"></div>
+      </details>
     </section>
   </div>
 </main>
@@ -131,7 +142,7 @@
 
 <div id="toast" class="toast hidden"></div>
 
-<script src="config.js?v=20261107ag"></script>
-<script src="app.js?v=20261107ag"></script>
+<script src="config.js?v=20261107ah"></script>
+<script src="app.js?v=20261107ah"></script>
 </body>
 </html>

@@ -40,6 +40,18 @@ getSocketIo((socketIo) => {
     process.exit(1);
   }
 
+  // 朋友圈封面图也要内联 —— 单文件版可能被单独下载分发，
+  // 绝对路径 /assets/covers/xxx.jpg 在别的域名下会 404。
+  let appJs = read('app.js');
+  const coverDir = path.join(FRONT, 'assets', 'covers');
+  if (fs.existsSync(coverDir)) {
+    for (const f of fs.readdirSync(coverDir)) {
+      if (!/\.jpe?g$/i.test(f)) continue;
+      const uri = dataUri('assets/covers/' + f, 'image/jpeg');
+      appJs = appJs.split('/assets/covers/' + f).join(uri);
+    }
+  }
+
   // 替换 index.html 里的外部引用。用正则匹配，版本号怎么 bump 都不会把它搞挂。
   const swap = (re, replacement, label) => {
     if (!re.test(html)) {
@@ -54,11 +66,11 @@ getSocketIo((socketIo) => {
   swap(/<link rel="stylesheet" href="glass\.css\?v=[^"]*"\s*\/>/, '', 'glass.css');
   swap(/<script src="\/socket\.io\/socket\.io\.js"><\/script>/, '<script>' + socketIo + '</script>', 'socket.io');
   swap(/<script src="config\.js\?v=[^"]*"><\/script>/, '<script>' + read('config.js') + '</script>', 'config.js');
-  swap(/<script src="app\.js\?v=[^"]*"><\/script>/, '<script>\n' + read('app.js') + '\n  </script>', 'app.js');
+  swap(/<script src="app\.js\?v=[^"]*"><\/script>/, '<script>\n' + appJs + '\n  </script>', 'app.js');
 
   fs.writeFileSync(OUT, html);
   const kb = (n) => (n / 1024).toFixed(0) + ' KB';
   console.log('写好了：' + OUT);
   console.log('  总大小 ' + kb(Buffer.byteLength(html)));
-  console.log('  css ' + kb(css.length) + ' / app.js ' + kb(read('app.js').length) + ' / socket.io ' + kb(socketIo.length));
+  console.log('  css ' + kb(css.length) + ' / app.js ' + kb(appJs.length) + ' / socket.io ' + kb(socketIo.length));
 });
