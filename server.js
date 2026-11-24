@@ -603,7 +603,10 @@ function mentionsAssistant(text) {
 
 // Ask the model, with the group chat as the context.
 async function assistantAnswer(question, context, kind) {
-  const catalog = aiModelCatalog().filter((m) => m.ready);
+  // 刚被限速的源先跳过 —— 配额要等到重置日才回来。
+  const ready = aiModelCatalog().filter((m) => m.ready);
+  const catalog = ready.filter((m) => !aiSourceCooling(m.id));
+  if (!catalog.length) catalog.push(...ready);
   if (!catalog.length) return null;
 
   // 群里谁用什么语言说话,就用什么语言接话。
@@ -668,6 +671,7 @@ async function assistantAnswer(question, context, kind) {
       clearTimeout(timer);
       if (!resp.ok || !resp.body) {
         console.warn('[VVeChat] assistant: ' + entry.id + ' returned ' + resp.status);
+        if (resp.status === 429) aiSourceCooledDown(entry.id, Number(resp.headers.get('retry-after')) || 0);
         continue;
       }
 
@@ -1654,6 +1658,27 @@ function aiModelCatalog() {
   });
 }
 
+// ============================================================
+// 被限速的源，冷却一段时间
+// ------------------------------------------------------------
+// 公共端点的配额按 IP + 模型计，而且返回的 retry-after 是"几天后重置"
+// 这种值（实测 OVH 返回 3317393 秒 ≈ 38 天，年度额度已用尽）。
+// 干等没有意义 —— 配额要等到重置日才回来。
+// 所以记住它：后面的请求直接跳过这个源，别让每个请求都先撞一次墙。
+const AI_COOLDOWN = new Map();          // source id -> 恢复的时间戳
+const AI_COOLDOWN_MAX_MS = 30 * 60 * 1000;
+
+function aiSourceCooling(id) {
+  const until = AI_COOLDOWN.get(id) || 0;
+  if (!until) return false;
+  if (until <= Date.now()) { AI_COOLDOWN.delete(id); return false; }
+  return true;
+}
+function aiSourceCooledDown(id, retryAfterSec) {
+  const ms = Math.min(Math.max(Number(retryAfterSec) * 1000, 30 * 1000), AI_COOLDOWN_MAX_MS);
+  AI_COOLDOWN.set(id, Date.now() + ms);
+}
+
 // Build the upstream body for one catalogue entry.
 function buildQwenBody(entry, opts) {
   const body = {
@@ -2084,12 +2109,16 @@ app.post('/api/ai/chat', rateLimit('write'), authRequired, aiChatGuard, async (r
     const bn = b.thinking === 'none' ? 1 : 0;
     return an - bn;
   });
+  // 刚被限速的源先跳过（配额要等到重置日才回来，试了也是白试）。
+  // 全都在冷却 → 宁可慢也别报错，把它们放回去。
+  const notCooling = catalog.filter((m) => !aiSourceCooling(m.id));
+  const pool = notCooling.length ? notCooling : catalog;
   // 用户只选「Jacky Bot」—— 底下按可用性排一条引擎链,
   // 谁先答上算谁的。挑具体 Qwen 型号是服务端的事。
-  const wanted = catalog.find((m) => m.id === String(model || ''));
+  const wanted = pool.find((m) => m.id === String(model || ''));
   const chain = [];
   if (wanted && wanted.ready) chain.push(wanted);
-  for (const m of catalog) {
+  for (const m of pool) {
     if (wanted && m.id === wanted.id) continue;
     if (!m.ready) continue;
     chain.push(m);
@@ -2253,7 +2282,11 @@ app.post('/api/ai/chat', rateLimit('write'), authRequired, aiChatGuard, async (r
           const retryAfter = Number(upstream.headers.get('retry-after')) || 0;
           const quotaHit = /429|quota|RATE_LIMIT|rate limit/i.test(upstream.status + txt);
           errors.push(`${entry.label}: HTTP ${upstream.status} ${summarizeUpstreamError(txt)}`);
+          if (quotaHit) aiSourceCooledDown(entry.id, retryAfter);
           if (!quotaHit || attempt === MAX_ATTEMPTS) break;
+          // retry-after 很大 = 配额要等到重置日才回来,再试也是白试。
+          // 干等 8 秒 × 3 次只会把一次回复拖成一分钟 —— 直接换下一个源。
+          if (retryAfter > 30) break;
           // Wait before the next attempt. Respect the upstream hint, but
           // cap it so a request never hangs for minutes.
           const wait = Math.min(retryAfter > 0 ? retryAfter * 1000 : 1200 * attempt, 8000);
