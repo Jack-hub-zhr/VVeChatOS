@@ -17,7 +17,7 @@ const jwt = require('jsonwebtoken');
 const Database = require('better-sqlite3');
 const { Server: SocketIOServer } = require('socket.io');
 const { createFirewall } = require('./firewall.js');
-const { realIp, realIpOf, validateChatInput, createChatRateLimiter, escapeHtml } = require('./security-core.js');
+const { realIp, realIpOf, validateChatInput, createChatRateLimiter, escapeHtml, CHAT_MAX_IMAGE } = require('./security-core.js');
 const crypto = require('crypto');
 const authCrypto = require('./auth-crypto.js');
 
@@ -405,10 +405,13 @@ try {
     db.prepare(
       `INSERT INTO users (username, password_hash, avatar_color, bio, created_at)
        VALUES (?, ?, ?, ?, ?)`
-    ).run('Jack', hashFor('Zhr121005', 'Jack'), '#fbbf24', 'VVeChat 官方管理员', now());
+    ).run('Jack', hashFor('Zhr121005', 'Jack'), '#fbbf24', 'VVeChat 官方管理员 · VVeChat Official Admin', now());
     console.log('[VVeChat] seeded admin account: Jack');
   } else {
     console.log('[VVeChat] admin account already present: Jack');
+    // 老库的 Jack 名片还是纯中文 —— 补成双语。
+    db.prepare("UPDATE users SET bio = ? WHERE username = ? AND bio = ?")
+      .run('VVeChat 官方管理员 · VVeChat Official Admin', 'Jack', 'VVeChat 官方管理员');
   }
   // Make sure Jack is in the official group too.
   const jack = db.prepare('SELECT id FROM users WHERE username = ?').get('Jack');
@@ -567,8 +570,8 @@ function linkFriends(aId, bId, ts, tagFromA, tagFromB) {
 
 // Jack 给新人的欢迎信（只发一次）。
 const JACK_WELCOME = {
-  zh: 'hello🙋我是Jack，VVeChat开发者也是管理员。很高兴你能来这里，如果遇到问题随时跟我沟通，我随时奉陪！',
-  en: "Hello 🙋 I'm Jack, the VVeChat developer and also the admin. Glad you're here — if you run into any problem, feel free to talk to me, I'm always around!",
+  zh: 'hello🙋我是Jack，VVeChat开发者也是管理员。很高兴你能来这里，如果遇到问题随时跟我沟通，我随时奉陪！\nHello 🙋 I\'m Jack — the VVeChat developer and also the admin. Glad you\'re here! If you run into any problem, feel free to talk to me, I\'m always around.',
+  en: "hello🙋我是Jack，VVeChat开发者也是管理员。很高兴你能来这里，如果遇到问题随时跟我沟通，我随时奉陪！\nHello 🙋 I'm Jack — the VVeChat developer and also the admin. Glad you're here! If you run into any problem, feel free to talk to me, I'm always around.",
 };
 function jackWelcome(userId) {
   const jack = db.prepare('SELECT id FROM users WHERE username = ?').get(ADMIN_USERNAME);
@@ -1001,7 +1004,9 @@ const chatLimiter = createChatRateLimiter({ perMinute: 10, perHour: 100 });
 setInterval(() => chatLimiter.sweep(), 60 * 1000).unref();
 
 function validateContent(req, res, next) {
-  const v = validateChatInput(req.body || {});
+  // 朋友圈的图片是 base64，一张就有十万字符 —— 不排除掉的话，
+  // 4000 字符的正文上限会把「带图发日常」全部拦死。
+  const v = validateChatInput(req.body || {}, { exclude: ['images'] });
   if (!v.ok) {
     // 被应用层拒绝的注入尝试也要留痕、也要算进「已拦截」。
     firewall.noteRejected(req, v.kind, 'high', '正文校验失败:' + v.detail, 'chat-schema');
@@ -1135,7 +1140,7 @@ app.post('/api/admin/wipe', rateLimit('write'), authRequired, requireAdmin, requ
     db.prepare(
       `INSERT INTO users (username, password_hash, avatar_color, bio, created_at)
        VALUES (?, ?, ?, ?, ?)`
-    ).run('Jack', jackHash, '#fbbf24', 'VVeChat 官方管理员', now());
+    ).run('Jack', jackHash, '#fbbf24', 'VVeChat 官方管理员 · VVeChat Official Admin', now());
     // recreate official group and update OFFICIAL_GROUP_ID
     OFFICIAL_GROUP_ID = ensureOfficialGroup();
     res.json({ ok: true, wiped: true, official_group_id: OFFICIAL_GROUP_ID, jack_reseeded: true });
@@ -2893,7 +2898,9 @@ app.post('/api/moments', rateLimit('write'), authRequired, validateContent, (req
   const { content = '', images = [], status = 'published' } = req.body || {};
   const text = String(content || '').slice(0, 1000).trim();
   const imgs = (Array.isArray(images) ? images : []).slice(0, 9)
-    .filter(u => typeof u === 'string' && /^data:image\/(png|jpe?g|webp|gif);base64,/i.test(u));
+    .filter(u => typeof u === 'string'
+      && /^data:image\/(png|jpe?g|webp|gif);base64,/i.test(u)
+      && u.length <= CHAT_MAX_IMAGE);
   if (!text && !imgs.length) return res.status(400).json({ error: '内容不能为空' });
   const st = status === 'draft' ? 'draft' : 'published';
   const info = db.prepare(
@@ -2919,7 +2926,9 @@ app.patch('/api/moments/:id', rateLimit('write'), authRequired, (req, res) => {
   const text = b.content === undefined ? row.content : String(b.content).slice(0, 1000).trim();
   const imgs = b.images === undefined ? row.images
     : JSON.stringify((Array.isArray(b.images) ? b.images : []).slice(0, 9)
-      .filter(u => typeof u === 'string' && /^data:image\/(png|jpe?g|webp|gif);base64,/i.test(u)));
+      .filter(u => typeof u === 'string'
+        && /^data:image\/(png|jpe?g|webp|gif);base64,/i.test(u)
+        && u.length <= CHAT_MAX_IMAGE));
   const st = b.status === 'draft' ? 'draft' : (b.status === 'published' ? 'published' : row.status);
   db.prepare('UPDATE moments SET content = ?, images = ?, status = ? WHERE id = ?')
     .run(text, imgs, st, id);
@@ -2997,7 +3006,9 @@ app.get('/api/groups', authRequired, (req, res) => {
   const rows = db.prepare(`
     SELECT g.id, g.name, g.is_official, g.owner_id, g.icon_color, g.icon_emoji, g.recommended, g.pinned, g.announcement,
            (SELECT COUNT(*) FROM group_members m JOIN users u ON u.id = m.user_id
-            WHERE m.group_id = g.id AND u.username <> ?) AS member_count
+            WHERE m.group_id = g.id AND u.username <> ?) AS member_count,
+           (SELECT COUNT(*) FROM group_join_requests r
+            WHERE r.group_id = g.id AND r.status = 'pending') AS pending_count
     FROM group_members gm
     JOIN groups g ON g.id = gm.group_id
     WHERE gm.user_id = ?
@@ -3567,7 +3578,9 @@ app.get('/api/conversations', authRequired, (req, res) => {
   `).all(uid);
   const groups = db.prepare(`
     SELECT g.id, g.name AS username, NULL AS avatar, NULL AS avatar_color, 'group' AS type, g.is_official,
-           g.icon_color, g.icon_emoji, g.pinned
+           g.icon_color, g.icon_emoji, g.pinned,
+           (SELECT COUNT(*) FROM group_join_requests r
+            WHERE r.group_id = g.id AND r.status = 'pending') AS pending_count
     FROM group_members gm JOIN groups g ON g.id = gm.group_id
     WHERE gm.user_id = ? ORDER BY g.is_official DESC, g.pinned DESC, g.id ASC
   `).all(uid);

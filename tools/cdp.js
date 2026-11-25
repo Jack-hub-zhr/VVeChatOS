@@ -8,7 +8,26 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const CHROME = '/root/.cache/ms-playwright/chromium-1243/chrome-linux/chrome';
+// Chrome 的位置会随 playwright 升级变（chromium-1243 → chromium-1255），
+// 写死路径会在重装后直接 ENOENT —— 这里按版本目录自己找，找不到就用系统 chrome。
+function findChrome() {
+  const fs = require('fs');
+  const cache = '/root/.cache/ms-playwright';
+  const candidates = [];
+  try {
+    for (const d of fs.readdirSync(cache)) {
+      if (!d.startsWith('chromium-')) continue;
+      candidates.push(path.join(cache, d, 'chrome-linux64', 'chrome'));
+      candidates.push(path.join(cache, d, 'chrome-linux', 'chrome'));
+    }
+  } catch (_) {}
+  candidates.push('/usr/local/bin/chromium', '/usr/local/bin/google-chrome',
+                  '/usr/bin/chromium', '/usr/bin/google-chrome');
+  for (const c of candidates) { try { if (fs.existsSync(c)) return c; } catch (_) {} }
+  return candidates[0];
+}
+
+const CHROME = findChrome();
 
 function get(url) {
   return new Promise((res, rej) => {

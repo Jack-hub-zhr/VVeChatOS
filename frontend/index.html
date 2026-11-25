@@ -8,9 +8,9 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="theme-color" content="#4C6FFF" />
   <title>VVeChat</title>
-  <link rel="stylesheet" href="style.css?v=20261107ai" />
+  <link rel="stylesheet" href="style.css?v=20261107aj" />
   <!-- 玻璃质感视觉层（普通毛玻璃；折射引擎已移除） -->
-  <link rel="stylesheet" href="glass.css?v=20261107ai" />
+  <link rel="stylesheet" href="glass.css?v=20261107aj" />
   <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><text x='32' y='44' font-family='system-ui' font-size='40' font-weight='800' text-anchor='middle' fill='%234C6FFF'>V</text></svg>" />
 </head>
 <body>
@@ -33,6 +33,24 @@
     </div>
   </div>
   <div class="bg-decor" aria-hidden="true"></div>
+
+  <!-- 语言选择：登录/注册之前的一页。选完自动切成那个语言。 -->
+  <div id="lang-pick" class="lang-pick hidden" role="dialog" aria-modal="true" aria-label="Choose your language">
+    <div class="lang-pick-inner">
+      <h1 class="lang-pick-title">选择你的语言</h1>
+      <p class="lang-pick-sub">Choose Your Language</p>
+      <div class="lang-pick-opts">
+        <button type="button" class="lang-pick-btn" data-lang="zh">
+          <span class="lang-pick-name">中文</span>
+          <span class="lang-pick-note">简体中文</span>
+        </button>
+        <button type="button" class="lang-pick-btn" data-lang="en">
+          <span class="lang-pick-name">English</span>
+          <span class="lang-pick-note">English</span>
+        </button>
+      </div>
+    </div>
+  </div>
 
   <!-- AUTH VIEW (hidden by default; revealed after splash dismiss) -->
   <main id="auth-view" class="view hidden">
@@ -71,6 +89,18 @@
       </form>
     </section>
   </main>
+
+  <!-- 日常使用清单：第一次进「日常」时强制看完，没有关闭按钮 -->
+  <div class="modal hidden" id="modal-moment-guide" role="dialog" aria-modal="true">
+    <div class="modal-card moment-guide-card">
+      <div class="moment-guide-body" id="moment-guide-body"></div>
+      <div class="moment-guide-dots" id="moment-guide-dots"></div>
+      <div class="modal-actions moment-guide-actions">
+        <span class="moment-guide-step" id="moment-guide-step"></span>
+        <button type="button" class="btn btn-primary" id="moment-guide-next"></button>
+      </div>
+    </div>
+  </div>
 
   <!-- MODAL: 发一条日常 -->
   <div class="modal hidden" id="modal-moment" role="dialog">
@@ -450,7 +480,7 @@
             <div class="more-list">
               <div class="more-row static">
                 <span class="more-row-main">
-                  <span class="more-row-title"><span class="beta-tag">OS 1</span> VVeChat OS 1（Beta）</span>
+                  <span class="more-row-title">VVeChat OS 1（Beta）</span>
                   <span class="more-row-desc" id="pref-version-desc">—</span>
                 </span>
               </div>
@@ -946,7 +976,7 @@
   <!-- Socket.io client is served by this same Express app at /socket.io/socket.io.js,
        so there is no third-party CDN to fail (or be blocked). -->
   <script src="/socket.io/socket.io.js"></script>
-  <script src="config.js?v=20261107ai"></script>
+  <script src="config.js?v=20261107aj"></script>
   <!-- The 550C theme is ~60 KB. Only fetch it when it is actually on:
        localStorage says so right now, and app.js re-checks after login
        for the case where the account has it on but this browser does
@@ -964,7 +994,7 @@
        time even though the theme was enabled. -->
   <script>
   (function () {
-    try { window.__VV_ASSET_V = '20261107ai'; } catch (e) { }
+    try { window.__VV_ASSET_V = '20261107aj'; } catch (e) { }
     var V = window.__VV_ASSET_V || '';
     var on = false;
     try { on = localStorage.getItem('vve:boot550c') === '1'; } catch (e) { }
@@ -986,6 +1016,6 @@
   })();
   </script>
   <!-- 液态玻璃引擎：折射 + 果冻物理 + 体积光 + 光照互通 -->
-  <script src="app.js?v=20261107ai"></script>
+  <script src="app.js?v=20261107aj"></script>
 </body>
 </html>

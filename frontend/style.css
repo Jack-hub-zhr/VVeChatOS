@@ -174,8 +174,11 @@ body {
   position: relative;
 }
 
-/* Wallpaper — login page: 100% size (no upscaling, sharp).
-   Main app: 110% size (slight buffer for animation drift). */
+/* Wallpaper — 静态。
+   背景本来是做 64 秒位移动画的，但玻璃层用的是 backdrop-filter：
+   它每次都要重新采样背后的像素。壁纸一动，十几块玻璃就得跟着
+   重新采样+重新模糊一遍，页面就一直占着 CPU/GPU —— 机器用久了发烫发卡。
+   静态壁纸看起来几乎一样，代价是零。 */
 body::before {
   content: "";
   position: fixed;
@@ -185,20 +188,10 @@ body::before {
   background-size: cover;
   z-index: -2;
   pointer-events: none;
-  will-change: transform;
   transform: translate3d(0, 0, 0);
   backface-visibility: hidden;
   /* 原图偏柔,加一点对比和饱和 —— 玻璃后面才看得清结构 */
   filter: contrast(1.05) saturate(1.10);
-  /* animation OFF by default (login page stays sharp & static) */
-}
-body.app-active::before {
-  /* Slightly larger to prevent edges showing during animation */
-  width: 110%; height: 110%;
-  top: -5%; left: -5%;
-  /* 慢速 + ease-in-out:速度从 0 渐渐增大再渐渐减小,
-     0% 与 100% 同位置同速度,循环处没有顿挫。 */
-  animation: wallpaperDrift 64s ease-in-out infinite;
 }
 body.dark::before,
 body.theme-dark::before {
@@ -214,12 +207,6 @@ body::after {
 }
 body:not(.dark)::after { background: rgba(0, 0, 0, 0.18); }   /* darken light wallpaper */
 body.dark::after      { background: rgba(0, 0, 0, 0); }       /* dark stays clean */
-
-@keyframes wallpaperDrift {
-  0%   { transform: translate3d(0%,    0%, 0); }
-  50%  { transform: translate3d(-1.6%, -1%, 0); }
-  100% { transform: translate3d(0%,    0%, 0); }
-}
 
 a { color: inherit; text-decoration: none; }
 ::selection { background: rgba(59, 130, 246, 0.22); }
@@ -979,6 +966,19 @@ body.dark #friends-list li.active { background: rgba(96, 165, 250, 0.15); }
   font-size: 11px; font-weight: 700;
   display: flex; align-items: center; justify-content: center;
   box-shadow: 0 2px 6px rgba(255, 59, 48, 0.35);
+}
+/* 入群申请待处理数 —— 不是未读消息数。两个都是绝对定位的角标会叠在一起，
+   所以这个走常规流，排在未读数后面。 */
+.pending-join {
+  position: static;
+  min-width: 20px; height: 20px; padding: 0 6px;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  color: #ffffff;
+  font-size: 11px; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.35);
 }
 .preview {
   font-size: 13px; color: var(--muted);
@@ -2013,6 +2013,97 @@ body.dark .msg-action-bar {
 }
 
 /* ============================================================
+   日常使用清单（第一次进「日常」时强制看完）
+   ============================================================ */
+#modal-moment-guide {
+  /* 没有 .modal-mask —— 点了外面也不能退出，必须看完。 */
+  background: rgba(10, 16, 26, 0.58);
+  backdrop-filter: blur(8px) saturate(140%);
+  -webkit-backdrop-filter: blur(8px) saturate(140%);
+}
+#modal-moment-guide .moment-guide-card {
+  width: min(460px, 100%);
+  max-width: 460px;
+  padding: 26px 24px 18px;
+  text-align: center;
+  /* 清单是必读的东西 —— 卡片得够实,不然底下的动态会透上来干扰阅读。 */
+  aspect-ratio: auto;
+  background: rgba(255, 255, 255, 0.92);
+}
+body.dark #modal-moment-guide .moment-guide-card { background: rgba(24, 30, 40, 0.94); }
+.moment-guide-body { min-height: 210px; }
+.guide-svg {
+  width: 100%;
+  max-width: 250px;
+  height: 130px;
+  margin: 0 auto 14px;
+  color: var(--accent);
+  display: block;
+}
+.moment-guide-title { font-size: 19px; font-weight: 700; color: var(--ink); margin: 0 0 8px; }
+.moment-guide-text { font-size: 14px; line-height: 1.7; color: var(--muted); margin: 0 0 6px; }
+.moment-guide-dots { display: flex; gap: 6px; justify-content: center; margin: 4px 0 14px; }
+.moment-guide-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--glass-border-strong, rgba(0, 0, 0, 0.14));
+  transition: background 0.2s, transform 0.2s;
+}
+.moment-guide-dot.on { background: var(--accent); transform: scale(1.25); }
+.moment-guide-actions { justify-content: space-between; align-items: center; }
+.moment-guide-step { font-size: 12px; color: var(--muted-2); }
+
+/* ============================================================
+   LANGUAGE PICKER (the page before login / register)
+   ============================================================ */
+.lang-pick {
+  position: fixed;
+  inset: 0;
+  z-index: 9500;               /* 盖在 Hello 之上 —— 它是更前的一页 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(10, 16, 26, 0.55);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  animation: langPickIn 0.35s ease both;
+}
+.lang-pick.hidden { display: none; }
+.lang-pick-inner {
+  width: min(460px, 100%);
+  text-align: center;
+  padding: 34px 26px 30px;
+  border-radius: 26px;
+  background: var(--glass-bg-strong, rgba(255, 255, 255, 0.82));
+  border: 1px solid var(--glass-border-soft, rgba(255, 255, 255, 0.5));
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+}
+.lang-pick-title { font-size: 26px; font-weight: 700; color: var(--ink); margin: 0; }
+.lang-pick-sub { font-size: 15px; color: var(--muted); margin: 6px 0 22px; }
+.lang-pick-opts { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+.lang-pick-btn {
+  flex: 1 1 160px;
+  min-width: 150px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 16px 14px;
+  border-radius: 18px;
+  border: 1px solid var(--glass-border-soft, rgba(0, 0, 0, 0.08));
+  background: var(--glass-bg-soft, rgba(255, 255, 255, 0.55));
+  color: var(--ink);
+  font-family: inherit;
+  cursor: pointer;
+  transition: transform 0.14s ease, background 0.16s ease, border-color 0.16s ease;
+}
+.lang-pick-btn:hover { transform: translateY(-2px); border-color: var(--accent); }
+.lang-pick-btn:active { transform: translateY(0); }
+.lang-pick-name { font-size: 17px; font-weight: 700; }
+.lang-pick-note { font-size: 12px; color: var(--muted); }
+@keyframes langPickIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* ============================================================
    HELLO SPLASH (full-screen greeting before auth)
    ============================================================ */
 .hello-splash {
@@ -2253,7 +2344,7 @@ body.dark .modal-card { background: rgba(20, 24, 32, 0.70); border-color: rgba(2
 }
 .req-item .meta { flex: 1; min-width: 0; }
 .req-item .name { font-size: 14px; font-weight: 600; color: var(--ink); }
-.req-item .sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.req-item .sub { font-size: 13px; color: var(--muted); margin-top: 2px; }
 
 .member-picker {
   display: flex; flex-direction: column; gap: 4px;
@@ -2298,7 +2389,9 @@ body.dark .modal-card { background: rgba(20, 24, 32, 0.70); border-color: rgba(2
   font-size: 13px; font-weight: 500;
   border-radius: var(--r-pill);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.30);
-  z-index: 300;
+  /* 必须在弹窗(1200)之上 —— 否则在名片弹窗里改词条时，
+     「词条已更新」的提示被弹窗整个盖住，看着像点了没反应。 */
+  z-index: 1700;
   animation: toastIn 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 @keyframes toastIn {
@@ -3707,10 +3800,10 @@ body.dark .tag-official { color: #fcd34d; background: rgba(245, 158, 11, 0.16); 
 
 /* 好友词条（分类）—— 个人资料页里选，选完同类好友自动并到一块 */
 .profile-tags { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--glass-border-soft); }
-.profile-tags-label { font-size: 11px; font-weight: 700; letter-spacing: .06em; color: var(--muted-2); margin-bottom: 8px; }
+.profile-tags-label { font-size: 12.5px; font-weight: 700; letter-spacing: .06em; color: var(--muted-2); margin-bottom: 8px; }
 .profile-tags-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .tag-pick {
-  padding: 5px 12px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  padding: 6px 13px; border-radius: 999px; font-size: 14px; font-weight: 600;
   border: 1px solid var(--glass-border-soft); background: var(--glass-bg-soft); color: var(--ink-2);
   cursor: pointer; transition: background .16s ease, color .16s ease, border-color .16s ease;
 }
@@ -3720,7 +3813,7 @@ body.dark .tag-official { color: #fcd34d; background: rgba(245, 158, 11, 0.16); 
 .tag-pick.tag-clear { border-style: dashed; color: var(--ink-3); }
 .tag-pick.tag-clear.on { border-style: dashed; background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 .tag-input {
-  width: 120px; padding: 5px 11px; border-radius: 999px; font-size: 12px;
+  width: 130px; padding: 6px 12px; border-radius: 999px; font-size: 14px;
   border: 1px solid var(--glass-border-soft); background: var(--glass-bg-soft); color: var(--ink);
 }
 .tag-input:focus { outline: none; border-color: var(--accent); }

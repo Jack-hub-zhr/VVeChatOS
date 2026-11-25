@@ -70,6 +70,7 @@
  "文件已丢失": "The file has been lost",
  "图片过大（>5MB）": "Image too large (over 5MB)",
  "内容过长": "Content is too long",
+ "内容太长": "Content is too long",
  "回复的消息不存在": "The message being replied to does not exist",
  "消息不存在": "Message does not exist",
  "只能删除自己的消息": "You can only delete your own messages",

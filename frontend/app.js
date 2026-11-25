@@ -1301,6 +1301,7 @@
     "文件已丢失": "The file has been lost",
     "图片过大（>5MB）": "Image too large (over 5MB)",
     "内容过长": "Content is too long",
+    "内容太长": "Content is too long",
     "回复的消息不存在": "The message being replied to does not exist",
     "消息不存在": "Message does not exist",
     "只能删除自己的消息": "You can only delete your own messages",
@@ -1786,6 +1787,10 @@
     const atMePrefix = isGroup && mentionsMe(c.last_message)
       ? `<span style="color:var(--accent);font-weight:700;">[${t('mentioned_me')}] </span>` : '';
     const unreadHtml = c.unread > 0 ? `<span class="unread">${c.unread>99?'99+':c.unread}</span>` : '';
+    // 群主还没处理的入群申请 —— 直接标在会话这一行上，
+    // 不用先点进群资料才发现。
+    const pendingHtml = (isGroup && c.pending_count > 0)
+      ? `<span class="unread pending-join" title="${escapeHtml(t('join_requests'))}">${c.pending_count>99?'99+':c.pending_count}</span>` : '';
     const inner = isGroup
       ? groupAvatarInner({ name: c.username, is_official: isOfficial, icon_emoji: c.icon_emoji })
       // 「我」这一条:名字在英文界面显示 Me,但头像是我本人的。
@@ -1793,7 +1798,7 @@
     li.innerHTML = `<div class="${avatarCls}"${avatarBg} data-user-avatar="${isGroup ? '' : c.id}">${inner}${dot}</div>
       <div class="meta"><div class="name">${escapeHtml(c.type === 'user' ? displayName(c.username, c.special) : groupDisplayName(c.username, isOfficial))} ${officialTag}${catTag}</div>
       <div class="preview">${atMePrefix}${senderPrefix}${escapeHtml(preview)}</div></div>
-      <div class="time">${fmtTime(c.last_at)}</div>${unreadHtml}`;
+      <div class="time">${fmtTime(c.last_at)}</div>${unreadHtml}${pendingHtml}`;
     li.addEventListener('click', () => {
       openChat(c.type, c.id, c.username, isOfficial);
       // Opening the conversation IS the read receipt — the row must drop out
@@ -1833,7 +1838,9 @@
   function convTag(c) {
     if (!c) return '';
     // 官方群跟系统账号一样，落在「系统」组里。
-    if (c.type === 'group') return c.is_official ? '系统' : '';
+    // 普通群聊用户没另外设置过 —— 默认跟好友会话一起放在「用户」组，
+    // 不然它会变成一条没有标题的悬空项，掉在列表最底下。
+    if (c.type === 'group') return c.is_official ? '系统' : '用户';
     if (c.special) return '';
     const f = (state.friends || []).find(x => String(x.id) === String(c.id));
     return (f && f.tag) ? String(f.tag) : '';
@@ -1864,6 +1871,7 @@
     };
     const all = [...groups, ...privates, ...fresh]
       .sort((a, b) => groupOrder(a) - groupOrder(b)
+        || convTag(a).localeCompare(convTag(b))
         || (b.is_official || 0) - (a.is_official || 0)
         || (b.last_at || 0) - (a.last_at || 0));
     if (empty) empty.classList.toggle('hidden', all.length > 0);
@@ -2134,7 +2142,7 @@
       const reqRow = document.createElement('div');
       reqRow.className = 'settings-row';
       reqRow.id = 'gi-join-requests';
-      const pendingCount = (state.pendingGroupRequests || {})[gid] || 0;
+      const pendingCount = Number(g.pending_count || 0) || (state.pendingGroupRequests || {})[gid] || 0;
       reqRow.innerHTML = `<div class="avatar sm" style="background:linear-gradient(135deg,#f59e0b,#f97316);color:#fff;">?</div>
         <div class="settings-label" style="color:#f59e0b;font-weight:600;">${lang==='zh'?'入群申请':'Join requests'}</div>
         <div class="settings-trailing">${pendingCount
@@ -3389,9 +3397,14 @@
       const saveTag = async (tag) => {
         try {
           const r = await api('/friends/' + user.id + '/tag', { method: 'PUT', body: { tag } });
+          const saved = r.tag || '';
           const f = state.friends.find(x => Number(x.id) === Number(user.id));
-          if (f) f.tag = r.tag || '';
-          else state.friends.push({ id: user.id, username: user.username, tag: r.tag || '' });
+          if (f) f.tag = saved;
+          else state.friends.push({ id: user.id, username: user.username, tag: saved });
+          // 选中的那个要马上变色 —— 不然点了跟没点一样。
+          $$('#profile-tag-row .tag-pick').forEach(b => {
+            b.classList.toggle('on', b.dataset.tag === saved);
+          });
           renderChats();
           toast(t('tag_saved'));
         } catch (e) {
@@ -3847,16 +3860,17 @@
   function applyCover() {
     const img = $('#moment-cover-img');
     if (!img) return;
-    if (COVER.photo) {
-      img.src = COVER.photo;
-      img.classList.remove('hidden');
-    } else if (COVER.cover_id) {
+    let src = '';
+    if (COVER.photo) src = COVER.photo;
+    else if (COVER.cover_id) {
       const p = COVER_PRESETS.find(x => x.id === COVER.cover_id);
-      if (p) { img.src = p.url; img.classList.remove('hidden'); }
-      else img.classList.add('hidden');
-    } else {
-      img.classList.add('hidden');
+      if (p) src = p.url;
     }
+    if (!src) { img.classList.add('hidden'); return; }
+    // 同一个 src 不重复赋值 —— 重新赋一次会让浏览器把整张图再解码一遍，
+    // 自传封面（几 MB 的 data URL）特别明显。
+    if (img.dataset.src !== src) { img.dataset.src = src; img.src = src; }
+    img.classList.remove('hidden');
   }
 
   async function loadCover() {
@@ -3884,13 +3898,14 @@
     openModal('modal-cover-picker');
   }
 
-  async function saveCover(coverId, photo) {
+  async function saveCover(coverId, photo, opts) {
+    opts = opts || {};
     try {
       await api('/me/cover', { method: 'PUT', body: { cover_id: coverId || '', photo: photo || '' } });
       COVER.cover_id = coverId || '';
       COVER.photo = photo || '';
       applyCover();
-      closeModal('modal-cover-picker');
+      if (!opts.silent) closeModal('modal-cover-picker');
       toast(t('cover_saved'));
     } catch (e) {
       toast(e.message || t('op_failed'));
@@ -3904,11 +3919,17 @@
     if (grid) grid.addEventListener('click', (e) => {
       const item = e.target.closest('.cover-item');
       if (!item) return;
-      COVER.picked = item.dataset.id;
-      // 选了官方图 —— 立刻存,顺手把上传的那张照片清掉。
+      const pick = item.dataset.id;
+      COVER.picked = pick;
+      // 先本地换上 —— 点一下就该立刻看到新封面，不该等一次网络往返。
+      COVER.cover_id = pick;
+      COVER.photo = '';
+      applyCover();
       renderCoverGrid();
-      saveCover(COVER.picked, '');
+      saveCover(pick, '', { silent: true });
     });
+    // 预载 6 张官方图 —— 点的时候就不用现解码了。
+    COVER_PRESETS.forEach(p => { const im = new Image(); im.src = p.url; });
     const file = $('#cover-file');
     if (file) file.addEventListener('change', () => {
       const f = file.files && file.files[0];
@@ -4029,7 +4050,106 @@
     }
     loadMoments();
     loadCover();
+    // 第一次进来先看一遍使用清单 —— 看完了才让走。
+    maybeShowMomentGuide();
   }
+  // ============================================================
+  // 日常使用清单 —— 第一次进「日常」时强制看完
+  // ------------------------------------------------------------
+  // 没有关闭按钮、没有遮罩点击退出、ESC 也不认 —— 只能一页页看完。
+  // 看完过一次就记住（localStorage），以后不再打扰。
+  const MOMENT_GUIDE_KEY = 'vve:moment-guide-done';
+  const MOMENT_GUIDE = [
+    {
+      zh: { title: '这里叫「日常」', body: '像朋友圈一样，写点什么、配上图，就发出去了。发完就在这下面的一条条列表里。' },
+      en: { title: 'This is "Moments"', body: 'Like a social feed: write something, add a photo, and post it. Everything you post shows up in the list below.' },
+      art: '<svg viewBox="0 0 220 130" class="guide-svg" aria-hidden="true">' +
+        '<rect x="26" y="12" width="168" height="106" rx="14" fill="none" stroke="currentColor" stroke-opacity=".3" stroke-width="2"/>' +
+        '<circle cx="48" cy="36" r="12" fill="currentColor" fill-opacity=".28"/>' +
+        '<rect x="70" y="30" width="100" height="9" rx="4.5" fill="currentColor" fill-opacity=".5"/>' +
+        '<rect x="70" y="45" width="62" height="7" rx="3.5" fill="currentColor" fill-opacity=".28"/>' +
+        '<rect x="40" y="66" width="62" height="38" rx="8" fill="currentColor" fill-opacity=".2"/>' +
+        '<rect x="112" y="66" width="62" height="38" rx="8" fill="currentColor" fill-opacity=".2"/>' +
+        '<circle cx="172" cy="106" r="15" fill="currentColor" fill-opacity=".55"/>' +
+        '<path d="M166 106h12M172 100v12" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></svg>'
+    },
+    {
+      zh: { title: '挑一张封面', body: '点右上角「换个封面」，六张官方配色随你选；也可以传自己的照片，横图会自动裁成 16:9。' },
+      en: { title: 'Pick a cover', body: 'Tap "Change cover" at the top right — six official colours, or upload your own photo (landscape shots are cropped to 16:9).' },
+      art: '<svg viewBox="0 0 220 130" class="guide-svg" aria-hidden="true">' +
+        '<rect x="20" y="24" width="180" height="72" rx="12" fill="currentColor" fill-opacity=".2" stroke="currentColor" stroke-opacity=".32" stroke-width="2"/>' +
+        '<path d="M44 82l24-26 18 20 16-16 30 22z" fill="currentColor" fill-opacity=".45"/>' +
+        '<circle cx="168" cy="46" r="8" fill="currentColor" fill-opacity=".55"/>' +
+        '<rect x="86" y="104" width="48" height="12" rx="6" fill="currentColor" fill-opacity=".3"/></svg>'
+    },
+    {
+      zh: { title: '中间那栏会跟着你走', body: '上下滑动，右边这栏会显示你划到那条的详情。点任意一条也行 —— 跟滑动一样。' },
+      en: { title: 'The side panel follows you', body: 'Scroll and the panel on the right shows whichever post you are on. Clicking any post does the same thing.' },
+      art: '<svg viewBox="0 0 220 130" class="guide-svg" aria-hidden="true">' +
+        '<rect x="20" y="16" width="92" height="98" rx="12" fill="none" stroke="currentColor" stroke-opacity=".28" stroke-width="2"/>' +
+        '<rect x="32" y="30" width="68" height="16" rx="6" fill="currentColor" fill-opacity=".18"/>' +
+        '<rect x="32" y="56" width="68" height="16" rx="6" fill="currentColor" fill-opacity=".45"/>' +
+        '<rect x="32" y="82" width="68" height="16" rx="6" fill="currentColor" fill-opacity=".18"/>' +
+        '<rect x="128" y="16" width="72" height="98" rx="12" fill="currentColor" fill-opacity=".16" stroke="currentColor" stroke-opacity=".3" stroke-width="2"/>' +
+        '<circle cx="164" cy="44" r="11" fill="currentColor" fill-opacity=".45"/>' +
+        '<rect x="140" y="66" width="48" height="7" rx="3.5" fill="currentColor" fill-opacity=".38"/>' +
+        '<rect x="140" y="80" width="34" height="7" rx="3.5" fill="currentColor" fill-opacity=".24"/></svg>'
+    },
+    {
+      zh: { title: '点赞和评论', body: '点小心心是点赞，点气泡是评论。别人给你点赞或评论，也会出现在这栏里。' },
+      en: { title: 'Likes and comments', body: 'Tap the heart to like, the bubble to comment. Likes and comments you receive show up in the side panel too.' },
+      art: '<svg viewBox="0 0 220 130" class="guide-svg" aria-hidden="true">' +
+        '<path d="M110 96S62 70 62 47a20 20 0 0 1 37-11 20 20 0 0 1 37 11c0 23-26 49-26 49z" fill="currentColor" fill-opacity=".42"/>' +
+        '<path d="M64 40h-10a7 7 0 0 0-7 7v16a7 7 0 0 0 7 7h10z" fill="currentColor" fill-opacity=".3"/>' +
+        '<path d="M64 40h-10a7 7 0 0 0-7 7v16a7 7 0 0 0 7 7h10z" fill="none" stroke="currentColor" stroke-opacity=".45" stroke-width="2"/>' +
+        '<path d="M170 42h24a7 7 0 0 1 7 7v18a7 7 0 0 1-7 7h-24z" fill="currentColor" fill-opacity=".3"/>' +
+        '<path d="M170 42h24a7 7 0 0 1 7 7v18a7 7 0 0 1-7 7h-24z" fill="none" stroke="currentColor" stroke-opacity=".45" stroke-width="2"/>' +
+        '<circle cx="178" cy="58" r="2.4" fill="currentColor" fill-opacity=".55"/>' +
+        '<circle cx="187" cy="58" r="2.4" fill="currentColor" fill-opacity=".55"/>' +
+        '<circle cx="196" cy="58" r="2.4" fill="currentColor" fill-opacity=".55"/></svg>'
+    }
+  ];
+  let _guideIdx = 0;
+  function momentGuideSeen() {
+    try { return localStorage.getItem(MOMENT_GUIDE_KEY) === '1'; } catch (_) { return false; }
+  }
+  function renderMomentGuide() {
+    const slide = MOMENT_GUIDE[_guideIdx];
+    const body = $('#moment-guide-body');
+    if (!body || !slide) return;
+    const txt = lang === 'en' ? slide.en : slide.zh;
+    body.innerHTML = slide.art +
+      `<h3 class="moment-guide-title">${escapeHtml(txt.title)}</h3>` +
+      `<p class="moment-guide-text">${escapeHtml(txt.body)}</p>`;
+    const dots = $('#moment-guide-dots');
+    if (dots) dots.innerHTML = MOMENT_GUIDE.map((_, i) =>
+      `<span class="moment-guide-dot${i === _guideIdx ? ' on' : ''}"></span>`).join('');
+    const step = $('#moment-guide-step');
+    if (step) step.textContent = `${_guideIdx + 1} / ${MOMENT_GUIDE.length}`;
+    const next = $('#moment-guide-next');
+    if (next) next.textContent = (_guideIdx === MOMENT_GUIDE.length - 1)
+      ? (lang === 'en' ? 'Start using' : '开始使用')
+      : (lang === 'en' ? 'Next' : '下一步');
+  }
+  function maybeShowMomentGuide() {
+    if (momentGuideSeen()) return;
+    _guideIdx = 0;
+    renderMomentGuide();
+    openModal('modal-moment-guide');
+  }
+  function bindMomentGuide() {
+    const next = $('#moment-guide-next');
+    if (next) next.addEventListener('click', () => {
+      if (_guideIdx < MOMENT_GUIDE.length - 1) {
+        _guideIdx++;
+        renderMomentGuide();
+        return;
+      }
+      try { localStorage.setItem(MOMENT_GUIDE_KEY, '1'); } catch (_) {}
+      closeModal('modal-moment-guide');
+    });
+  }
+
   function closeMoments() {
     const mv = $('#moment-view');
     if (!mv || mv.classList.contains('hidden')) return;
@@ -4100,7 +4220,7 @@
       MOMENT.activeId = MOMENT.items.length ? MOMENT.items[0].id : null;
     }
     renderMomentDetail();
-    observeMoments();
+    syncActiveMoment();
     // 首屏:第一条就是当前这条,把它框出来。
     document.querySelectorAll('#moment-feed .moment-post').forEach(p => {
       p.classList.toggle('is-active', Number(p.dataset.id) === Number(MOMENT.activeId));
@@ -4149,24 +4269,30 @@
   }
 
   // 滚到哪条,中间那栏就显示哪条的详情。
-  let _momentObserver = null;
-  function observeMoments() {
-    if (_momentObserver) { _momentObserver.disconnect(); _momentObserver = null; }
+  // 不用 IntersectionObserver:它的 rootMargin 是条窄带,最后一条永远挤不到
+  // 带子里 —— 滑到底了它也不亮。改成「谁离容器中线最近就算谁」,
+  // 最后一条照样能选中,而且一次算完所有条目,不会漏。
+  let _momentScrollRaf = 0;
+  function syncActiveMoment() {
     const feed = $('#moment-feed');
     const view = $('#moment-view');
-    if (!feed || !view || !window.IntersectionObserver) return;
-    _momentObserver = new IntersectionObserver((entries) => {
-      const vis = entries.filter(e => e.isIntersecting);
-      if (!vis.length) return;
-      const mid = view.getBoundingClientRect().top + view.clientHeight / 2;
-      const pick = vis.sort((a, b) => {
-        const da = Math.abs(a.boundingClientRect.top + a.boundingClientRect.height / 2 - mid);
-        const db = Math.abs(b.boundingClientRect.top + b.boundingClientRect.height / 2 - mid);
-        return da - db;
-      })[0];
-      setActiveMoment(Number(pick.target.dataset.id));
-    }, { root: view, rootMargin: '-45% 0px -45% 0px', threshold: 0 });
-    feed.querySelectorAll('.moment-post').forEach(p => _momentObserver.observe(p));
+    if (!feed || !view) return;
+    const mid = view.getBoundingClientRect().top + view.clientHeight / 2;
+    let best = null, bestD = Infinity;
+    for (const p of feed.children) {
+      if (!p.classList || !p.classList.contains('moment-post')) continue;
+      const r = p.getBoundingClientRect();
+      const d = Math.abs(r.top + r.height / 2 - mid);
+      if (d < bestD) { bestD = d; best = p; }
+    }
+    if (best) setActiveMoment(Number(best.dataset.id));
+  }
+  function onMomentScroll() {
+    if (_momentScrollRaf) return;
+    _momentScrollRaf = requestAnimationFrame(() => {
+      _momentScrollRaf = 0;
+      syncActiveMoment();
+    });
   }
   function setActiveMoment(id) {
     if (Number(MOMENT.activeId) === Number(id)) return;
@@ -4187,6 +4313,17 @@
   function bindMoments() {
     const back = $('#btn-moment-back');
     if (back) back.addEventListener('click', closeMoments);
+    // 滚到哪条,中间那栏跟着换。
+    const mview = $('#moment-view');
+    if (mview) mview.addEventListener('scroll', onMomentScroll, { passive: true });
+    // 点任意一条,中间那栏立刻显示这条的详情 —— 跟滑动一样。
+    const feedEl = $('#moment-feed');
+    if (feedEl) feedEl.addEventListener('click', (e) => {
+      if (e.target.closest('button, a, input, textarea')) return;   // 点按钮不算选中
+      const post = e.target.closest('.moment-post');
+      if (!post) return;
+      setActiveMoment(Number(post.dataset.id));
+    });
     const compose = $('#btn-moment-compose');
     if (compose) compose.addEventListener('click', () => {
       MOMENT.editingId = null;
@@ -4419,6 +4556,10 @@
   }
 
   function bindSocketEvents(s) {
+    // socket.io 按 URL 缓存连接 —— 登出再登录拿到的还是同一个 socket。
+    // 不先摘掉旧监听器的话，每登录一次事件就多跑一遍（23 个监听器 × N 次），
+    // 用久了必然卡。先清空再绑，保证只有一份。
+    try { s.removeAllListeners(); } catch (_) {}
     s.on('connect', () => {
       hideOffline();
       if (state.currentChat) loadMessages().then(renderMessages);
@@ -4915,7 +5056,10 @@
     if (state.currentChat && convKey(state.currentChat.type, state.currentChat.id) === key) {
       const existing = state.typingUsers.get(user_id);
       if (existing) clearTimeout(existing.timer);
-      const timer = setTimeout(() => onTypingStop({ conv_type, conv_id, user_id }), 8000);
+      // 这个定时器只是「对方断线了」的保险 —— 正常情况下服务端答完会发
+      // typing:stop。原来只等 8 秒，模型要十几秒才答完，于是「正在输入」
+      // 先消失了，消息过好几秒才蹦出来。
+      const timer = setTimeout(() => onTypingStop({ conv_type, conv_id, user_id }), 60000);
       state.typingUsers.set(user_id, { username, timer });
       renderTyping();
     }
@@ -6620,6 +6764,7 @@
     if (state.socket) { try { state.socket.disconnect(); } catch (_) {} }
     showAuth();
     showSplashAgain();   // bring back the big-Hello splash on logout
+    showLangPicker();    // 登录前再过一次语言选择 —— 登录页上没别的语言入口
   }
   // ---------- 会话代号 ----------
   // 登录 / 登出都会把它 +1。
@@ -7085,7 +7230,8 @@
     // modal close
     $$('[data-close]').forEach(el => bindOnce(el, 'click', (e) => { e.stopPropagation(); closeModal(el.dataset.close); }));
     $$('.modal-mask').forEach(el => bindOnce(el, 'click', (e) => { if (e.target === el) closeModal(el.parentElement?.id || el.closest('.modal')?.id); }));
-    bindOnce(document, 'keydown', (e) => { if (e.key === 'Escape') { $$('.modal:not(.hidden)').forEach(m => closeModal(m.id)); $('#emoji-picker')?.classList.add('hidden'); } });
+    // ESC 关掉所有弹窗 —— 唯独「日常使用清单」不行，它必须看完。
+    bindOnce(document, 'keydown', (e) => { if (e.key === 'Escape') { $$('.modal:not(.hidden)').forEach(m => { if (m.id === 'modal-moment-guide') return; closeModal(m.id); }); $('#emoji-picker')?.classList.add('hidden'); } });
     // ULTIMATE FALLBACK: document-level delegation. If anything above
     // somehow missed (timing, duplicate listeners, etc.), this still works.
     bindOnce(document, 'click', (e) => {
@@ -7125,10 +7271,13 @@
       ensureAvatarBound();   // every avatar opens the add-friend menu
       bindMoments();         // 朋友圈(日常)
       bindCover();           // 朋友圈封面(官方配色 / 上传)
+      bindMomentGuide();     // 日常使用清单(第一次进来强制看完)
       updateUiScale();
       window.addEventListener('resize', updateUiScale);
       initSplash();         // show full-screen Hello before auth (skipped if logged in)
       startHelloCycler();   // animate the auth tagline across languages
+      bindLangPicker();     // 语言选择页 —— 登录/注册之前的那一页
+      if (!hasStoredSession()) showLangPicker();
       $$('.lang-toggle, .lang-btn').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); setLang(lang === 'zh' ? 'en' : 'zh'); }));
       $$('.auth-card .tab').forEach(t => t.addEventListener('click', () => switchAuthTab(t.dataset.tab)));
       $('#btn-pick-avatar')?.addEventListener('click', () => openAvatarPicker(_regAvatar, (v) => { _regAvatar = v; paintRegPreview(); }));
@@ -7214,7 +7363,16 @@
     const big = $('#hello-splash-cycler');
     if (big) { runCycler(big, 2200); }
   }
+  // 每个元素只留一个定时器 —— 元素被换掉（登出重开）时旧的必须停掉，
+  // 否则每登出一次就多一个 2.2 秒的定时器，永远不停。
+  const _cyclerTimers = new WeakMap();
+  function stopCycler(el) {
+    if (!el) return;
+    const t = _cyclerTimers.get(el);
+    if (t) { clearInterval(t); _cyclerTimers.delete(el); }
+  }
   function runCycler(el, interval) {
+    stopCycler(el);
     // 从当前界面语言的那句开始 —— 英文界面第一眼看到「Hello」,
     // 而不是跳到一句俄语,免得看着像没切换干净。
     let idx = Math.max(0, HELLOS.findIndex(h => h.lang === lang));
@@ -7231,12 +7389,44 @@
       }, 250);
     };
     show();
-    setInterval(show, interval);
+    _cyclerTimers.set(el, setInterval(show, interval));
   }
 
   // ============================================================
   // Hello splash — full-screen greeting shown on first visit /
   // after logout. Click anywhere to dismiss and reveal auth.
+  // ============================================================
+  // 语言选择页 —— 登录/注册之前的那一页
+  // ------------------------------------------------------------
+  // 选完立刻切成那个语言,后面整个界面(登录页、提示、报错)都是它。
+  function showLangPicker() {
+    const el = $('#lang-pick');
+    if (!el) return;
+    el.classList.remove('hidden');
+    const first = el.querySelector('.lang-pick-btn');
+    if (first) setTimeout(() => first.focus(), 40);
+  }
+  function hideLangPicker() {
+    const el = $('#lang-pick');
+    if (el) el.classList.add('hidden');
+  }
+  // 有没有存着的登录态 —— 决定要不要先过语言选择这一页。
+  function hasStoredSession() {
+    try { return !!(localStorage.getItem('vve:token') && localStorage.getItem('vve:user')); }
+    catch (_) { return false; }
+  }
+  function bindLangPicker() {
+    const el = $('#lang-pick');
+    if (!el) return;
+    el.addEventListener('click', (e) => {
+      const b = e.target.closest('.lang-pick-btn');
+      if (!b) return;
+      const pick = b.dataset.lang === 'en' ? 'en' : 'zh';
+      hideLangPicker();
+      if (pick !== lang) setLang(pick);
+      else applyI18n();
+    });
+  }
   // ============================================================
   let splashDismissed = false;
   function initSplash() {
@@ -7274,6 +7464,8 @@
     const dismiss = () => {
       if (splashDismissed) return;
       splashDismissed = true;
+      // 元素马上要被扔掉了，它那个 2.2 秒的定时器也得跟着停。
+      stopCycler(splash.querySelector('#hello-splash-cycler'));
       splash.classList.add('hello-splash-out');
       setTimeout(() => splash.remove(), 500);
     };
@@ -7287,7 +7479,7 @@
     // 550C theme — play the boot animation instead of the Hello splash.
     if (boot550cOn()) {
       const old = $('#hello-splash');
-      if (old) old.remove();
+      if (old) { stopCycler(old.querySelector('#hello-splash-cycler')); old.remove(); }
       ensureBoot550cLoaded().then(function () {
         if (!window.Boot550C) return;
         try { window.Boot550C.play(); } catch (_) {}

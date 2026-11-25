@@ -64,7 +64,9 @@ const stripped = html.replace(/<[^>]*data-i18n[^>]*>[\s\S]*?<\/[^>]+>/g, '');
 const stripped2 = stripped
   .replace(/<[^>]*id="lang-glyph"[^>]*>[\s\S]*?<\/[^>]+>/g, '')
   .replace(/<[^>]*id="hello-cycler"[^>]*>[\s\S]*?<\/[^>]+>/g, '')
-  .replace(/<[^>]*id="hello-splash-cycler"[^>]*>[\s\S]*?<\/[^>]+>/g, '');
+  .replace(/<[^>]*id="hello-splash-cycler"[^>]*>[\s\S]*?<\/[^>]+>/g, '')
+  // 语言选择页整页都是双语 —— 那一页本来就是给两种语言看的，故意不翻。
+  .replace(/<div id="lang-pick"[\s\S]*?\n {2}<\/div>\n/g, '');
 // 去掉 <script> / <style> 块
 const noScript = stripped2.replace(/<script[\s\S]*?<\/script>/g, '').replace(/<style[\s\S]*?<\/style>/g, '');
 // 去掉注释
