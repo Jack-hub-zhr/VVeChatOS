@@ -7158,7 +7158,11 @@
       e.stopPropagation();
       const p = $('#emoji-picker');
       if (p.classList.contains('hidden')) {
-        p.innerHTML = `<div class="emoji-grid" style="grid-template-columns:repeat(8,1fr);">${EMOJIS.map(em => `<button class="emoji-cell" data-em="${em}">${em}</button>`).join('')}</div>`;
+        // 按钮直接挂在 .emoji-picker 上 —— 它自己就是网格容器。
+        // 之前多包了一层 div，网格套在空壳上，表情就竖着排成一条了。
+        // type="button" 必须写：面板在聊天表单里，button 默认是 submit，
+        // 点一下表情会把消息也一起发出去。
+        p.innerHTML = EMOJIS.map(em => `<button type="button" class="emoji-cell" data-em="${em}">${em}</button>`).join('');
         p.classList.remove('hidden');
         p.onclick = (ev) => {
           const c = ev.target.closest('.emoji-cell');

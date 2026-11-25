@@ -1607,19 +1607,25 @@ body.dark .mention-hint-bar { background: rgba(255, 255, 255, 0.05); }
   width: 320px; max-height: 260px; overflow-y: auto;
   padding: 10px;
   background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(var(--blur-l2)) saturate(180%);
+  /* 不要 backdrop-filter：输入框那层(.chat-composer)自己就有，
+     它成了 backdrop root —— 面板只能采样到它那半透明底色，整块就显黑。
+     面板背景本来就有 85% 不透明，不需要再模糊背后的东西。 */
   border: 1px solid var(--glass-border);
   border-radius: 18px;
   box-shadow: var(--glass-shadow-lg);
+  /* 表情按矩阵排 —— 竖着排一列的话，找一个表情得滚半天。 */
   display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  gap: 2px;
+  grid-template-columns: repeat(auto-fill, minmax(34px, 1fr));
+  gap: 3px;
   margin-bottom: 8px;
   z-index: 10;
 }
 .emoji-picker button {
-  width: 32px; height: 32px;
-  font-size: 18px;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;      /* 撑满格子，保持正方形 */
+  padding: 0;
+  font-size: 20px;
   border-radius: 8px;
   transition: background 0.15s;
 }
@@ -11773,7 +11779,7 @@ window.VVECHAT_API = '';
        time even though the theme was enabled. -->
   <script>
   (function () {
-    try { window.__VV_ASSET_V = '20261107aj'; } catch (e) { }
+    try { window.__VV_ASSET_V = '20261107ak'; } catch (e) { }
     var V = window.__VV_ASSET_V || '';
     var on = false;
     try { on = localStorage.getItem('vve:boot550c') === '1'; } catch (e) { }
@@ -18956,7 +18962,11 @@ window.VVECHAT_API = '';
       e.stopPropagation();
       const p = $('#emoji-picker');
       if (p.classList.contains('hidden')) {
-        p.innerHTML = `<div class="emoji-grid" style="grid-template-columns:repeat(8,1fr);">${EMOJIS.map(em => `<button class="emoji-cell" data-em="${em}">${em}</button>`).join('')}</div>`;
+        // 按钮直接挂在 .emoji-picker 上 —— 它自己就是网格容器。
+        // 之前多包了一层 div，网格套在空壳上，表情就竖着排成一条了。
+        // type="button" 必须写：面板在聊天表单里，button 默认是 submit，
+        // 点一下表情会把消息也一起发出去。
+        p.innerHTML = EMOJIS.map(em => `<button type="button" class="emoji-cell" data-em="${em}">${em}</button>`).join('');
         p.classList.remove('hidden');
         p.onclick = (ev) => {
           const c = ev.target.closest('.emoji-cell');

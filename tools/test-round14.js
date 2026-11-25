@@ -191,7 +191,7 @@ const rnd = () => Math.random().toString(36).slice(2, 8);
   ok('词条按钮字号 ≥ 14px', parseFloat(fs2) >= 14, 'font-size=' + fs2);
 
   // ---------- ⑥ Jack 名片双语 ----------
-  const jackProf = await ev(`(()=>{const rows=[...document.querySelectorAll('#chats-list .list-item')];const r=rows.find(x=>/Jack/.test(x.textContent||''));if(!r)return 'no-row';const av=r.querySelector('[data-user-avatar]');if(!av)return 'no-avatar';av.click();return 'ok';})()`);
+  const jackProf = await ev(`(()=>{const rows=[...document.querySelectorAll('#chats-list .list-item')];const r=rows.find(x=>/Jack(?!y)/.test(x.textContent||''));if(!r)return 'no-row';const av=r.querySelector('[data-user-avatar]');if(!av)return 'no-avatar';av.click();return 'ok';})()`);
   await sleep(1000);
   await ev(`(()=>{const m=[...document.querySelectorAll('[data-act="profile"]')][0];if(m)m.click();return 1;})()`);
   await sleep(1200);
@@ -199,6 +199,42 @@ const rnd = () => Math.random().toString(36).slice(2, 8);
   ok('Jack 名片是双语', /官方管理员/.test(jackBio) && /Official Admin/.test(jackBio), 'bio=' + jackBio);
   await shot('06-jack-bilingual');
   await ev(`document.querySelector('#modal-profile [data-close]').click()`); await sleep(400);
+
+  // ---------- 表情面板：矩阵排列（不是竖着一列） ----------
+  // 表情面板挂在聊天输入框上 —— 得先切回聊天并打开一个会话，否则整块是隐藏的、量不到尺寸。
+  await ev(`(()=>{const b=document.querySelector('.side-nav-item[data-pane="chats"]');if(b)b.click();return 1;})()`);
+  await sleep(900);
+  await ev(`(()=>{const r=document.querySelector('#chats-list .list-item');if(r)r.click();return 1;})()`);
+  await sleep(1500);
+  await ev(`(()=>{const b=document.querySelector('#emoji-btn');if(b)b.click();return 1;})()`);
+  await sleep(900);
+  const grid = await ev(`(()=>{
+    const cells=[...document.querySelectorAll('#emoji-picker .emoji-cell')];
+    if(!cells.length) return 'no-cells';
+    const r0=cells[0].getBoundingClientRect();
+    // 第 8 个（索引 7）应该和第 1 个同一行 —— 8 列。
+    const r7=cells[7].getBoundingClientRect();
+    return JSON.stringify({
+      n:cells.length,
+      w:Math.round(r0.width),
+      sameRow: Math.abs(r0.top-r7.top)<2,
+      cols: new Set(cells.slice(0,16).map(c=>Math.round(c.getBoundingClientRect().left))).size
+    });
+  })()`);
+  const g = JSON.parse(grid);
+  ok('表情面板是矩阵（同排 8 个，列数 > 1）', g.sameRow && g.cols > 1, grid);
+  ok('表情格子有实际尺寸（不是 0）', g.w > 20, 'w=' + g.w);
+  // 点一下表情要能插进输入框，而且不能顺手把消息发出去
+  const beforeMsgs = await ev(`document.querySelectorAll('#chat-messages .msg-row, #chat-messages .msg-bubble').length`);
+  const pickedEm = await ev(`(()=>{const c=document.querySelector('#emoji-picker .emoji-cell');if(!c)return 'none';c.click();return c.dataset.em;})()`);
+  await sleep(600);
+  const inputVal = await ev(`(document.querySelector('#chat-input')||{}).value||''`);
+  const afterMsgs = await ev(`document.querySelectorAll('#chat-messages .msg-row, #chat-messages .msg-bubble').length`);
+  ok('点表情能插进输入框', pickedEm !== 'none' && String(inputVal).includes(pickedEm), `picked=${pickedEm} input=${inputVal}`);
+  ok('点表情不会把消息发出去', afterMsgs === beforeMsgs, `${beforeMsgs} → ${afterMsgs}`);
+  await shot('07-emoji-matrix');
+  await ev(`(()=>{document.body.click();return 1;})()`);
+  await sleep(400);
 
   ok('页面没有 JS 异常', logs.length === 0, logs.join(' | '));
 
