@@ -2,8 +2,7 @@
    LIQUID GLASS — 全局液态玻璃 polish 层（在 glass.css 之后加载）
    ------------------------------------------------------------
    把 App 的 "weightless glass" 设计语言推进到 Apple 液态玻璃观感，
-   全局覆盖所有玻璃表面：面板 / 卡片 / 气泡 / 控件 / 菜单 / 提示 /
-   浮层弹窗 / AI 视图 / 朋友圈 / 发现 / 设置 / 输入框 / 滚动条。
+   全局覆盖所有玻璃表面：面板 / 卡片 / 气泡 / 控件 / 菜单 / 提示。
 
    手段（全部 GPU 友好、廉价）：
      · 色散镶边 —— 红/蓝双层 0.5~1px 边缘，模拟折射色散
@@ -64,22 +63,6 @@ body:not(.theme-550c) .hello-splash-inner {
   background-image: var(--lg-gloss);
 }
 
-/* ---------- 浮层菜单 / 弹出卡片：同卡片待遇 ---------- */
-body:not(.theme-550c) .user-menu,
-body:not(.theme-550c) .ctx-menu,
-body:not(.theme-550c) .theme-menu,
-body:not(.theme-550c) .search-suggestions,
-body:not(.theme-550c) .msg-popup-card,
-body:not(.theme-550c) .ai-tool-pop,
-body:not(.theme-550c) .onboard-tooltip {
-  box-shadow: var(--lg-rim), var(--lg-spec), var(--lg-depth-lg);
-  background-image: var(--lg-gloss);
-}
-/* 移动端菜单 sheet 是实心面板（iOS 嵌套 backdrop 会糊），只加镶边厚度 */
-body:not(.theme-550c) .mobile-menu-sheet {
-  box-shadow: var(--lg-rim), var(--lg-spec), var(--lg-depth-lg);
-}
-
 /* ---------- 消息气泡：液态边缘（不改背景，保住 me 渐变）---------- */
 body:not(.theme-550c) .msg-bubble {
   box-shadow: var(--lg-rim-soft), var(--lg-spec-soft);
@@ -93,102 +76,6 @@ body:not(.theme-550c) .chat-item,
 body:not(.theme-550c) .icon-btn,
 body:not(.theme-550c) .side-nav-item,
 body:not(.theme-550c) .tab {
-  box-shadow: var(--lg-rim-soft), var(--lg-spec-soft);
-}
-
-/* ---------- AI 视图：composer / 气泡 / 供应商卡 / 控件 ---------- */
-body:not(.theme-550c) .ai-composer {
-  box-shadow: var(--lg-rim), var(--lg-spec), var(--lg-depth);
-  background-image: var(--lg-gloss);
-}
-body:not(.theme-550c) .ai-bubble.bot {
-  box-shadow: var(--lg-rim-soft), var(--lg-spec-soft);
-  background-image: var(--lg-gloss-soft);
-}
-body:not(.theme-550c) .ai-bubble.user {
-  box-shadow: var(--lg-rim-soft), inset 0 1px 0 rgba(255,255,255,0.35), 0 4px 14px rgba(76,111,255,0.24);
-}
-body:not(.theme-550c) .ai-provider,
-body:not(.theme-550c) .ai-chat-item.active,
-body:not(.theme-550c) .ai-new-chat,
-body:not(.theme-550c) .ai-new-btn,
-body:not(.theme-550c) .ai-select {
-  box-shadow: var(--lg-rim-soft), var(--lg-spec-soft);
-}
-body:not(.theme-550c) .ai-head {
-  box-shadow: var(--lg-spec-soft);
-}
-body:not(.theme-550c) .ai-send,
-body:not(.theme-550c) .msg-popup-send {
-  box-shadow: var(--lg-rim), inset 0 1px 0 rgba(255,255,255,0.40), 0 3px 12px rgba(76,111,255,0.32);
-}
-
-/* ---------- 朋友圈 / 发现 / 设置 / 更多：卡片与行 ---------- */
-body:not(.theme-550c) .settings-group,
-body:not(.theme-550c) .plus-action,
-body:not(.theme-550c) .plus-result,
-body:not(.theme-550c) .file-card {
-  box-shadow: var(--lg-rim-soft), var(--lg-spec-soft);
-  background-image: var(--lg-gloss-soft);
-}
-body:not(.theme-550c) .discover-card,
-body:not(.theme-550c) .more-row,
-body:not(.theme-550c) .member-picker,
-body:not(.theme-550c) .cover-item {
-  box-shadow: var(--lg-rim-soft), var(--lg-spec-soft);
-}
-body:not(.theme-550c) .plus-action:hover,
-body:not(.theme-550c) .discover-card:hover,
-body:not(.theme-550c) .more-row:not(.static):hover,
-body:not(.theme-550c) .ai-new-chat:hover {
-  box-shadow: var(--lg-rim-soft), var(--lg-spec-soft), var(--lg-depth);
-}
-
-/* ---------- 输入控件：轻镶边（焦点环在本层重新声明，避免被盖掉）---------- */
-body:not(.theme-550c) .field-input,
-body:not(.theme-550c) .tag-input,
-body:not(.theme-550c) .moment-comment-input,
-body:not(.theme-550c) .msg-popup-input,
-body:not(.theme-550c) .plus-search,
-body:not(.theme-550c) .chat-composer input[type="text"] {
-  box-shadow: var(--lg-rim-soft), var(--lg-spec-soft);
-}
-body:not(.theme-550c) .field-input:focus,
-body:not(.theme-550c) .tag-input:focus,
-body:not(.theme-550c) .moment-comment-input:focus,
-body:not(.theme-550c) .msg-popup-input:focus,
-body:not(.theme-550c) .plus-search:focus-within,
-body:not(.theme-550c) .chat-composer input[type="text"]:focus {
-  box-shadow: var(--lg-rim-soft), 0 0 0 4px rgba(76, 111, 255, 0.12);
-}
-
-/* ---------- 横幅 / 提示条 ---------- */
-body:not(.theme-550c) .msg-banner-inner {
-  box-shadow: var(--lg-rim), var(--lg-spec), var(--lg-depth-lg);
-  background-image: var(--lg-gloss);
-}
-body:not(.theme-550c) .mention-hint-bar {
-  box-shadow: var(--lg-rim-soft), var(--lg-spec-soft);
-}
-body:not(.theme-550c) .offline-banner {
-  box-shadow: var(--lg-rim-soft), inset 0 1px 0 rgba(255,255,255,0.35), 0 8px 24px rgba(255,59,48,0.35);
-}
-
-/* ---------- 次级按钮 / 分段控件 ---------- */
-body:not(.theme-550c) .btn-ghost {
-  box-shadow: var(--lg-rim-soft), var(--lg-spec-soft);
-  background-image: var(--lg-gloss-soft);
-}
-body:not(.theme-550c) .btn-ok {
-  box-shadow: var(--lg-rim), inset 0 1px 0 rgba(255,255,255,0.40), 0 4px 12px rgba(59,130,246,0.30);
-}
-body:not(.theme-550c) .btn-danger {
-  box-shadow: var(--lg-rim), inset 0 1px 0 rgba(255,255,255,0.35), 0 6px 18px rgba(255,59,48,0.30);
-}
-body:not(.theme-550c) .tabbar,
-body:not(.theme-550c) .seg,
-body:not(.theme-550c) .moment-compose.capsule,
-body:not(.theme-550c) .discover-join {
   box-shadow: var(--lg-rim-soft), var(--lg-spec-soft);
 }
 
@@ -210,25 +97,6 @@ body:not(.theme-550c) .btn-primary::after {
   58%, 100% { transform: translateX(120%); }
 }
 
-/* ---------- 全局滚动条：玻璃珠 ---------- */
-body:not(.theme-550c) ::-webkit-scrollbar-track { background: transparent; }
-body:not(.theme-550c) ::-webkit-scrollbar-thumb {
-  background: rgba(38, 62, 100, 0.20);
-  border-radius: 999px;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.40), 0 0 0 0.5px rgba(255,255,255,0.30);
-}
-body:not(.theme-550c) ::-webkit-scrollbar-thumb:hover { background: rgba(38, 62, 100, 0.32); }
-body.dark:not(.theme-550c) ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.20);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.25), 0 0 0 0.5px rgba(255,255,255,0.10);
-}
-body.dark:not(.theme-550c) ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.32); }
-/* Firefox 等不支持 ::-webkit-scrollbar 的引擎走标准属性 */
-@supports not selector(::-webkit-scrollbar) {
-  body:not(.theme-550c) { scrollbar-color: rgba(38, 62, 100, 0.28) transparent; }
-  body.dark:not(.theme-550c) { scrollbar-color: rgba(255, 255, 255, 0.24) transparent; }
-}
-
 /* ---------- 无障碍：系统说不要动，就别动 ---------- */
 @media (prefers-reduced-motion: reduce) {
   body:not(.theme-550c) .btn-primary::after { animation: none; opacity: 0; }
@@ -240,17 +108,7 @@ body.dark:not(.theme-550c) ::-webkit-scrollbar-thumb:hover { background: rgba(25
   body:not(.theme-550c) .toast,
   body:not(.theme-550c) .chat-composer,
   body:not(.theme-550c) .emoji-picker,
-  body:not(.theme-550c) .mention-menu,
-  body:not(.theme-550c) .user-menu,
-  body:not(.theme-550c) .ctx-menu,
-  body:not(.theme-550c) .theme-menu,
-  body:not(.theme-550c) .search-suggestions,
-  body:not(.theme-550c) .msg-popup-card,
-  body:not(.theme-550c) .ai-tool-pop,
-  body:not(.theme-550c) .onboard-tooltip,
-  body:not(.theme-550c) .mobile-menu-sheet,
-  body:not(.theme-550c) .ai-composer,
-  body:not(.theme-550c) .msg-banner-inner {
+  body:not(.theme-550c) .mention-menu {
     background-color: rgba(255,255,255,0.96);
     background-image: none;
   }
@@ -259,17 +117,7 @@ body.dark:not(.theme-550c) ::-webkit-scrollbar-thumb:hover { background: rgba(25
   body.dark:not(.theme-550c) .toast,
   body.dark:not(.theme-550c) .chat-composer,
   body.dark:not(.theme-550c) .emoji-picker,
-  body.dark:not(.theme-550c) .mention-menu,
-  body.dark:not(.theme-550c) .user-menu,
-  body.dark:not(.theme-550c) .ctx-menu,
-  body.dark:not(.theme-550c) .theme-menu,
-  body.dark:not(.theme-550c) .search-suggestions,
-  body.dark:not(.theme-550c) .msg-popup-card,
-  body.dark:not(.theme-550c) .ai-tool-pop,
-  body.dark:not(.theme-550c) .onboard-tooltip,
-  body.dark:not(.theme-550c) .mobile-menu-sheet,
-  body.dark:not(.theme-550c) .ai-composer,
-  body.dark:not(.theme-550c) .msg-banner-inner {
+  body.dark:not(.theme-550c) .mention-menu {
     background-color: rgba(24,28,38,0.98);
     background-image: none;
   }
