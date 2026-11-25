@@ -29,7 +29,7 @@ getSocketIo((socketIo) => {
   let html = read('index.html');
 
   // CSS：两张壁纸转成 data URI，其余原样内联
-  let css = read('style.css') + '\n' + read('glass.css');
+  let css = read('style.css') + '\n' + read('glass.css') + '\n' + read('liquid-glass.css');
   for (const name of ['wall-dark.jpg', 'wall-light.jpg']) {
     const uri = dataUri('assets/' + name, 'image/jpeg');
     css = css.split("url('assets/" + name + "')").join("url('" + uri + "')");
@@ -64,6 +64,7 @@ getSocketIo((socketIo) => {
   };
   swap(/<link rel="stylesheet" href="style\.css\?v=[^"]*"\s*\/>/, '<style>\n' + css + '\n  </style>', 'style.css');
   swap(/<link rel="stylesheet" href="glass\.css\?v=[^"]*"\s*\/>/, '', 'glass.css');
+  swap(/<link rel="stylesheet" href="liquid-glass\.css\?v=[^"]*"\s*\/>/, '', 'liquid-glass.css');
   swap(/<script src="\/socket\.io\/socket\.io\.js"><\/script>/, '<script>' + socketIo + '</script>', 'socket.io');
   swap(/<script src="config\.js\?v=[^"]*"><\/script>/, '<script>' + read('config.js') + '</script>', 'config.js');
   swap(/<script src="app\.js\?v=[^"]*"><\/script>/, '<script>\n' + appJs + '\n  </script>', 'app.js');
