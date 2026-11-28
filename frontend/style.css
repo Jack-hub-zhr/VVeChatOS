@@ -34,23 +34,33 @@
   --muted: #6a7c96;
   --muted-2: #9aa8bd;
 
-  /* Glass — the core of the language */
-  --glass-bg: rgba(255, 255, 255, 0.62);
-  --glass-bg-strong: rgba(255, 255, 255, 0.78);
-  --glass-bg-soft: rgba(255, 255, 255, 0.42);
-  --glass-bg-frost: rgba(255, 255, 255, 0.20);
+  /* Glass — 磨砂玻璃。
+     面板不再透光:底色接近实色,背后的壁纸看不出来。
+     backdrop-filter 也就没必要了 —— 看不见背景时模糊纯属浪费,
+     而壁纸一动,压在它上面的每一块模糊都得每帧重算一遍(发烫发卡的元凶)。 */
+  --glass-bg: rgba(255, 255, 255, 0.92);
+  --glass-bg-strong: rgba(255, 255, 255, 0.96);
+  --glass-bg-soft: rgba(255, 255, 255, 0.55);
+  --glass-bg-frost: rgba(255, 255, 255, 0.34);
   --glass-border: rgba(255, 255, 255, 0.72);
   --glass-border-soft: rgba(255, 255, 255, 0.48);
-  --glass-blur: 34px;
-  --glass-blur-strong: 48px;
   --glass-shadow: 0 10px 34px rgba(38, 62, 100, 0.10);
   --glass-shadow-lg: 0 22px 68px rgba(38, 62, 100, 0.16);
   --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.85);
   --glass-chromatic: 0 0 0 0.5px rgba(255, 90, 90, 0.10), 0 0 0 1px rgba(80, 80, 255, 0.06);
 
-  /* 分层玻璃:UI 层级越高,身后的背景越模糊。
-     第一层(主面板/壁纸)完全不糊 —— 折射要看得见;
-     卡片与控件第二层,弹窗与菜单第三层。 */
+  /* 磨砂颗粒:面板上那层细噪点,就是「磨砂」和「塑料」的分界线。
+     一张 140px 的噪声图平铺,几乎不占内存,也不吃帧。 */
+  --frost-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.07'/%3E%3C/svg%3E");
+  /* 磨砂面 = 颗粒 + 底色。面板统一用它,暗色主题只要改这一个变量。 */
+  --frost-panel: var(--frost-grain), rgba(255, 255, 255, 0.92);
+  --frost-panel-strong: var(--frost-grain), rgba(255, 255, 255, 0.96);
+  /* 聊天画布:唯一还留一点通透的地方。背后是柔焦后的壁纸,
+     认不出原图,只剩一层缓慢流动的柔光。 */
+  --frost-canvas: var(--frost-grain), rgba(255, 255, 255, 0.72);
+  --frost-canvas-blur: 26px;
+
+  /* 模糊档位:只留给真正浮在内容上面的东西(弹窗、菜单)。 */
   --blur-l2: 10.4px;
   --blur-l3: 23.4px;
 
@@ -98,12 +108,14 @@ body.dark, body.theme-dark {
   --muted: #8693a8;
   --muted-2: #5a6577;
 
-  /* Dark keeps the same translucency story: the panel is a smoky sheet
-     with a heavy blur, not an opaque black slab. */
-  --glass-bg: rgba(28, 33, 44, 0.56);
-  --glass-bg-strong: rgba(32, 38, 50, 0.74);
-  --glass-bg-soft: rgba(255, 255, 255, 0.07);
-  --glass-bg-frost: rgba(255, 255, 255, 0.04);
+  /* Dark keeps the same story: the panel is a matte sheet, not a black slab. */
+  --glass-bg: rgba(26, 31, 42, 0.92);
+  --glass-bg-strong: rgba(30, 36, 48, 0.96);
+  --glass-bg-soft: rgba(255, 255, 255, 0.08);
+  --glass-bg-frost: rgba(255, 255, 255, 0.05);
+  --frost-panel: var(--frost-grain), rgba(26, 31, 42, 0.92);
+  --frost-panel-strong: var(--frost-grain), rgba(30, 36, 48, 0.96);
+  --frost-canvas: var(--frost-grain), rgba(16, 20, 28, 0.72);
   --glass-border: rgba(255, 255, 255, 0.13);
   --glass-border-soft: rgba(255, 255, 255, 0.07);
   --glass-shadow: 0 10px 34px rgba(0, 0, 0, 0.42);
@@ -136,10 +148,13 @@ body.dark, body.theme-dark {
     --ink-2: #c5d0e0;
     --muted: #8693a8;
     --muted-2: #5a6577;
-    --glass-bg: rgba(28, 33, 44, 0.56);
-    --glass-bg-strong: rgba(32, 38, 50, 0.74);
-    --glass-bg-soft: rgba(255, 255, 255, 0.07);
-    --glass-bg-frost: rgba(255, 255, 255, 0.04);
+    --glass-bg: rgba(26, 31, 42, 0.92);
+    --glass-bg-strong: rgba(30, 36, 48, 0.96);
+    --glass-bg-soft: rgba(255, 255, 255, 0.08);
+    --glass-bg-frost: rgba(255, 255, 255, 0.05);
+    --frost-panel: var(--frost-grain), rgba(26, 31, 42, 0.92);
+    --frost-panel-strong: var(--frost-grain), rgba(30, 36, 48, 0.96);
+    --frost-canvas: var(--frost-grain), rgba(16, 20, 28, 0.72);
     --glass-border: rgba(255, 255, 255, 0.13);
     --glass-border-soft: rgba(255, 255, 255, 0.07);
     --glass-shadow: 0 10px 34px rgba(0, 0, 0, 0.42);
@@ -174,30 +189,42 @@ body {
   position: relative;
 }
 
-/* Wallpaper — 静态。
-   背景本来是做 64 秒位移动画的，但玻璃层用的是 backdrop-filter：
-   它每次都要重新采样背后的像素。壁纸一动，十几块玻璃就得跟着
-   重新采样+重新模糊一遍，页面就一直占着 CPU/GPU —— 机器用久了发烫发卡。
-   静态壁纸看起来几乎一样，代价是零。 */
+/* Wallpaper — 柔焦 + 慢速漂移。
+   上一轮把它冻住，是因为背景上压着十几块 backdrop-filter：
+   壁纸一动，每一块都得重新采样 + 重新模糊，页面就一直烧 CPU/GPU，
+   机器用久了发烫发卡。
+   现在磨砂化的面板全部不透明、也全部撤掉了 backdrop-filter，
+   壁纸可以放心地动。
+   模糊是烤在这一层上的（一次算好、缓存成纹理），不是 backdrop-filter，
+   所以每帧只做一次位移合成，不重算模糊 —— 不烧机。
+   26s 一个来回（原来 64s），慢到不抢眼、快到一眼能看出在动。 */
 body::before {
   content: "";
   position: fixed;
-  inset: 0;
-  width: 100%; height: 100%;
+  inset: -5%;
+  width: 110%; height: 110%;
   background: url('assets/wall-light.jpg') center/cover no-repeat;
   background-size: cover;
   z-index: -2;
   pointer-events: none;
   transform: translate3d(0, 0, 0);
   backface-visibility: hidden;
-  /* 原图偏柔,加一点对比和饱和 —— 玻璃后面才看得清结构 */
-  filter: contrast(1.05) saturate(1.10);
+  will-change: transform;
+  /* 柔焦：壁纸散成一层光，看不出原来的丝带；加一点对比和饱和，
+     磨砂面上才有结构，不然就是一片糊。 */
+  filter: blur(var(--frost-canvas-blur)) contrast(1.05) saturate(1.10);
+  animation: wallpaperDrift 26s ease-in-out infinite;
 }
 body.dark::before,
 body.theme-dark::before {
   background-image: url('assets/wall-dark.jpg');
 }
-/* Static filter overlay — separates the expensive filter from the animation */
+@keyframes wallpaperDrift {
+  0%   { transform: translate3d(0%,     0%, 0); }
+  50%  { transform: translate3d(-2.4%, -1.6%, 0); }
+  100% { transform: translate3d(0%,     0%, 0); }
+}
+/* 压暗层：把壁纸整体压一档，浅色主题下文字才读得清 */
 body::after {
   content: "";
   position: fixed; inset: 0;
@@ -243,9 +270,7 @@ input::placeholder, textarea::placeholder { color: var(--muted-2); }
    Center frosted + edge highlights (iOS-style illuminated glass)
    ============================================================ */
 .glass {
-  background: var(--glass-bg);
-  backdrop-filter: saturate(180%);
-  -webkit-backdrop-filter: saturate(180%);
+  background: var(--frost-panel);
   border: 1px solid var(--glass-border);
   /* Inner top highlight + inner bottom edge + outer soft glow + drop shadow */
   box-shadow:
@@ -259,9 +284,7 @@ input::placeholder, textarea::placeholder { color: var(--muted-2); }
 }
 
 .glass-strong {
-  background: var(--glass-bg-strong);
-  backdrop-filter: saturate(180%);
-  -webkit-backdrop-filter: saturate(180%);
+  background: var(--frost-panel-strong);
   border: 1px solid var(--glass-border);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.22),
@@ -308,9 +331,7 @@ body.dark [data-liquid-glass] {
   max-width: 400px;
   padding: 36px 32px 28px;
   display: flex; flex-direction: column; gap: 18px;
-  background: rgba(255, 255, 255, 0.40);
-  backdrop-filter: saturate(180%);
-  -webkit-backdrop-filter: saturate(180%);
+  background: var(--frost-panel);
   border: 1px solid var(--glass-border);
   border-radius: var(--r-card);
   box-shadow:
@@ -323,7 +344,7 @@ body.dark [data-liquid-glass] {
   overflow-y: auto;
   scrollbar-width: thin;
 }
-body.dark .auth-card { background: rgba(20, 24, 32, 0.60); border-color: rgba(255, 255, 255, 0.10); }
+body.dark .auth-card { background: var(--frost-panel); border-color: rgba(255, 255, 255, 0.10); }
 @keyframes authIn {
   from { opacity: 0; transform: translateY(20px) scale(0.97); }
   to { opacity: 1; transform: translateY(0) scale(1); }
@@ -478,8 +499,6 @@ body.dark .auth-card { background: rgba(20, 24, 32, 0.60); border-color: rgba(25
   border: 1px solid var(--glass-border-soft);
   color: var(--ink-2);
   transition: background 0.2s, color 0.2s, transform 0.15s, box-shadow 0.2s;
-  backdrop-filter: blur(var(--blur-l2)) saturate(180%);
-  -webkit-backdrop-filter: blur(var(--blur-l2)) saturate(180%);
   box-shadow: var(--glass-highlight), 0 4px 12px rgba(30, 80, 150, 0.08);
   flex-shrink: 0;
 }
@@ -524,8 +543,6 @@ body.dark .auth-card { background: rgba(20, 24, 32, 0.60); border-color: rgba(25
   color: #12508f;
   border-radius: 999px;
   background: linear-gradient(135deg, rgba(146, 202, 255, 0.62), rgba(88, 158, 240, 0.44));
-  backdrop-filter: blur(var(--blur-l2)) saturate(200%);
-  -webkit-backdrop-filter: blur(var(--blur-l2)) saturate(200%);
   border: 1px solid rgba(255, 255, 255, 0.78);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.95),
@@ -581,13 +598,13 @@ body.theme-dark .beta-tag {
   display: flex; flex-direction: column;
   border-radius: 0;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.10);
-  backdrop-filter: saturate(180%);
-  -webkit-backdrop-filter: saturate(180%);
+  /* 只留一层极淡的白纱:壳子不能盖死 —— 盖死了壁纸一点都看不见，
+     而缝隙和聊天画布还要透出那层柔焦的背景。 */
+  background: rgba(255, 255, 255, 0.06);
   border: none;
   box-shadow: none;
 }
-body.dark .app-shell { background: rgba(20, 24, 32, 0.30); border-color: rgba(255, 255, 255, 0.10); }
+body.dark .app-shell { background: rgba(12, 16, 22, 0.22); border-color: rgba(255, 255, 255, 0.10); }
 
 /* ============================================================
    TOPBAR
@@ -597,13 +614,11 @@ body.dark .app-shell { background: rgba(20, 24, 32, 0.30); border-color: rgba(25
   padding: 0 18px 0 22px;
   height: 60px;
   border-bottom: 1px solid var(--glass-border-soft);
-  background: rgba(255, 255, 255, 0.20);
-  backdrop-filter: saturate(180%);
-  -webkit-backdrop-filter: saturate(180%);
+  background: var(--frost-panel);
   flex-shrink: 0;
   z-index: 5;
 }
-body.dark .topbar { background: rgba(20, 24, 32, 0.30); border-bottom-color: rgba(255, 255, 255, 0.08); }
+body.dark .topbar { background: var(--frost-panel); border-bottom-color: rgba(255, 255, 255, 0.08); }
 .topbar-left { display: flex; align-items: center; gap: 0; min-width: 0; flex-shrink: 0; }
 .topbar-right { display: flex; gap: 6px; align-items: center; margin-left: auto; flex-shrink: 0; position: relative; }
 /* Buttons must never be squeezed/overlapped by a long left side. */
@@ -653,18 +668,16 @@ body.dark .brand-name { text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4); }
   margin: 10px 0 10px 10px;
   padding: 14px 0 12px;
   border-radius: 22px;
-  background: rgba(255, 255, 255, 0.32);
+  background: var(--frost-panel);
   border: 1px solid var(--glass-border);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.30),
     0 8px 24px rgba(30, 80, 150, 0.10);
-  backdrop-filter: saturate(180%);
-  -webkit-backdrop-filter: saturate(180%);
   flex-shrink: 0;
   overflow: hidden;
 }
 body.dark .rail-pane {
-  background: rgba(20, 24, 32, 0.45);
+  background: var(--frost-panel);
   border-color: rgba(255, 255, 255, 0.10);
 }
 
@@ -674,13 +687,11 @@ body.dark .rail-pane {
   margin: 10px 0 10px 8px;
   padding: 4px;
   border-radius: 22px;
-  background: rgba(255, 255, 255, 0.32);
+  background: var(--frost-panel);
   border: 1px solid var(--glass-border);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.30),
     0 8px 24px rgba(30, 80, 150, 0.10);
-  backdrop-filter: saturate(180%);
-  -webkit-backdrop-filter: saturate(180%);
   flex-shrink: 0;
   overflow: hidden;
   transition: width 0.28s cubic-bezier(0.22, 1, 0.36, 1),
@@ -688,7 +699,7 @@ body.dark .rail-pane {
               opacity 0.2s ease;
 }
 body.dark .list-pane {
-  background: rgba(20, 24, 32, 0.45);
+  background: var(--frost-panel);
   border-color: rgba(255, 255, 255, 0.10);
 }
 /* Collapsed: the list pane folds away, but the switch that folds it
@@ -753,19 +764,28 @@ body.dark .list-me .avatar.md { color: #e6ecf5; }
 .list-pane:not([data-mode="chats"]) .search { display: none; }
 /* Right pane: also a floating panel with a gap between it and the sidebar */
 .right-pane {
+  position: relative;      /* 朋友圈要绝对定位铺满这一栏 */
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; min-height: 0;
   margin: 10px 10px 10px 6px;
   border-radius: 22px;
   border: 1px solid var(--glass-border);
-  background: rgba(255, 255, 255, 0.12);
-  /* 聊天区只留一点点模糊:消息文字直接压在壁纸上,完全不清会花,
-     但也不能多 —— 背景要看得清(第一层最透)。
-     4px 把壁纸上那些亮丝带化成柔光,结构还在。 */
-  backdrop-filter: blur(5.2px) saturate(180%);
-  -webkit-backdrop-filter: blur(5.2px) saturate(180%);
+  /* 磨砂画布:背后是全局那张柔焦壁纸(已经糊到认不出丝带),
+     这里只盖一层奶白面纱 —— 剩下的那点通透感就是「玻璃」，
+     而背景在面纱底下慢慢流动,画面是活的。
+     不用 backdrop-filter:壁纸在动,压在上面就会每帧重算。 */
+  background:
+    radial-gradient(700px 500px at 90% 10%, rgba(59, 130, 246, 0.05), transparent 60%),
+    radial-gradient(500px 400px at 10% 90%, rgba(14, 165, 233, 0.05), transparent 60%),
+    var(--frost-canvas);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.20),
     0 8px 24px rgba(30, 80, 150, 0.08);
   overflow: hidden;
+}
+body.dark .right-pane {
+  background: var(--frost-canvas);
+  border-color: rgba(255, 255, 255, 0.10);
 }
 
 .tabbar {
@@ -776,8 +796,6 @@ body.dark .list-me .avatar.md { color: #e6ecf5; }
   border: 1px solid var(--glass-border-soft);
   border-radius: var(--r-pill);
   align-self: flex-start;
-  backdrop-filter: saturate(180%);
-  -webkit-backdrop-filter: saturate(180%);
 }
 body.dark .tabbar { background: rgba(255, 255, 255, 0.06); }
 .tab2 {
@@ -830,7 +848,7 @@ body.dark .tab2.active { background: rgba(96, 165, 250, 0.25); color: #93c5fd; }
 #chats-list, #groups-list, #friends-list {
   /* iOS Settings style: list inside a rounded glass group panel */
   list-style: none;
-  background: rgba(255, 255, 255, 0.40);
+  background: var(--frost-grain), rgba(255, 255, 255, 0.58);
   border: 1px solid var(--glass-border-soft);
   border-radius: 14px;
   overflow: hidden;
@@ -839,11 +857,9 @@ body.dark .tab2.active { background: rgba(96, 165, 250, 0.25); color: #93c5fd; }
     0 0 0 0.5px rgba(255, 130, 130, 0.10),
     0 0 20px rgba(255, 255, 255, 0.04),
     0 4px 18px rgba(30, 80, 150, 0.08);
-  backdrop-filter: saturate(180%);
-  -webkit-backdrop-filter: saturate(180%);
 }
 body.dark #chats-list, body.dark #groups-list, body.dark #friends-list {
-  background: rgba(20, 24, 32, 0.45);
+  background: var(--frost-grain), rgba(255, 255, 255, 0.06);
   border-color: rgba(255, 255, 255, 0.08);
 }
 .list-item, .chat-item {
@@ -1005,20 +1021,6 @@ body.dark #friends-list li.active { background: rgba(96, 165, 250, 0.15); }
 /* ============================================================
    RIGHT PANE / CHAT
    ============================================================ */
-.right-pane {
-  position: relative;      /* 朋友圈要绝对定位铺满这一栏 */
-  flex: 1; min-width: 0;
-  display: flex; flex-direction: column; min-height: 0;
-  background:
-    radial-gradient(700px 500px at 90% 10%, rgba(59, 130, 246, 0.05), transparent 60%),
-    radial-gradient(500px 400px at 10% 90%, rgba(14, 165, 233, 0.05), transparent 60%),
-    transparent;
-}
-body.dark .right-pane {
-  background: rgba(20, 24, 32, 0.30);
-  border-color: rgba(255, 255, 255, 0.10);
-}
-
 .chat-empty {
   flex: 1; display: flex; flex-direction: column;
   align-items: center; justify-content: center;
@@ -1046,13 +1048,11 @@ body.dark .right-pane {
   padding: 0 18px;
   height: 64px;
   border-bottom: 1px solid var(--glass-border-soft);
-  background: rgba(255, 255, 255, 0.20);
-  backdrop-filter: saturate(180%);
-  -webkit-backdrop-filter: saturate(180%);
+  background: var(--frost-panel);
   flex-shrink: 0;
   min-width: 0;
 }
-body.dark .chat-header { background: rgba(20, 24, 32, 0.30); border-bottom-color: rgba(255, 255, 255, 0.08); }
+body.dark .chat-header { background: var(--frost-panel); border-bottom-color: rgba(255, 255, 255, 0.08); }
 .chat-header-text { flex: 1; min-width: 0; overflow: hidden; }
 .chat-header-text h3 {
   margin: 0; font-size: 16px; font-weight: 700;
@@ -1335,13 +1335,11 @@ body.dark .chat-header { background: rgba(20, 24, 32, 0.30); border-bottom-color
   position: relative;
   padding: 12px 16px 14px;
   border-top: 1px solid var(--glass-border-soft);
-  background: rgba(255, 255, 255, 0.20);
-  backdrop-filter: blur(var(--blur-l2)) saturate(180%);
-  -webkit-backdrop-filter: blur(var(--blur-l2)) saturate(180%);
+  background: var(--frost-panel);
   flex-shrink: 0;
   display: flex; flex-direction: column; gap: 8px;
 }
-body.dark .chat-composer { background: rgba(20, 24, 32, 0.30); border-top-color: rgba(255, 255, 255, 0.08); }
+body.dark .chat-composer { background: var(--frost-panel); border-top-color: rgba(255, 255, 255, 0.08); }
 
 .composer-row {
   display: flex; align-items: center; gap: 8px;
@@ -1679,8 +1677,6 @@ body.dark .mention-hint-bar { background: rgba(255, 255, 255, 0.05); }
   cursor: pointer;
   opacity: 0; transform: translateY(-4px);
   transition: opacity 0.2s, transform 0.2s;
-  backdrop-filter: blur(var(--blur-l2)) saturate(180%);
-  -webkit-backdrop-filter: blur(var(--blur-l2)) saturate(180%);
 }
 .moment-cover:hover .moment-cover-pick,
 .moment-cover-pick:focus-visible { opacity: 1; transform: none; }
@@ -1861,8 +1857,6 @@ body.dark .moment-post.is-active { background: rgba(76, 111, 255, 0.13); }
   border-radius: 999px !important;
   border: 1px solid var(--glass-border-soft);
   box-shadow: var(--glass-highlight);
-  backdrop-filter: blur(var(--blur-l2)) saturate(180%);
-  -webkit-backdrop-filter: blur(var(--blur-l2)) saturate(180%);
   flex-shrink: 0;
   cursor: default;
   /* Soft circular glow that follows the circle shape (no square clip) */
@@ -2024,8 +2018,6 @@ body.dark .msg-action-bar {
 #modal-moment-guide {
   /* 没有 .modal-mask —— 点了外面也不能退出，必须看完。 */
   background: rgba(10, 16, 26, 0.58);
-  backdrop-filter: blur(8px) saturate(140%);
-  -webkit-backdrop-filter: blur(8px) saturate(140%);
 }
 #modal-moment-guide .moment-guide-card {
   width: min(460px, 100%);
@@ -2069,9 +2061,7 @@ body.dark #modal-moment-guide .moment-guide-card { background: rgba(24, 30, 40, 
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: rgba(10, 16, 26, 0.55);
-  backdrop-filter: blur(16px) saturate(160%);
-  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  background: rgba(10, 16, 26, 0.72);
   animation: langPickIn 0.35s ease both;
 }
 .lang-pick.hidden { display: none; }
@@ -2119,9 +2109,7 @@ body.dark #modal-moment-guide .moment-guide-card { background: rgba(24, 30, 40, 
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.78);
-  backdrop-filter: blur(var(--blur-l2)) saturate(180%);
-  -webkit-backdrop-filter: blur(var(--blur-l2)) saturate(180%);
+  background: rgba(255, 255, 255, 0.88);
   cursor: pointer;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
@@ -2149,9 +2137,7 @@ body.dark #modal-moment-guide .moment-guide-card { background: rgba(24, 30, 40, 
   will-change: opacity, transform;
 }
 body.dark .hello-splash {
-  background: rgba(10, 14, 22, 0.82);
-  backdrop-filter: saturate(180%);
-  -webkit-backdrop-filter: saturate(180%);
+  background: rgba(10, 14, 22, 0.90);
 }
 body.dark .hello-splash-text {
   background: linear-gradient(135deg, #45CFE0 0%, #7C9CFF 60%, #4C6FFF 100%);
@@ -2264,9 +2250,7 @@ body.dark .hello-splash-hint {
   max-height: 78vh;
   display: flex; flex-direction: column;
   margin: 0 auto;
-  background: rgba(255, 255, 255, 0.50);
-  backdrop-filter: blur(var(--blur-l3)) saturate(180%);
-  -webkit-backdrop-filter: blur(var(--blur-l3)) saturate(180%);
+  background: var(--frost-panel-strong);
   border: 1px solid var(--glass-border);
   border-radius: 24px;
   box-shadow:
@@ -2277,7 +2261,7 @@ body.dark .hello-splash-hint {
   overflow: hidden;
   animation: modalIn 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
-body.dark .modal-card { background: rgba(20, 24, 32, 0.70); border-color: rgba(255, 255, 255, 0.10); }
+body.dark .modal-card { background: var(--frost-panel-strong); border-color: rgba(255, 255, 255, 0.10); }
 @keyframes modalIn {
   from { opacity: 0; transform: translateY(20px) scale(0.96); }
   to { opacity: 1; transform: translateY(0) scale(1); }
@@ -2377,8 +2361,6 @@ body.dark .modal-card { background: rgba(20, 24, 32, 0.70); border-color: rgba(2
 .lightbox {
   position: fixed; inset: 0; z-index: 200;
   background: rgba(28, 42, 62, 0.85);
-
-  -webkit-backdrop-filter: ;
   display: flex; align-items: center; justify-content: center;
   padding: 20px;
   cursor: zoom-out;
@@ -2478,8 +2460,6 @@ body.dark .modal-card { background: rgba(20, 24, 32, 0.70); border-color: rgba(2
   background: rgba(255, 255, 255, 0.55);
   border: 1px solid var(--glass-border-soft);
   color: var(--ink-2);
-  backdrop-filter: blur(var(--blur-l2)) saturate(180%);
-  -webkit-backdrop-filter: blur(var(--blur-l2)) saturate(180%);
   box-shadow: 0 4px 14px rgba(30, 80, 150, 0.10), var(--glass-highlight);
   transition: background 0.2s, transform 0.2s, color 0.2s;
   flex-shrink: 0;
@@ -2603,12 +2583,10 @@ body.dark .theme-menu { background: rgba(20, 24, 32, 0.92); border-color: rgba(2
     border-radius: 0;
     overflow: hidden;
     z-index: 10;
-    background: rgba(255, 255, 255, 0.40);
-    backdrop-filter: blur(5.2px) saturate(180%);
-    -webkit-backdrop-filter: blur(5.2px) saturate(180%);
+    background: var(--frost-canvas);
     border: 1px solid var(--glass-border);
   }
-  body.dark .right-pane { background: rgba(20, 24, 32, 0.50); }
+  body.dark .right-pane { background: var(--frost-canvas); }
   .right-pane.mobile-show { display: flex; }
   /* When chat is open on mobile, hide the sidebar entirely */
   .app-body.chat-open .list-pane { display: none; }
@@ -2630,11 +2608,9 @@ body.dark .theme-menu { background: rgba(20, 24, 32, 0.92); border-color: rgba(2
   body { padding-top: env(safe-area-inset-top, 0); }
   .topbar {
     height: 48px; padding: 0 10px 0 12px; gap: 6px;
-    background: rgba(255, 255, 255, 0.72) !important;
-    backdrop-filter: saturate(180%);
-    -webkit-backdrop-filter: saturate(180%);
+    background: var(--frost-panel) !important;
   }
-  body.dark .topbar { background: rgba(20, 24, 32, 0.72) !important; }
+  body.dark .topbar { background: var(--frost-panel) !important; }
   /* Hide root console bar on small screens (too cramped) */
   .root-bar { display: none !important; }
   .chat-header { height: 48px; padding: 0 10px; gap: 6px; }
@@ -3969,8 +3945,6 @@ body.dark .ai-welcome-title { color: var(--ink); }
   color: var(--ink);
   border: 1px solid var(--glass-border-soft);
   border-bottom-left-radius: 6px;
-  backdrop-filter: saturate(180%);
-  -webkit-backdrop-filter: saturate(180%);
   box-shadow: var(--glass-shadow);
 }
 .ai-error { color: var(--danger); font-size: 13px; }
@@ -4045,8 +4019,6 @@ body.dark .ai-welcome-title { color: var(--ink); }
   border-radius: 20px;
   background: var(--glass-bg-strong);
   border: 1px solid var(--glass-border-soft);
-  backdrop-filter: blur(var(--blur-l2)) saturate(180%);
-  -webkit-backdrop-filter: blur(var(--blur-l2)) saturate(180%);
   box-shadow: var(--glass-highlight), var(--glass-shadow);
 }
 .ai-composer textarea {
@@ -4686,9 +4658,7 @@ body.dark .mobile-menu-scrim { background: rgba(0, 0, 0, 0.34); }
     gap: 2px;
     margin: 0; padding: 5px 6px;
     border-radius: 28px;
-    background: rgba(255, 255, 255, 0.72);
-    backdrop-filter: saturate(180%);
-    -webkit-backdrop-filter: saturate(180%);
+    background: var(--frost-panel);
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.55),
       0 8px 26px rgba(30, 80, 150, 0.18);
@@ -4751,9 +4721,7 @@ body.dark .mobile-menu-scrim { background: rgba(0, 0, 0, 0.34); }
     transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
     border-radius: 0 20px 0 0;
     border-top: 0; border-bottom: 0; border-left: 0;
-    background: rgba(255, 255, 255, 0.96);
-    backdrop-filter: saturate(180%);
-    -webkit-backdrop-filter: saturate(180%);
+    background: var(--frost-panel);
     box-shadow: 8px 0 30px rgba(30, 80, 150, 0.22);
   }
   body.dark .app-body.chat-open .list-pane { background: rgba(18, 22, 30, 0.97); }
@@ -4878,9 +4846,7 @@ body.dark .mobile-menu-scrim { background: rgba(0, 0, 0, 0.34); }
     border-radius: 0;
     /* 真的不透明 —— 用玻璃变量(0.62)的话底下的助手界面照样透出来,
        一片糊。这里给到 97%,底下几乎看不穿,但边缘还留着玻璃感。 */
-    background: rgba(255, 255, 255, 0.97);
-    backdrop-filter: saturate(190%);
-    -webkit-backdrop-filter: saturate(190%);
+    background: var(--frost-panel);
     box-shadow: 6px 0 28px rgba(30, 80, 150, 0.20);
   }
   body.dark .app-body.ai-active.list-open .list-pane {
@@ -5369,8 +5335,6 @@ body.theme-dark .mention-preview .cancel:hover {
   inset: 0;
   pointer-events: auto;
   background: rgba(16, 24, 40, 0.18);
-  backdrop-filter: saturate(140%);
-  -webkit-backdrop-filter: saturate(140%);
   opacity: 0;
   transition: opacity .22s ease;
 }
