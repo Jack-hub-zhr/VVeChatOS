@@ -1,48 +1,48 @@
 /* ============================================================
-   GLASS — 磨砂玻璃质感（不做折射）
+   GLASS — 玻璃质感视觉层（普通毛玻璃，不做折射）
    ------------------------------------------------------------
    折射引擎（SVG 滤镜链）已整体移除：它在移动端每帧重算整块背景，
    iPad 上直接把主线程压死，点会话都加载不出历史消息。
-   现在连 backdrop-filter 也基本撤掉了：
-     面板不透明 ⇒ 背后没有东西可模糊 ⇒ 模糊是纯浪费，
-     而壁纸在动，压在它上面的每一块模糊都要每帧重采样重模糊，
-     正是当年「发烫发卡」的根源。
-   这一层只保留「看起来像磨砂玻璃」的表面处理：
-     · 面板的磨砂底色 / 颗粒 / 描边 / 投影（App 的设计语言，别乱动）
+   这一层只保留「看起来像玻璃」的表面处理：
+     · 面板的玻璃底色 / 描边 / 投影（App 的设计语言，别乱动）
      · 顶栏与列表顶部的一道高光（玻璃的「厚度」）
      · 按压反馈
      · 550C 终端主题不做玻璃处理（硬边等宽字体跟玻璃混在一起会脏）
    ============================================================ */
 
-/* ---------- 磨砂玻璃面板：不透光，但有颗粒和高光 ---------- */
+/* ---------- 玻璃面板：更强的通透感 ---------- */
 body {
-  --glass-bg: rgba(255, 255, 255, 0.92);
-  --glass-bg-strong: rgba(255, 255, 255, 0.96);
-  --glass-bg-soft: rgba(255, 255, 255, 0.55);
-  --glass-bg-frost: rgba(255, 255, 255, 0.34);
-  --glass-border: rgba(255, 255, 255, 0.72);
-  --glass-border-soft: rgba(255, 255, 255, 0.48);
+  --glass-bg: rgba(255, 255, 255, 0.46);
+  --glass-bg-strong: rgba(255, 255, 255, 0.62);
+  --glass-bg-soft: rgba(255, 255, 255, 0.30);
+  --glass-bg-frost: rgba(255, 255, 255, 0.16);
+  --glass-border: rgba(255, 255, 255, 0.62);
+  --glass-border-soft: rgba(255, 255, 255, 0.36);
+  --glass-blur: 40px;
+  --glass-blur-strong: 56px;
   --glass-shadow: 0 12px 38px rgba(38, 62, 100, 0.13), 0 1px 2px rgba(38, 62, 100, 0.06);
   --glass-shadow-lg: 0 26px 76px rgba(38, 62, 100, 0.20), 0 2px 6px rgba(38, 62, 100, 0.07);
   --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.85), inset 0 -1px 0 rgba(0, 0, 0, 0.04);
 }
 body.dark {
-  --glass-bg: rgba(26, 31, 42, 0.92);
-  --glass-bg-strong: rgba(30, 36, 48, 0.96);
-  --glass-bg-soft: rgba(255, 255, 255, 0.08);
-  --glass-bg-frost: rgba(255, 255, 255, 0.05);
-  --glass-border: rgba(255, 255, 255, 0.13);
-  --glass-border-soft: rgba(255, 255, 255, 0.07);
+  --glass-bg: rgba(28, 33, 44, 0.46);
+  --glass-bg-strong: rgba(32, 38, 50, 0.62);
+  --glass-bg-soft: rgba(255, 255, 255, 0.055);
+  --glass-bg-frost: rgba(255, 255, 255, 0.035);
+  --glass-border: rgba(255, 255, 255, 0.115);
+  --glass-border-soft: rgba(255, 255, 255, 0.06);
   --glass-shadow: 0 12px 38px rgba(0, 0, 0, 0.46), 0 1px 2px rgba(0, 0, 0, 0.3);
   --glass-shadow-lg: 0 26px 76px rgba(0, 0, 0, 0.62), 0 2px 6px rgba(0, 0, 0, 0.34);
   --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.13), inset 0 -1px 0 rgba(0, 0, 0, 0.20);
 }
 
-/* ---------- 关键面板：只留描边，不叠模糊 ---------- */
+/* ---------- 关键面板：只加饱和度与对比度，不叠模糊 ---------- */
 body .list-pane,
 body .topbar,
 body .side-nav,
 body .mobile-tabbar {
+  backdrop-filter: saturate(190%) contrast(1.04);
+  -webkit-backdrop-filter: saturate(190%) contrast(1.04);
   border-color: var(--glass-border);
 }
 /* 顶部边缘的一道高光 —— 玻璃的「厚度」就靠这条线 */

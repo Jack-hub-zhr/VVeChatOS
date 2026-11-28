@@ -59,10 +59,6 @@ body.dark.theme-550c {
   --glass-shadow-lg: 0 0 0 1px rgba(232, 160, 32, 0.14);
   --glass-highlight: inset 0 0 0 1px rgba(232, 160, 32, 0.07);
   --glass-chromatic: none;
-  /* 磨砂面板跟着终端配色走：硬边、琥珀色，不要颗粒 */
-  --frost-panel: rgba(10, 8, 5, 0.86);
-  --frost-panel-strong: rgba(13, 10, 6, 0.94);
-  --frost-canvas: rgba(5, 4, 3, 0.30);
 
   --accent: #e8a020;
   --accent2: #ffc043;
